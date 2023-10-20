@@ -14248,7 +14248,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
             float * dst_data = (float *)((char *) dst->data + ib*nb2);
             float * wdata = (float *)(params->wdata) + ith*ne0*ne1;
 
-            gemm_f32_out_f32(ne00, ne01, ne1,
+            gemm_f32_out_f32(ne00, ne1, ne01,
                              kern_data,
                              src_data,
                              wdata,
