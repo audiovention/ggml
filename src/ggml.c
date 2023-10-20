@@ -4057,6 +4057,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CONV_1D",
     "CONV_1D_STAGE_0",
     "CONV_1D_STAGE_1",
+    "CONV_1D_SMALL_KERN",
     "CONV_TRANSPOSE_1D",
     "CONV_2D",
     "CONV_2D_STAGE_0",
@@ -4091,7 +4092,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CROSS_ENTROPY_LOSS_BACK",
 };
 
-static_assert(GGML_OP_COUNT == 73, "GGML_OP_COUNT != 73");
+static_assert(GGML_OP_COUNT == 74, "GGML_OP_COUNT != 74");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -4144,6 +4145,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "conv_1d(x)",
     "conv_1d_stage_0(x)",
     "conv_1d_stage_1(x)",
+    "conv_1d_small_kern(x)",
     "conv_transpose_1d(x)",
     "conv_2d(x)",
     "conv_2d_stage_0(x)",
@@ -4178,7 +4180,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "cross_entropy_loss_back(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 73, "GGML_OP_COUNT != 73");
+static_assert(GGML_OP_COUNT == 74, "GGML_OP_COUNT != 74");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -4209,6 +4211,7 @@ static void ggml_setup_op_has_task_pass(void) {
         p[GGML_OP_CONV_1D                ] = true;
         p[GGML_OP_CONV_1D_STAGE_0        ] = true;
         p[GGML_OP_CONV_1D_STAGE_1        ] = true;
+        p[GGML_OP_CONV_1D_SMALL_KERN     ] = true;
         p[GGML_OP_CONV_TRANSPOSE_1D      ] = true;
         p[GGML_OP_CONV_2D                ] = true;
         p[GGML_OP_CONV_2D_STAGE_0        ] = true;
@@ -7574,6 +7577,47 @@ GGML_API struct ggml_tensor * ggml_conv_1d(
     result = ggml_conv_1d_stage_1(ctx, a, result);
     return result;
 }
+
+
+// a: [OC，IC, K]
+// b: [IC, IL, N]
+// result: [OC, OL, N]
+struct ggml_tensor * ggml_conv_1d_small_kern(
+    struct ggml_context * ctx,
+    struct ggml_tensor  * a,
+    struct ggml_tensor  * b,
+    int                   s0,
+    int                   p0,
+    int                   d0) {
+    GGML_ASSERT(a->ne[1] == b->ne[0]);
+    bool is_node = false;
+
+    if (a->grad || b->grad) {
+        GGML_ASSERT(false); // TODO: implement backward
+        is_node = true;
+    }
+
+    const int64_t OL = ggml_calc_conv_output_size(b->ne[1], a->ne[2], s0, p0, d0);
+
+    const int64_t ne[4] = {
+        a->ne[0],
+        OL,
+        b->ne[2],
+        1,
+    };
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+
+    int32_t params[] = { s0, p0, d0 };
+    ggml_set_op_params(result, params, sizeof(params));
+
+    result->op = GGML_OP_CONV_1D_SMALL_KERN;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src[0] = a;
+    result->src[1] = b;
+
+    return result;
+}
+
 
 // GGML_API struct ggml_tensor * ggml_conv_1d(
 //         struct ggml_context * ctx,
@@ -17065,6 +17109,11 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_conv_1d_stage_1(params, tensor->src[0], tensor->src[1], tensor);
             } break;
+        case GGML_OP_CONV_1D_SMALL_KERN:
+            {
+                GGML_ASSERT(false);
+                // ggml_compute_forward_conv_1d_small_kern(params, tensor->src[0], tensor->src[1], tensor);
+            } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
                 ggml_compute_forward_conv_transpose_1d(params, tensor->src[0], tensor->src[1], tensor);
@@ -18010,6 +18059,10 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 GGML_ASSERT(false); // TODO: not implemented
             } break;
+        case GGML_OP_CONV_1D_SMALL_KERN:
+            {
+                GGML_ASSERT(false); // TODO: not implemented
+            } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
                 GGML_ASSERT(false); // TODO: not implemented
@@ -18902,6 +18955,10 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     n_tasks = n_threads;
                 } break;
             case GGML_OP_CONV_1D_STAGE_1:
+                {
+                    n_tasks = n_threads;
+                } break;
+            case GGML_OP_CONV_1D_SMALL_KERN:
                 {
                     n_tasks = n_threads;
                 } break;
