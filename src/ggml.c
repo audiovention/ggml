@@ -11108,7 +11108,7 @@ static void ggml_compute_forward_tanh_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
-    assert(params->ith == 0);
+    // assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -14239,8 +14239,6 @@ static void ggml_compute_forward_conv_1d_small_kern(
     // row range for this thread
     const int ir0 = dr*ith;
     const int ir1 = MIN(ir0 + dr, nr);
-
-    float * const wdata = (float *) params->wdata + 0;
 
     for (int ik = 0; ik < nk; ik++) {
         const float * kern_data = (float *)((char *) src0->data + ik*nb02);
@@ -19104,6 +19102,10 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN:
                 {
+                    const int64_t ne0 = node->ne[0];
+                    const int64_t ne1 = node->ne[1];
+                    size_t cur = ne0*ne1*n_threads*sizeof(float);
+                    work_size = MAX(work_size, cur);
                     n_tasks = n_threads;
                 } break;
             case GGML_OP_CONV_TRANSPOSE_1D:
