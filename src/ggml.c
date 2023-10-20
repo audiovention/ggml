@@ -14240,10 +14240,11 @@ static void ggml_compute_forward_conv_1d_small_kern(
     const int ir0 = dr*ith;
     const int ir1 = MIN(ir0 + dr, nr);
 
-    for (int ik = 0; ik < nk; ik++) {
-        const float * kern_data = (float *)((char *) src0->data + ik*nb02);
-        const long offset = d0 * ik;
-        for (int ir = ir0; ir < ir1; ir++) {
+    for (int ir = ir0; ir < ir1; ir++) {
+        for (int ik = 0; ik < nk; ik++) {
+            const float * kern_data = (float *)((char *) src0->data + ik*nb02);
+            const long offset = d0 * ik;
+
             float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb11);
             float * dst_data = (float *)((char *) dst->data + ir*nb2);
 
