@@ -14222,7 +14222,6 @@ static void ggml_compute_forward_conv_1d_small_kern(
 
     if (params->type == GGML_TASK_INIT) {
         ggml_set_zero(dst);
-        memset(params->wdata, 0, params->wsize);
         return;
     }
 
@@ -14230,8 +14229,9 @@ static void ggml_compute_forward_conv_1d_small_kern(
         return;
     }
 
-    // total rows in dst
-    const int nr = ne0*ne1;
+
+    // total batches
+    const int nr = ne12;
 
     // rows per thread
     const int dr = (nr + nth - 1)/nth;
@@ -14243,17 +14243,15 @@ static void ggml_compute_forward_conv_1d_small_kern(
     for (int ik = 0; ik < nk; ik++) {
         const float * kern_data = (float *)((char *) src0->data + ik*nb02);
         const long offset = d0 * ik;
-        for (int ib = 0; ib < ne12; ib++) {
-            float * src_data = (float *)((char *) src1->data + ib*nb12 + offset*nb11);
-            float * dst_data = (float *)((char *) dst->data + ib*nb2);
-            float * wdata = (float *)(params->wdata) + ith*ne0*ne1;
+        for (int ir = ir0; ir < ir1; ir++) {
+            float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb11);
+            float * dst_data = (float *)((char *) dst->data + ir*nb2);
 
-            gemm_f32_out_f32(ne00, ne1, ne01,
-                             kern_data,
-                             src_data,
-                             wdata,
-                             ith, nth);
-            ggml_vec_add_f32(ir1-ir0, dst_data + ir0, dst_data + ir0, wdata + ir0);
+            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                    ne00, ne1, ne01,
+                    1.0f,   kern_data, ne01,
+                            src_data, ne1,
+                    1.0f,   dst_data, ne1);
         }
     }
 }
@@ -19102,10 +19100,6 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN:
                 {
-                    const int64_t ne0 = node->ne[0];
-                    const int64_t ne1 = node->ne[1];
-                    size_t cur = ne0*ne1*n_threads*sizeof(float);
-                    work_size = MAX(work_size, cur);
                     n_tasks = n_threads;
                 } break;
             case GGML_OP_CONV_TRANSPOSE_1D:
