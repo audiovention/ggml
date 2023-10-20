@@ -7592,6 +7592,10 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     GGML_ASSERT(a->ne[1] == b->ne[0]);
     bool is_node = false;
 
+    // TODO: support other configurations
+    GGML_ASSERT(s0==1);
+    GGML_ASSERT(p0==0);
+
     if (a->grad || b->grad) {
         GGML_ASSERT(false); // TODO: implement backward
         is_node = true;
@@ -14116,6 +14120,147 @@ static void ggml_compute_forward_conv_1d_f32(
     }
 }
 
+
+// TODO: reuse ggml_mul_mat or implement ggml_im2col and remove stage_0 and stage_1
+static void gemm_f32_out_f32(int64_t m, int64_t n, int64_t k,
+                             float * A,
+                             float * B,
+                             float * C,
+                             const int ith, const int nth) {
+    // does not seem to make a difference
+    int64_t m0, m1, n0, n1;
+    // patches per thread
+    if (m > n) {
+        n0 = 0;
+        n1 = n;
+
+        // total patches in dst
+        const int np = m;
+
+        // patches per thread
+        const int dp = (np + nth - 1)/nth;
+
+        // patch range for this thread
+        m0 = dp*ith;
+        m1 = MIN(m0 + dp, np);
+    } else {
+        m0 = 0;
+        m1 = m;
+
+        // total patches in dst
+        const int np = n;
+
+        // patches per thread
+        const int dp = (np + nth - 1)/nth;
+
+        // patch range for this thread
+        n0 = dp*ith;
+        n1 = MIN(n0 + dp, np);
+    }
+
+    // block-tiling attempt
+    int64_t blck_n = 16;
+    int64_t blck_m = 16;
+
+    // int64_t CACHE_SIZE = 2 * 1024 * 1024; // 2MB
+    // int64_t blck_size = CACHE_SIZE / (sizeof(float) + 2 * sizeof(ggml_fp16_t) * K);
+    // if (blck_size > 0) {
+    //     blck_0 = 4;
+    //     blck_1 = blck_size / blck_0;
+    //     if (blck_1 < 0) {
+    //         blck_1 = 1;
+    //     }
+    //     // blck_0 = (int64_t)sqrt(blck_size);
+    //     // blck_1 = blck_0;
+    // }
+    // // printf("%zd %zd %zd %zd\n", blck_size, K, blck_0, blck_1);
+
+    for (int j = n0; j < n1; j+=blck_n) {
+        for (int i = m0; i < m1; i+=blck_m) {
+            // printf("i j k => %d %d %d\n", i, j, K);
+            for (int ii = i; ii < i + blck_m && ii < m1; ii++) {
+                for (int jj = j; jj < j + blck_n && jj < n1; jj++) {
+                    ggml_vec_dot_f32(k,
+                                    C + ii*n + jj,
+                                    A + ii * k,
+                                    B + jj * k);
+                }
+            }
+        }
+    }
+}
+
+static void ggml_compute_forward_conv_1d_small_kern(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+              struct ggml_tensor * dst) {
+    GGML_ASSERT(src0->type == GGML_TYPE_F32);
+    GGML_ASSERT(src1->type == GGML_TYPE_F32);
+    GGML_ASSERT( dst->type == GGML_TYPE_F32);
+
+    int64_t t0 = ggml_perf_time_us();
+    UNUSED(t0);
+
+    GGML_TENSOR_BINARY_OP_LOCALS
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    const int nk = ne02; // kernel size
+
+    const int32_t s0 = ((const int32_t*)(dst->op_params))[0];
+    const int32_t p0 = ((const int32_t*)(dst->op_params))[1];
+    const int32_t d0 = ((const int32_t*)(dst->op_params))[2];
+    GGML_ASSERT(s0 == 1);
+    GGML_ASSERT(p0 == 0);
+
+
+
+    GGML_ASSERT(nb00 == sizeof(float));
+    GGML_ASSERT(nb10 == sizeof(float));
+
+    if (params->type == GGML_TASK_INIT) {
+        ggml_set_zero(dst);
+        memset(params->wdata, 0, params->wsize);
+        return;
+    }
+
+    if (params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    // total rows in dst
+    const int nr = ne0*ne1;
+
+    // rows per thread
+    const int dr = (nr + nth - 1)/nth;
+
+    // row range for this thread
+    const int ir0 = dr*ith;
+    const int ir1 = MIN(ir0 + dr, nr);
+
+    float * const wdata = (float *) params->wdata + 0;
+
+    for (int ik = 0; ik < nk; ik++) {
+        const float * kern_data = (float *)((char *) src0->data + ik*nb02);
+        const long offset = d0 * ik;
+        for (int ib = 0; ib < ne12; ib++) {
+            float * src_data = (float *)((char *) src1->data + ib*nb12 + offset*nb11);
+            float * dst_data = (float *)((char *) dst->data + ib*nb2);
+            float * wdata = (float *)(params->wdata) + ith*ne0*ne1;
+
+            gemm_f32_out_f32(ne00, ne01, ne1,
+                             kern_data,
+                             src_data,
+                             wdata,
+                             ith, nth);
+            ggml_vec_add_f32(ir1-ir0, dst_data + ir0, dst_data + ir0, wdata + ir0);
+        }
+    }
+}
+
+
 // TODO: reuse ggml_mul_mat or implement ggml_im2col and remove stage_0 and stage_1
 static void gemm_f16_out_f32(int64_t m, int64_t n, int64_t k,
                              ggml_fp16_t * A,
@@ -17111,8 +17256,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_CONV_1D_SMALL_KERN:
             {
-                GGML_ASSERT(false);
-                // ggml_compute_forward_conv_1d_small_kern(params, tensor->src[0], tensor->src[1], tensor);
+                ggml_compute_forward_conv_1d_small_kern(params, tensor->src[0], tensor->src[1], tensor);
             } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
