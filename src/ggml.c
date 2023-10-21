@@ -7580,8 +7580,8 @@ GGML_API struct ggml_tensor * ggml_conv_1d(
 
 
 // a: [OC，IC, K]
-// b: [IC, IL, N]
-// result: [OC, OL, N]
+// b: [IL, IC, N]
+// result: [OL, OC, N]
 struct ggml_tensor * ggml_conv_1d_small_kern(
     struct ggml_context * ctx,
     struct ggml_tensor  * a,
@@ -7589,7 +7589,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     int                   s0,
     int                   p0,
     int                   d0) {
-    GGML_ASSERT(a->ne[1] == b->ne[0]);
+    GGML_ASSERT(a->ne[1] == b->ne[1]);
     bool is_node = false;
 
     // TODO: support other configurations
@@ -7601,11 +7601,11 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
         is_node = true;
     }
 
-    const int64_t OL = ggml_calc_conv_output_size(b->ne[1], a->ne[2], s0, p0, d0);
+    const int64_t OL = ggml_calc_conv_output_size(b->ne[0], a->ne[2], s0, p0, d0);
 
     const int64_t ne[4] = {
-        a->ne[0],
         OL,
+        a->ne[0],
         b->ne[2],
         1,
     };
@@ -14233,10 +14233,10 @@ static void ggml_compute_forward_conv_1d_small_kern(
     // total batches
     const int nr = ne12;
 
-    // rows per thread
+    // btaches per thread
     const int dr = (nr + nth - 1)/nth;
 
-    // row range for this thread
+    // batch range for this thread
     const int ir0 = dr*ith;
     const int ir1 = MIN(ir0 + dr, nr);
 
@@ -14245,14 +14245,14 @@ static void ggml_compute_forward_conv_1d_small_kern(
             const float * kern_data = (float *)((char *) src0->data + ik*nb02);
             const long offset = d0 * ik;
 
-            float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb11);
+            float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb10);
             float * dst_data = (float *)((char *) dst->data + ir*nb2);
 
-            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                    ne00, ne1, ne01,
-                    1.0f,   kern_data, ne01,
-                            src_data, ne1,
-                    1.0f,   dst_data, ne1);
+            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                    ne0, ne1, ne01,
+                    1.0f,   src_data,  ne01,
+                            kern_data, ne01,
+                    1.0f,   dst_data,  ne1);
         }
     }
 }
