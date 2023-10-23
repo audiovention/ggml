@@ -14258,10 +14258,10 @@ static void ggml_compute_forward_conv_1d_small_kern(
             float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb10);
             float * dst_data = (float *)((char *) dst->data + ir*nb2);
 
-            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-                    output_channels, output_len, input_channels,
-                    1.0f,   kern_data,  input_channels,
-                            src_data, input_channels,
+            cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                    output_len, output_channels, input_channels,
+                    1.0f,   src_data,  input_len,
+                            kern_data, output_channels,
                     1.0f,   dst_data,  output_len);
         }
     }
