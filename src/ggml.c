@@ -11132,9 +11132,14 @@ static void ggml_compute_forward_tanh_f32(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
+#ifdef GGML_USE_ACCELERATE
+        vvtanhf((float *) ((char *) dst->data  + ir*( dst->nb[1])),
+                (float *) ((char *) src0->data + ir*(src0->nb[1])), &nc);
+#else
         ggml_vec_tanh_f32(nc,
                 (float *) ((char *) dst->data  + ir*( dst->nb[1])),
                 (float *) ((char *) src0->data + ir*(src0->nb[1])));
+#endif
     }
 }
 
