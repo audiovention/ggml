@@ -14229,9 +14229,19 @@ static void ggml_compute_forward_conv_1d_small_kern(
         return;
     }
 
+    const int input_channels = ne01;
+    const int output_channels = ne00;
+    const int input_len = ne10;
+    const int output_len = ne0;
+
+    GGML_ASSERT(input_channels == ne11);
+    GGML_ASSERT(output_channels == ne1);
+
 
     // total batches
     const int nr = ne12;
+
+    GGML_ASSERT(nr == ne2);
 
     // btaches per thread
     const int dr = (nr + nth - 1)/nth;
@@ -14249,10 +14259,10 @@ static void ggml_compute_forward_conv_1d_small_kern(
             float * dst_data = (float *)((char *) dst->data + ir*nb2);
 
             cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-                    ne0, ne1, ne01,
-                    1.0f,   src_data,  ne01,
-                            kern_data, ne01,
-                    1.0f,   dst_data,  ne1);
+                    output_channels, output_len, input_channels,
+                    1.0f,   kern_data,  input_channels,
+                            src_data, input_channels,
+                    1.0f,   dst_data,  output_len);
         }
     }
 }
