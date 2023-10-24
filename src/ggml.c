@@ -7584,29 +7584,36 @@ GGML_API struct ggml_tensor * ggml_conv_1d(
 // result: [OL, OC, N]
 struct ggml_tensor * ggml_conv_1d_small_kern(
     struct ggml_context * ctx,
-    struct ggml_tensor  * a,
-    struct ggml_tensor  * b,
+    struct ggml_tensor  * filter,
+    struct ggml_tensor  * signal,
+    struct ggml_tensor  * bias,
     int                   s0,
     int                   p0,
     int                   d0) {
-    GGML_ASSERT(a->ne[1] == b->ne[1]);
+    GGML_ASSERT(filter->ne[1] == signal->ne[1]);
     bool is_node = false;
+    if (bias) {
+        GGML_ASSERT(bias->ne[0] == 1);
+        GGML_ASSERT(bias->ne[2] == 1);
+        GGML_ASSERT(bias->ne[3] == 1);
+        GGML_ASSERT(bias->ne[1] == filter->ne[0]);
+    }
 
     // TODO: support other configurations
     GGML_ASSERT(s0==1);
     GGML_ASSERT(p0==0);
 
-    if (a->grad || b->grad) {
+    if (filter->grad || signal->grad || (bias && bias->grad)) {
         GGML_ASSERT(false); // TODO: implement backward
         is_node = true;
     }
 
-    const int64_t OL = ggml_calc_conv_output_size(b->ne[0], a->ne[2], s0, p0, d0);
+    const int64_t OL = ggml_calc_conv_output_size(signal->ne[0], filter->ne[2], s0, p0, d0);
 
     const int64_t ne[4] = {
         OL,
-        a->ne[0],
-        b->ne[2],
+        filter->ne[0],
+        signal->ne[2],
         1,
     };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
@@ -7616,8 +7623,10 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
 
     result->op = GGML_OP_CONV_1D_SMALL_KERN;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
-    result->src[0] = a;
-    result->src[1] = b;
+    result->src[0] = filter;
+    result->src[1] = signal;
+    result->src[2] = bias;
+
 
     return result;
 }
@@ -14199,10 +14208,15 @@ static void ggml_compute_forward_conv_1d_small_kern(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
+        const struct ggml_tensor * src2,
               struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
+
+    if (src2) {
+        GGML_ASSERT(src2->type == GGML_TYPE_F32);
+    }
 
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
@@ -14224,6 +14238,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
 
     GGML_ASSERT(nb00 == sizeof(float));
     GGML_ASSERT(nb10 == sizeof(float));
+    GGML_ASSERT(nb0 == sizeof(float));
 
     if (params->type == GGML_TASK_INIT) {
         ggml_set_zero(dst);
@@ -14256,6 +14271,17 @@ static void ggml_compute_forward_conv_1d_small_kern(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
+        
+        if (src2){
+            for (int j=0; j<output_channels; j++) {
+                const float val = *((float *)((char *) src2->data + j*src2->nb[1]));
+                float * dst_data = (float *)((char *) dst->data + ir*nb2 + j*nb1);
+                for (int i=0; i<output_len; i++) {
+                    dst_data[i] = val;
+                }
+            }
+        }
+
         for (int ik = 0; ik < nk; ik++) {
             const float * kern_data = (float *)((char *) src0->data + ik*nb02);
             const long offset = d0 * ik;
@@ -17268,7 +17294,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_CONV_1D_SMALL_KERN:
             {
-                ggml_compute_forward_conv_1d_small_kern(params, tensor->src[0], tensor->src[1], tensor);
+                ggml_compute_forward_conv_1d_small_kern(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
             } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {

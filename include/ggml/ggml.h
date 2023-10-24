@@ -1396,8 +1396,9 @@ extern "C" {
 
     GGML_API struct ggml_tensor * ggml_conv_1d_small_kern(
             struct ggml_context * ctx,
-            struct ggml_tensor  * a,
-            struct ggml_tensor  * b,
+            struct ggml_tensor  * filter,
+            struct ggml_tensor  * signal,
+            struct ggml_tensor  * bias,
             int                   s0,  // stride
             int                   p0,  // padding
             int                   d0); // dilation
