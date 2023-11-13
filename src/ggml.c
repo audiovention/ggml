@@ -239,6 +239,8 @@ inline static void * ggml_aligned_malloc(size_t size) {
 #if defined(GGML_USE_CLBLAST) // allow usage of CLBlast alongside Accelerate functions
 #include "ggml-opencl.h"
 #endif
+#elif defined(GGML_USE_BLIS)
+#include "blis.h"
 #elif defined(GGML_USE_OPENBLAS)
 #if defined(GGML_BLAS_USE_MKL)
 #include <mkl.h>
@@ -11962,7 +11964,7 @@ static void ggml_compute_forward_group_norm(
 
 // ggml_compute_forward_mul_mat
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_BLIS)
 // helper function to determine if it is better to use BLAS or not
 // for large matrices, BLAS is faster
 static bool ggml_compute_forward_mul_mat_use_blas(
@@ -12042,7 +12044,7 @@ static void ggml_compute_forward_mul_mat(
     }
 #endif
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_BLIS)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
             return;
@@ -12239,7 +12241,7 @@ static void ggml_compute_forward_out_prod_f32(
     //   compute by src0 rows
 
     // TODO: #if defined(GGML_USE_CUBLAS) ggml_cuda_out_prod
-    // TODO: #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+    // TODO: #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_BLIS) || defined(GGML_USE_CLBLAST)
 
     if (params->type == GGML_TASK_INIT) {
         ggml_vec_set_f32(ne0*ne1*ne2*ne3, dst->data, 0);
@@ -12378,7 +12380,7 @@ static void ggml_compute_forward_out_prod_q_f32(
     //   compute by src0 rows
 
     // TODO: #if defined(GGML_USE_CUBLAS) ggml_cuda_out_prod
-    // TODO: #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
+    // TODO: #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_BLIS) || defined(GGML_USE_CLBLAST)
 
     if (params->type == GGML_TASK_INIT) {
         ggml_vec_set_f32(ne0*ne1*ne2*ne3, dst->data, 0);
@@ -18939,7 +18941,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 //       depending on the workload and the operating system.
                 //       since it is not clear what is the best approach, it should potentially become user-configurable
                 //       ref: https://github.com/ggerganov/ggml/issues/291
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_BLIS)
                 sched_yield();
 #endif
 
@@ -19098,7 +19100,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                         cur = ggml_cl_mul_mat_get_wsize(node->src[0], node->src[1], node);
                     } else
 #endif
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_BLIS)
                     if (ggml_compute_forward_mul_mat_use_blas(node->src[0], node->src[1], node)) {
                         n_tasks = 1; // TODO: this actually is doing nothing
                                      //       the threads are still spinning
@@ -22588,7 +22590,7 @@ int ggml_cpu_has_wasm_simd(void) {
 }
 
 int ggml_cpu_has_blas(void) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_BLIS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
     return 1;
 #else
     return 0;

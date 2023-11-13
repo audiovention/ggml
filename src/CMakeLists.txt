@@ -168,6 +168,20 @@ if (GGML_OPENBLAS)
     endif()
 endif()
 
+if (GGML_BLIS)
+    message(STATUS "Using BLIS")
+
+    set(GGML_EXTRA_LIBS  ${GGML_EXTRA_LIBS}  
+        "$<$<PLATFORM_ID:Linux>:${CMAKE_CURRENT_SOURCE_DIR}/../blis_builds/linux/lib/x86_64/libblis.a>"
+        "$<$<PLATFORM_ID:Darwin>:${CMAKE_CURRENT_SOURCE_DIR}/../blis_builds/macos/lib/universal/libblis.a>"
+    )
+    set(GGML_EXTRA_INCS  ${GGML_EXTRA_INCS}  
+        "$<$<PLATFORM_ID:Linux>:${CMAKE_CURRENT_SOURCE_DIR}/../blis_builds/linux/include/x86_64>"
+        "$<$<PLATFORM_ID:Darwin>:${CMAKE_CURRENT_SOURCE_DIR}/../blis_builds/macos/include/universal>"
+    )
+	set(GGML_EXTRA_FLAGS ${GGML_EXTRA_FLAGS} -DGGML_USE_BLIS)
+endif()
+
 if (GGML_CLBLAST)
 	set(CLBLAST_INCLUDE_SEARCH_PATHS
         /usr/include
