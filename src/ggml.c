@@ -3890,7 +3890,7 @@ inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x)
 
     if (i < n) {
         for (int j=i; j < n; j++) {
-            tmp[j] = x[j];
+            tmp[j-i] = x[j];
         }
 
         __m256 x1 = _mm256_loadu_ps(tmp);
@@ -3898,7 +3898,7 @@ inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x)
         _mm256_storeu_ps(tmp, y1);
 
         for (int j=i; j < n; j++) {
-            y[j] = tmp[j];
+            y[j] = tmp[j-i];
         }
     }
 
