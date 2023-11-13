@@ -3828,7 +3828,7 @@ inline static void ggml_vec_scale_f32(const int n, float * y, const float   v) {
 
 
 #ifdef __AVX2__
-inline __m256 tanh_fma(__m256 x)
+inline static __m256 tanh_fma(__m256 x)
 {
     const __m256 n0 = _mm256_set1_ps(4.351839500e+06);
     const __m256 n1 = _mm256_set1_ps(5.605646250e+05);
