@@ -3874,7 +3874,7 @@ inline static void ggml_vec_step_f32 (const int n, float * y, const float * x) {
 inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x) 
 {
 #ifdef GGML_USE_ACCELERATE
-    vvtanhf(y, x, &nc);
+    vvtanhf(y, x, &n);
 #else
     #ifdef __AVX2__
     int i = 0;
