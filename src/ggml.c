@@ -3824,6 +3824,46 @@ inline static void ggml_vec_scale_f32(const int n, float * y, const float   v) {
 #endif
 }
 
+
+#ifdef __AVX2__
+inline __m256 tanh_fma(__m256 x)
+{
+    const __m256 n0 = _mm256_set1_ps(4.351839500e+06);
+    const __m256 n1 = _mm256_set1_ps(5.605646250e+05);
+    const __m256 n2 = _mm256_set1_ps(1.263485352e+04);
+    const __m256 n3 = _mm256_set1_ps(4.751771164e+01);
+
+    const __m256 d0 = n0;
+    const __m256 d1 = _mm256_set1_ps(2.011170000e+06);
+    const __m256 d2 = _mm256_set1_ps(1.027901563e+05);
+    const __m256 d3 = _mm256_set1_ps(1.009453430e+03);
+
+    const __m256 max_val = _mm256_set1_ps(7.8231868743896484);
+
+    const __m256 signmask = _mm256_set1_ps(-0.0f);
+
+    __m256 signs = _mm256_and_ps(x, signmask);
+    x = _mm256_andnot_ps(signmask, x);
+    x = _mm256_min_ps(x, max_val);
+
+    __m256 f2 = _mm256_mul_ps(x, x);
+    // Numerator, Horner's scheme
+    __m256 num = n3;
+    num = _mm256_fmadd_ps(num, f2, n2);
+    num = _mm256_fmadd_ps(num, f2, n1);
+    num = _mm256_fmadd_ps(num, f2, n0);
+    num = _mm256_mul_ps(_mm256_xor_ps(x, signs), num);
+    // Denominator, Horner's scheme
+    __m256 denom = f2;
+    denom = _mm256_add_ps(denom, d3);
+    denom = _mm256_fmadd_ps(denom, f2, d2);
+    denom = _mm256_fmadd_ps(denom, f2, d1);
+    denom = _mm256_fmadd_ps(denom, f2, d0);
+
+    return _mm256_div_ps(num, denom);
+}
+#endif
+
 inline static void ggml_vec_norm_f32 (const int n, float * s, const float * x) { ggml_vec_dot_f32(n, s, x, x); *s = sqrtf(*s);   }
 inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = x[i]*x[i];   }
 inline static void ggml_vec_sqrt_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = sqrtf(x[i]); }
@@ -3836,7 +3876,33 @@ inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x)
 #ifdef GGML_USE_ACCELERATE
     vvtanhf(y, x, &nc);
 #else
+    #ifdef __AVX2__
+    int i = 0;
+    float tmp[8] = {0};
+
+    for (; i + 8 <= n; i += 8) {
+        __m256 x1 = _mm256_loadu_ps(x + i);
+        __m256 y1 = tanh_fma(x1);
+        _mm256_storeu_ps(y + i, y1);
+    }
+
+    if (i < n) {
+        for (int j=i; j < n; j++) {
+            tmp[j] = x[j];
+        }
+
+        __m256 x1 = _mm256_loadu_ps(tmp);
+        __m256 y1 = tanh_fma(x1);
+        _mm256_storeu_ps(tmp, y1);
+
+        for (int j=i; j < n; j++) {
+            y[j] = tmp[j];
+        }
+    }
+
+    #else
     for (int i = 0; i < n; ++i) y[i] = tanhf(x[i]);  
+    #endif
 #endif
 }
 inline static void ggml_vec_elu_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? x[i] : expf(x[i])-1; }
