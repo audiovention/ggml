@@ -3831,7 +3831,14 @@ inline static void ggml_vec_log_f32  (const int n, float * y, const float * x) {
 inline static void ggml_vec_abs_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = fabsf(x[i]); }
 inline static void ggml_vec_sgn_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? 1.f : ((x[i] < 0.f) ? -1.f : 0.f); }
 inline static void ggml_vec_step_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? 1.f : 0.f; }
-inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = tanhf(x[i]);  }
+inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x) 
+{
+#ifdef GGML_USE_ACCELERATE
+    vvtanhf(y, x, &nc);
+#else
+    for (int i = 0; i < n; ++i) y[i] = tanhf(x[i]);  
+#endif
+}
 inline static void ggml_vec_elu_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? x[i] : expf(x[i])-1; }
 inline static void ggml_vec_relu_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? x[i] : 0.f; }
 
@@ -11141,14 +11148,9 @@ static void ggml_compute_forward_tanh_f32(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
-#ifdef GGML_USE_ACCELERATE
-        vvtanhf((float *) ((char *) dst->data  + ir*( dst->nb[1])),
-                (float *) ((char *) src0->data + ir*(src0->nb[1])), &nc);
-#else
         ggml_vec_tanh_f32(nc,
                 (float *) ((char *) dst->data  + ir*( dst->nb[1])),
                 (float *) ((char *) src0->data + ir*(src0->nb[1])));
-#endif
     }
 }
 
