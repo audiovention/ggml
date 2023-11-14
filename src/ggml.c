@@ -18565,7 +18565,14 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                         } break;
                     case GGML_UNARY_OP_TANH:
                         {
-                            GGML_ASSERT(false); // TODO: not implemented
+                            if (src0->grad) {
+                                src0->grad = ggml_add_or_set(ctx,
+                                        src0->grad,
+                                        ggml_mul(ctx,
+                                            ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, src0)), ggml_new_f32(ctx, 1.0f)),
+                                            tensor->grad),
+                                        zero_table);
+                            }
                         } break;
                     case GGML_UNARY_OP_ELU:
                         {
