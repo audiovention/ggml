@@ -5696,10 +5696,11 @@ static struct ggml_tensor * ggml_add_impl(
     return result;
 }
 
-struct ggml_tensor * ggml_add_and_tanh_inplace(
+struct ggml_tensor * ggml_add_and_tanh_impl(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
-        struct ggml_tensor  * b) {
+        struct ggml_tensor  * b,
+        bool inplace) {
     GGML_ASSERT(ggml_are_same_shape(b, a));
 
     bool is_node = false;
@@ -5709,7 +5710,7 @@ struct ggml_tensor * ggml_add_and_tanh_inplace(
         is_node = true;
     }
 
-    struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     result->op   = GGML_OP_ADD_AND_TANH;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5719,6 +5720,19 @@ struct ggml_tensor * ggml_add_and_tanh_inplace(
     return result;
 }
 
+struct ggml_tensor * ggml_add_and_tanh(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b) {
+    return ggml_add_and_tanh_impl(ctx, a, b, false);
+}
+
+struct ggml_tensor * ggml_add_and_tanh_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b) {
+    return ggml_add_and_tanh_impl(ctx, a, b, true);
+}
 
 struct ggml_tensor * ggml_add(
         struct ggml_context * ctx,
