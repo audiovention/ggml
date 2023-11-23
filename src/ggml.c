@@ -7808,10 +7808,10 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_input(
     GGML_ASSERT(s0==1);
     GGML_ASSERT(p0==0);
 
-    if (filter->grad || gradient->grad) {
-        GGML_ASSERT(false); // this is a backward operation already - it doesn't make sense to need it's gradient
-        is_node = true;
-    }
+    // if (filter->grad || gradient->grad) {
+    //     GGML_ASSERT(false); // this is a backward operation already - it doesn't make sense to need it's gradient
+    //     is_node = true;
+    // }
 
     const int64_t IL = ggml_calc_conv_input_size(gradient->ne[0], filter->ne[2], s0, p0, d0);
 
@@ -7853,10 +7853,10 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_filter(
     GGML_ASSERT(s0==1);
     GGML_ASSERT(p0==0);
 
-    if (signal->grad || gradient->grad) {
-        GGML_ASSERT(false); // this is a backward operation already - it doesn't make sense to need it's gradient
-        is_node = true;
-    }
+    // if (signal->grad || gradient->grad) {
+    //     GGML_ASSERT(false); // this is a backward operation already - it doesn't make sense to need it's gradient
+    //     is_node = true;
+    // }
 
     const int64_t ne[4] = {
         gradient->ne[1],
@@ -18713,7 +18713,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                             d0);
                 }
 
-                if (tensor->src[2]->grad) {
+                if (tensor->src[2] && tensor->src[2]->grad) {
                     GGML_ASSERT(false); // TODO: not implemented
                 }
     
