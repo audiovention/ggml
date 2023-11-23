@@ -403,6 +403,8 @@ extern "C" {
         GGML_OP_CONV_1D_STAGE_0,  // internal
         GGML_OP_CONV_1D_STAGE_1,  // internal
         GGML_OP_CONV_1D_SMALL_KERN,
+        GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT,
+        GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER,
         GGML_OP_CONV_TRANSPOSE_1D,
         GGML_OP_CONV_2D,
         GGML_OP_CONV_2D_STAGE_0, // internal
@@ -1410,6 +1412,23 @@ extern "C" {
             struct ggml_tensor  * filter,
             struct ggml_tensor  * signal,
             struct ggml_tensor  * bias,
+            int                   s0,  // stride
+            int                   p0,  // padding
+            int                   d0); // dilation
+
+    GGML_API struct ggml_tensor * ggml_conv_1d_small_kern_back_input(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * filter,
+            struct ggml_tensor  * gradient,
+            int                   s0,  // stride
+            int                   p0,  // padding
+            int                   d0); // dilation
+
+    GGML_API struct ggml_tensor * ggml_conv_1d_small_kern_back_filter(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * signal,
+            struct ggml_tensor  * gradient,
+            int                   kernel_size, // we can't deduce this from the inputs
             int                   s0,  // stride
             int                   p0,  // padding
             int                   d0); // dilation
