@@ -18848,7 +18848,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     src0->grad = ggml_add_or_set(ctx,
                             src0->grad,
                             ggml_mul(ctx,
-                                ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, src0)), ggml_new_f32(ctx, 1.0f)),
+                                ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)),
                                 tensor->grad),
                             zero_table);
                 }
@@ -18857,7 +18857,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     src1->grad = ggml_add_or_set(ctx,
                             src1->grad,
                             ggml_mul(ctx,
-                                ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, src1)), ggml_new_f32(ctx, 1.0f)),
+                                ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)),
                                 tensor->grad),
                             zero_table);
                 }
@@ -18970,7 +18970,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                                 src0->grad = ggml_add_or_set(ctx,
                                         src0->grad,
                                         ggml_mul(ctx,
-                                            ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, src0)), ggml_new_f32(ctx, 1.0f)),
+                                            ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)),
                                             tensor->grad),
                                         zero_table);
                             }
