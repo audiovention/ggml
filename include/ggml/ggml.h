@@ -405,6 +405,7 @@ extern "C" {
         GGML_OP_CONV_1D_SMALL_KERN,
         GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT,
         GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER,
+        GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS,
         GGML_OP_CONV_TRANSPOSE_1D,
         GGML_OP_CONV_2D,
         GGML_OP_CONV_2D_STAGE_0, // internal
@@ -1432,6 +1433,10 @@ extern "C" {
             int                   s0,  // stride
             int                   p0,  // padding
             int                   d0); // dilation
+
+    GGML_API struct ggml_tensor * ggml_conv_1d_small_kern_back_bias(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * gradient);
 
     GGML_API struct ggml_tensor * ggml_conv_transpose_1d(
             struct ggml_context * ctx,

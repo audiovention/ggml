@@ -127,7 +127,7 @@ typedef void * thread_ret_t;
 #endif
 
 /*#define GGML_PERF*/
-#define GGML_DEBUG 0
+#define GGML_DEBUG 1
 #define GGML_GELU_FP16
 #define GGML_GELU_QUICK_FP16
 #define GGML_SILU_FP16
@@ -4173,6 +4173,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CONV_1D_SMALL_KERN",
     "CONV_1D_SMALL_KERN_BACK_INPUT",
     "CONV_1D_SMALL_KERN_BACK_FILTER",
+    "CONV_1D_SMALL_KERN_BACK_BIAS",
     "CONV_TRANSPOSE_1D",
     "CONV_2D",
     "CONV_2D_STAGE_0",
@@ -4208,7 +4209,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CROSS_ENTROPY_LOSS_BACK",
 };
 
-static_assert(GGML_OP_COUNT == 77, "GGML_OP_COUNT != 77");
+static_assert(GGML_OP_COUNT == 78, "GGML_OP_COUNT != 78");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -4264,6 +4265,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "conv_1d_small_kern(x)",
     "conv_1d_small_kern_back_input(x)",
     "conv_1d_small_kern_back_filter(x)",
+    "conv_1d_small_kern_back_bias(x)",
     "conv_transpose_1d(x)",
     "conv_2d(x)",
     "conv_2d_stage_0(x)",
@@ -4299,7 +4301,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "cross_entropy_loss_back(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 77, "GGML_OP_COUNT != 77");
+static_assert(GGML_OP_COUNT == 78, "GGML_OP_COUNT != 78");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -7873,6 +7875,35 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_filter(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = signal;
     result->src[1] = gradient;
+
+    return result;
+}
+
+
+// signal:      [IL, IC, N]
+// gradient:    [OL, OC, N]
+// result:      [OC，IC, K]
+struct ggml_tensor * ggml_conv_1d_small_kern_back_bias(
+    struct ggml_context * ctx,
+    struct ggml_tensor  * gradient) {
+    bool is_node = false;
+
+    // if (signal->grad || gradient->grad) {
+    //     GGML_ASSERT(false); // this is a backward operation already - it doesn't make sense to need it's gradient
+    //     is_node = true;
+    // }
+
+    const int64_t ne[4] = {
+        1,
+        gradient->ne[1],
+        1,
+        1,
+    };
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+
+    result->op = GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src[0] = gradient;
 
     return result;
 }
@@ -14734,6 +14765,62 @@ static void ggml_compute_forward_conv_1d_small_kern_back_filter(
     }
 }
 
+
+// src0: [OL, OC, N] - gradient
+// dst:  [1，OC, 1] - result
+static void ggml_compute_forward_conv_1d_small_kern_back_bias(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+              struct ggml_tensor * dst) {
+    GGML_ASSERT(src0->type == GGML_TYPE_F32);
+    GGML_ASSERT( dst->type == GGML_TYPE_F32);
+
+    int64_t t0 = ggml_perf_time_us();
+    UNUSED(t0);
+
+    GGML_TENSOR_UNARY_OP_LOCALS
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    const int nk = ne1; // output channels
+
+
+    GGML_ASSERT(nb00 == sizeof(float));
+    GGML_ASSERT(nb0 == sizeof(float));
+
+    if (params->type == GGML_TASK_INIT) {
+        return;
+    }
+
+    if (params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    const int output_len = ne00;
+
+    // total batches
+    const int nr = ne02;
+
+    // OC items per thread
+    const int dk = (nk + nth - 1)/nth;
+
+    // batch range for this thread
+    const int ik0 = dk*ith;
+    const int ik1 = MIN(ik0 + dk, nk);
+
+    for (int ik = ik0; ik < ik1; ik++) {
+        float accum = 0.0f;
+        float * kern_data = (float *)((char *) dst->data + ik*nb1);
+        for (int ir = 0; ir < nr; ir++) {
+            for (int iol = 0; iol < output_len; iol++) {
+                accum += *((float *)((char *) src0->data + iol*nb00 + ik*nb01 + ir*nb02));
+            }
+        }
+        *kern_data = accum;
+    }
+}
+
 // TODO: reuse ggml_mul_mat or implement ggml_im2col and remove stage_0 and stage_1
 static void gemm_f16_out_f32(int64_t m, int64_t n, int64_t k,
                              ggml_fp16_t * A,
@@ -17739,6 +17826,10 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_conv_1d_small_kern_back_filter(params, tensor->src[0], tensor->src[1], tensor);
             } break;
+        case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
+            {
+                ggml_compute_forward_conv_1d_small_kern_back_bias(params, tensor->src[0], tensor);
+            } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
                 ggml_compute_forward_conv_transpose_1d(params, tensor->src[0], tensor->src[1], tensor);
@@ -18714,12 +18805,13 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 }
 
                 if (tensor->src[2] && tensor->src[2]->grad) {
-                    GGML_ASSERT(false); // TODO: not implemented
+                    tensor->src[2]->grad = ggml_conv_1d_small_kern_back_bias(ctx, tensor->grad);
                 }
     
             } break;
         case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
         case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
+        case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
             {
                 GGML_ASSERT(false); // TODO: not implemented
             } break;
@@ -19635,6 +19727,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
+            case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
                 {
                     n_tasks = n_threads;
                 } break;
