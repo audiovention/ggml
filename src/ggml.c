@@ -20949,7 +20949,7 @@ static enum ggml_opt_result ggml_opt_adam(
         GGML_PRINT_DEBUG_5("df/dx1 = %10.6f\n", ggml_get_f32_1d(ps[1]->grad, 0));
 
         for (int i = 0; i < np; ++i) {
-            GGML_PRINT_DEBUG("param %d: %10.6f, g = %10.6f\n", i,
+            GGML_PRINT_DEBUG_5("param %d: %10.6f, g = %10.6f\n", i,
                     ggml_get_f32_1d(ps[i], 0), ggml_get_f32_1d(ps[i]->grad, 0));
         }
 
