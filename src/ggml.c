@@ -20861,7 +20861,7 @@ static enum ggml_opt_result ggml_opt_adam(
     int64_t nx = 0;
     for (int i = 0; i < gf->n_nodes; ++i) {
         if (gf->nodes[i]->is_param) {
-            GGML_PRINT_DEBUG("found param %d: grad->op = %d\n", np, gf->nodes[i]->grad->op);
+            GGML_PRINT_DEBUG_5("found param %d: grad->op = %d\n", np, gf->nodes[i]->grad->op);
 
             GGML_ASSERT(np < GGML_MAX_PARAMS);
 
