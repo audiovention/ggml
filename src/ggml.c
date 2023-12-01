@@ -14753,7 +14753,7 @@ static void ggml_compute_forward_conv_1d_small_kern_back_filter(
             float * kern_data = (float *)((char *) dst->data + ik*nb2);
 
             const float * A_src_data_gradient = (float *)((char *) src1->data + ir*nb12);
-            const float * B_src_data_signal = (float *)((char *) src0->data + ir*nb12 + ik*d0*nb10);
+            const float * B_src_data_signal = (float *)((char *) src0->data + ir*nb02 + ik*d0*nb00);
 
             cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     output_channels, input_channels, output_len,
