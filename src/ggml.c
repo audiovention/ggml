@@ -18785,26 +18785,26 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 const int d0 = ((int32_t *) tensor->op_params)[2];
 
                 if (src0->grad) {
-                    src0->grad = ggml_conv_1d_small_kern_back_filter(ctx,
+                    src0->grad = ggml_add_or_set(ctx, src0->grad, ggml_conv_1d_small_kern_back_filter(ctx,
                             src1,
                             tensor->grad,
                             src0->ne[2],
                             s0,
                             p0,
-                            d0);
+                            d0), zero_table);
                 }
 
                 if (src1->grad) {
-                    src1->grad = ggml_conv_1d_small_kern_back_input(ctx,
+                    src1->grad = ggml_add_or_set(ctx, src1->grad, ggml_conv_1d_small_kern_back_input(ctx,
                             src0,
                             tensor->grad,
                             s0,
                             p0,
-                            d0);
+                            d0), zero_table);
                 }
 
                 if (tensor->src[2] && tensor->src[2]->grad) {
-                    tensor->src[2]->grad = ggml_conv_1d_small_kern_back_bias(ctx, tensor->grad);
+                    tensor->src[2]->grad = ggml_add_or_set(ctx, tensor->src[2]->grad, ggml_conv_1d_small_kern_back_bias(ctx, tensor->grad), zero_table);
                 }
     
             } break;
