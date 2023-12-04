@@ -14669,6 +14669,13 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
+        for (int for_z_i1=0; for_z_i1 < ne1; for_z_i1++) {
+            float * dst_data = (float *)((char *) dst->data + ir*nb2 + for_z_i1*nb1);
+            for (int for_z_i2=0; for_z_i2 < ne0; for_z_i2++) {
+                dst_data[for_z_i2] = 0;
+            }
+        }
+
         for (int ik = 0; ik < nk; ik++) {
             const float * kern_data = (float *)((char *) src0->data + ik*nb02);
 
