@@ -10314,17 +10314,24 @@ static void ggml_compute_forward_acc_f32(
         const int i2 = (ir - i3*ne12*ne11)/ne11;
         const int i1 = (ir - i3*ne12*ne11 - i2*ne11);
 
+        if (!zero_out_accumulator) {
 #ifdef GGML_USE_ACCELERATE
-        vDSP_vadd(
-                (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + offset), 1,
-                (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11), 1,
-                (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1  + offset), 1, nc);
+            vDSP_vadd(
+                    (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + offset), 1,
+                    (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11), 1,
+                    (float *) ((char *) dst->data  + i3*nb3  + i2*nb2  + i1*nb1  + offset), 1, nc);
 #else
-        ggml_vec_add_f32(nc,
-                (float *) ((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + offset),
-                (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + offset),
-                (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11));
+            ggml_vec_add_f32(nc,
+                    (float *) ((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + offset),
+                    (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + offset),
+                    (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11));
 #endif
+        } else {
+            memcpy(
+                    (float *) ((char *) dst->data + i3*nb3  + i2*nb2  + i1*nb1  + offset),
+                    (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11),
+                    nc*sizeof(float) );
+        }
     }
 }
 
