@@ -18851,22 +18851,17 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_ADD_AND_TANH:
             {
+                struct ggml_tensor* interim_tensor = NULL;
+                if (src0->grad || src1->grad) {
+                    interim_tensor = ggml_mul_inplace(ctx, ggml_add1_inplace(ctx, ggml_neg_inplace(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)), tensor->grad);
+                }
+                
                 if (src0->grad) {
-                    src0->grad = ggml_add_or_set(ctx,
-                            src0->grad,
-                            ggml_mul(ctx,
-                                ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)),
-                                tensor->grad),
-                            zero_table);
+                    src0->grad = ggml_add_or_set(ctx, src0->grad, interim_tensor, zero_table);
                 }
 
                 if (src1->grad) {
-                    src1->grad = ggml_add_or_set(ctx,
-                            src1->grad,
-                            ggml_mul(ctx,
-                                ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)),
-                                tensor->grad),
-                            zero_table);
+                    src1->grad = ggml_add_or_set(ctx, src1->grad, interim_tensor, zero_table);
                 }
 
             } break;
