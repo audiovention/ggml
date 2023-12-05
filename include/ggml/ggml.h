@@ -1415,7 +1415,8 @@ extern "C" {
             struct ggml_tensor  * bias,
             int                   s0,  // stride
             int                   p0,  // padding
-            int                   d0); // dilation
+            int                   d0,  // dilation
+            int                   output_len); // output length if we want it reduced
 
     GGML_API struct ggml_tensor * ggml_conv_1d_small_kern_back_input(
             struct ggml_context * ctx,

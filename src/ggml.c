@@ -7750,7 +7750,8 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     struct ggml_tensor  * bias,
     int                   s0,
     int                   p0,
-    int                   d0) {
+    int                   d0,
+    int                   output_len) {
     GGML_ASSERT(filter->ne[1] == signal->ne[1]);
     bool is_node = false;
     if (bias) {
@@ -7764,14 +7765,23 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     GGML_ASSERT(s0==1);
     GGML_ASSERT(p0==0);
 
+    // We only support convolution with reshape with no bias and fixed input, as that is what we needed, TODO: easy to implement the other gradients
+    GGML_ASSERT(signal->grad == NULL || output_len == -1);
+    GGML_ASSERT(bias == NULL || bias->grad == NULL || output_len == -1);
+
     if (filter->grad || signal->grad || (bias && bias->grad)) {
         is_node = true;
     }
 
     const int64_t OL = ggml_calc_conv_output_size(signal->ne[0], filter->ne[2], s0, p0, d0);
+    GGML_ASSERT(output_len <= OL);
+    int64_t realOL = OL;
+    if (output_len > 0 && output_len < OL ) {
+        realOL = output_len;
+    }
 
     const int64_t ne[4] = {
-        OL,
+        realOL,
         filter->ne[0],
         signal->ne[2],
         1,
@@ -14562,6 +14572,8 @@ static void ggml_compute_forward_conv_1d_small_kern(
     const int input_len = ne10;
     const int output_len = ne0;
 
+    const int64_t real_input_len = ggml_calc_conv_input_size(output_len, nk, s0, p0, d0);
+
     GGML_ASSERT(input_channels == ne11);
     GGML_ASSERT(output_channels == ne1);
 
@@ -14592,7 +14604,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
             const float * kern_data = (float *)((char *) src0->data + ik*nb02);
             const long offset = d0 * ik;
 
-            float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb10);
+            float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb10 + (input_len - real_input_len)*nb0);
             float * dst_data = (float *)((char *) dst->data + ir*nb2);
 
             cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
@@ -14742,6 +14754,7 @@ static void ggml_compute_forward_conv_1d_small_kern_back_filter(
     GGML_ASSERT(input_channels == ne1);
     GGML_ASSERT(output_channels == ne0);
 
+    const int64_t real_input_len = ggml_calc_conv_input_size(output_len, nk, s0, p0, d0);
 
     // total batches
     const int nr = ne12;
@@ -14760,7 +14773,7 @@ static void ggml_compute_forward_conv_1d_small_kern_back_filter(
             float * kern_data = (float *)((char *) dst->data + ik*nb2);
 
             const float * A_src_data_gradient = (float *)((char *) src1->data + ir*nb12);
-            const float * B_src_data_signal = (float *)((char *) src0->data + ir*nb02 + ik*d0*nb00);
+            const float * B_src_data_signal = (float *)((char *) src0->data + ir*nb02 + ik*d0*nb00 + (input_len - real_input_len)*nb00);
 
             cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     output_channels, input_channels, output_len,
