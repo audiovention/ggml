@@ -18305,7 +18305,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     src0->grad =
                         ggml_add_or_set(ctx,
                                 src0->grad,
-                                ggml_scale(ctx,
+                                ggml_scale_inplace(ctx,
                                     ggml_mul(ctx, src0, tensor->grad),
                                     ggml_new_f32(ctx, 2.0f)),
                                 zero_table);
@@ -18855,7 +18855,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (src0->grad || src1->grad) {
                     interim_tensor = ggml_mul_inplace(ctx, ggml_add1_inplace(ctx, ggml_neg_inplace(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)), tensor->grad);
                 }
-                
+
                 if (src0->grad) {
                     src0->grad = ggml_add_or_set(ctx, src0->grad, interim_tensor, zero_table);
                 }
