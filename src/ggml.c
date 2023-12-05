@@ -4124,6 +4124,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
 
     "DUP",
     "ADD",
+    "ADD_AND_TRIM",
     "ADD1",
     "ACC",
     "SUB",
@@ -4209,13 +4210,14 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CROSS_ENTROPY_LOSS_BACK",
 };
 
-static_assert(GGML_OP_COUNT == 78, "GGML_OP_COUNT != 78");
+static_assert(GGML_OP_COUNT == 79, "GGML_OP_COUNT != 79");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
 
     "x",
     "x+y",
+    "trim(x+y)",
     "x+y",
     "view(x,nb,offset)+=y->x",
     "x-y",
@@ -4301,7 +4303,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "cross_entropy_loss_back(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 78, "GGML_OP_COUNT != 78");
+static_assert(GGML_OP_COUNT == 79, "GGML_OP_COUNT != 79");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -5695,6 +5697,36 @@ static struct ggml_tensor * ggml_add_impl(
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
     result->op   = GGML_OP_ADD;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src[0] = a;
+    result->src[1] = b;
+
+    return result;
+}
+
+struct ggml_tensor * ggml_add_and_trim(
+        struct ggml_context * ctx,
+        struct ggml_tensor * a,
+        struct ggml_tensor * b,
+        size_t output_len) {
+
+    GGML_ASSERT(a->ne[1] == b->ne[1]);
+    GGML_ASSERT(a->ne[2] == b->ne[2]);
+    GGML_ASSERT(a->ne[3] == b->ne[3]);
+    GGML_ASSERT(output_len <= a->ne[0]);
+    GGML_ASSERT(output_len <= b->ne[0]);
+
+    bool is_node = false;
+
+    if (a->grad || b->grad) {
+        is_node = true;
+    }
+
+    int64_t ne[4] = {output_len, a->ne[1], a->ne[2], a->ne[3]};
+
+    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, a->n_dims, ne);
+
+    result->op   = GGML_OP_ADD_AND_TRIM;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = b;
@@ -9746,6 +9778,51 @@ static void ggml_compute_forward_add_f32(
                 *dst_ptr = *src0_ptr + *src1_ptr;
             }
         }
+    }
+}
+
+
+static void ggml_compute_forward_add_and_trim(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst) {
+    
+    GGML_ASSERT(ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst));
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    const int nr = ggml_nrows(src0);
+
+    GGML_TENSOR_BINARY_OP_LOCALS
+
+    // GGML_ASSERT( nb0 == sizeof(float));
+    // GGML_ASSERT(nb00 == sizeof(float));
+
+    // rows per thread
+    const int dr = (nr + nth - 1)/nth;
+
+    // row range for this thread
+    const int ir0 = dr*ith;
+    const int ir1 = MIN(ir0 + dr, nr);
+
+    for (int ir = ir0; ir < ir1; ++ir) {
+        const int64_t i03 = ir/(ne02*ne01);
+        const int64_t i02 = (ir - i03*ne02*ne01)/ne01;
+        const int64_t i01 = (ir - i03*ne02*ne01 - i02*ne01);
+
+        float * dst_ptr  = (float *) ((char *) dst->data  + i03*nb3  + i02*nb2  + i01*nb1 );
+        float * src0_ptr = (float *) ((char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01 + (ne00 - ne0)*nb00);
+        float * src1_ptr = (float *) ((char *) src1->data + i03*nb13 + i02*nb12 + i01*nb11 + (ne10 - ne0)*nb10);
+#ifdef GGML_USE_ACCELERATE
+        vDSP_vadd(src0_ptr, 1, src1_ptr, 1, dst_ptr, 1, ne0);
+#else
+        ggml_vec_add_f32(ne0, dst_ptr, src0_ptr, src1_ptr);
+#endif
     }
 }
 
@@ -17670,6 +17747,10 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_add(params, tensor->src[0], tensor->src[1], tensor);
             } break;
+        case GGML_OP_ADD_AND_TRIM:
+            {
+                ggml_compute_forward_add_and_trim(params, tensor->src[0], tensor->src[1], tensor);
+            } break;
         case GGML_OP_ADD1:
             {
                 ggml_compute_forward_add1(params, tensor->src[0], tensor->src[1], tensor);
@@ -18238,6 +18319,23 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (src1->grad) {
                     src1->grad = ggml_add_or_set(ctx, src1->grad, tensor->grad, zero_table);
                 }
+            } break;
+        case GGML_OP_ADD_AND_TRIM:
+            {
+                if (src0->grad) {
+                    size_t offset = (src0->ne[0] - tensor->ne[0]) * src0->nb[0];
+                    src0->grad = ggml_acc_or_set(ctx, src0->grad, tensor->grad, 
+                        src0->nb[1], src0->nb[2], src0->nb[3],
+                        offset, zero_table);
+                }
+
+                if (src1->grad) {
+                    size_t offset = (src1->ne[0] - tensor->ne[0]) * src1->nb[0];
+                    src1->grad = ggml_acc_or_set(ctx, src1->grad, tensor->grad, 
+                        src1->nb[1], src1->nb[2], src1->nb[3],
+                        offset, zero_table);
+                }
+
             } break;
         case GGML_OP_ADD1:
             {
@@ -19557,6 +19655,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     work_size = MAX(work_size, cur);
                 } break;
             case GGML_OP_ADD:
+            case GGML_OP_ADD_AND_TRIM:
             case GGML_OP_ADD1:
                 {
                     n_tasks = n_threads;
