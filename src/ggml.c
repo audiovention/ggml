@@ -5841,7 +5841,8 @@ static struct ggml_tensor * ggml_acc_impl(
         size_t               nb2,
         size_t               nb3,
         size_t               offset,
-        bool inplace) {
+        bool inplace,
+        bool zero_out_accumulator) {
     GGML_ASSERT(ggml_nelements(b) <= ggml_nelements(a));
     GGML_ASSERT(ggml_is_contiguous(a));
     GGML_ASSERT(a->type == GGML_TYPE_F32);
@@ -5855,7 +5856,7 @@ static struct ggml_tensor * ggml_acc_impl(
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
-    int32_t params[] = { nb1, nb2, nb3, offset, inplace ? 1 : 0 };
+    int32_t params[] = { nb1, nb2, nb3, offset, inplace ? 1 : 0, zero_out_accumulator ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_ACC;
@@ -5874,7 +5875,7 @@ struct ggml_tensor * ggml_acc(
         size_t               nb2,
         size_t               nb3,
         size_t               offset) {
-    return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, false);
+    return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, false, false);
 }
 
 struct ggml_tensor * ggml_acc_inplace(
@@ -5885,7 +5886,7 @@ struct ggml_tensor * ggml_acc_inplace(
         size_t               nb2,
         size_t               nb3,
         size_t               offset) {
-    return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, true);
+    return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, true, false);
 }
 
 // ggml_sub
@@ -10258,14 +10259,19 @@ static void ggml_compute_forward_acc_f32(
     size_t nb3     = ((int32_t *) dst->op_params)[2];
     size_t offset  = ((int32_t *) dst->op_params)[3];
     bool   inplace = (bool) ((int32_t *) dst->op_params)[4];
+    bool   zero_out_accumulator = (bool) ((int32_t *) dst->op_params)[5];
 
-    if (!inplace && (params->type == GGML_TASK_INIT)) {
-        // memcpy needs to be synchronized across threads to avoid race conditions.
-        // => do it in INIT phase
-        memcpy(
-            ((char *)  dst->data),
-            ((char *) src0->data),
-            ggml_nbytes(dst));
+    if (params->type == GGML_TASK_INIT) {
+        if (zero_out_accumulator) {
+            ggml_set_zero(dst);
+        } else if (!inplace) {
+            // memcpy needs to be synchronized across threads to avoid race conditions.
+            // => do it in INIT phase
+            memcpy(
+                ((char *)  dst->data),
+                ((char *) src0->data),
+                ggml_nbytes(dst));
+        }
     }
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -18184,10 +18190,9 @@ static struct ggml_tensor * ggml_add_or_set(struct ggml_context * ctx, struct gg
 
 static struct ggml_tensor * ggml_acc_or_set(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b, size_t nb1, size_t nb2, size_t nb3, size_t offset, void * zero_table[]) {
     if (hash_contains(zero_table, a)) {
-        struct ggml_tensor * a_zero = ggml_scale(ctx, a, ggml_new_f32(ctx, 0));
-        return ggml_acc_impl(ctx, a_zero, b, nb1, nb2, nb3, offset, false);
+        return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, false, true);
     } else {
-        return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, false);
+        return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, false, false);
     }
 }
 
@@ -18539,7 +18544,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                         ggml_acc_impl(ctx,
                             tensor->grad,
                             ggml_neg(ctx, tensor_grad_view),
-                            nb1, nb2, nb3, offset, false),
+                            nb1, nb2, nb3, offset, false, false),
                         zero_table);
                 }
 
