@@ -14731,9 +14731,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
         for (int j=0; j<output_channels; j++) {
             const float val = src2 ? *((float *)((char *) src2->data + j*src2->nb[1])) : 0;
             float * dst_data = (float *)((char *) dst->data + ir*nb2 + j*nb1);
-            for (int i=0; i<output_len; i++) {
-                dst_data[i] = val;
-            }
+            ggml_vec_set_f32(output_len, dst_data, val);
         }
 
         for (int ik = 0; ik < nk; ik++) {
