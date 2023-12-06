@@ -18324,16 +18324,24 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 if (src0->grad) {
                     size_t offset = (src0->ne[0] - tensor->ne[0]) * src0->nb[0];
-                    src0->grad = ggml_acc_or_set(ctx, src0->grad, tensor->grad, 
-                        src0->nb[1], src0->nb[2], src0->nb[3],
-                        offset, zero_table);
+                    if (offset > 0) {
+                        src0->grad = ggml_acc_or_set(ctx, src0->grad, tensor->grad, 
+                            src0->nb[1], src0->nb[2], src0->nb[3],
+                            offset, zero_table);
+                    } else {
+                        src0->grad = ggml_add_or_set(ctx, src0->grad, tensor->grad, zero_table);
+                    }
                 }
 
                 if (src1->grad) {
                     size_t offset = (src1->ne[0] - tensor->ne[0]) * src1->nb[0];
-                    src1->grad = ggml_acc_or_set(ctx, src1->grad, tensor->grad, 
-                        src1->nb[1], src1->nb[2], src1->nb[3],
-                        offset, zero_table);
+                    if (offset > 0) {
+                        src1->grad = ggml_acc_or_set(ctx, src1->grad, tensor->grad, 
+                            src1->nb[1], src1->nb[2], src1->nb[3],
+                            offset, zero_table);
+                    } else {
+                        src1->grad = ggml_add_or_set(ctx, src1->grad, tensor->grad, zero_table);
+                    }
                 }
 
             } break;
