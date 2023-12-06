@@ -2386,7 +2386,31 @@ inline static void ggml_vec_add_f32 (const int n, float * z, const float * x, co
     for (int i = 0; i < n; ++i) z[i]  = x[i] + y[i]; 
 #endif
 }
-inline static void ggml_vec_add1_f32(const int n, float * z, const float * x, const float   v) { for (int i = 0; i < n; ++i) z[i]  = x[i] + v;    }
+inline static void ggml_vec_add1_f32(const int n, float * z, const float * x, const float   v)
+{
+#ifdef GGML_SIMD
+    const int np = (n & ~(GGML_F32_STEP - 1));
+
+    GGML_F32_VEC vx = GGML_F32_VEC_SET1(v);
+    GGML_F32_VEC ax[GGML_F32_ARR];
+
+    for (int i = 0; i < np; i += GGML_F32_STEP) {
+        for (int j = 0; j < GGML_F32_ARR; j++) {
+            ax[j] = GGML_F32_VEC_LOAD(x + i + j*GGML_F32_EPR);
+            GGML_F32_VEC_STORE(z + i + j*GGML_F32_EPR, GGML_F32_VEC_ADD(ax[j], vx));
+        }
+    }
+
+    // leftovers
+    for (int i = np; i < n; ++i) {
+        z[i]  = x[i] + v;
+    }
+#else
+    // scalar
+    for (int i = 0; i < n; ++i) z[i]  = x[i] + v;
+#endif
+
+}
 inline static void ggml_vec_acc_f32 (const int n, float * y, const float * x)                  { for (int i = 0; i < n; ++i) y[i] += x[i];        }
 inline static void ggml_vec_acc1_f32(const int n, float * y, const float   v)                  { for (int i = 0; i < n; ++i) y[i] += v;           }
 inline static void ggml_vec_sub_f32 (const int n, float * z, const float * x, const float * y)
@@ -3963,7 +3987,30 @@ inline static __m256 tanh_fma(__m256 x)
 #endif
 
 inline static void ggml_vec_norm_f32 (const int n, float * s, const float * x) { ggml_vec_dot_f32(n, s, x, x); *s = sqrtf(*s);   }
-inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = x[i]*x[i];   }
+inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x)
+{
+#ifdef GGML_SIMD
+    const int np = (n & ~(GGML_F32_STEP - 1));
+
+    GGML_F32_VEC ax[GGML_F32_ARR];
+
+    for (int i = 0; i < np; i += GGML_F32_STEP) {
+        for (int j = 0; j < GGML_F32_ARR; j++) {
+            ax[j] = GGML_F32_VEC_LOAD(x + i + j*GGML_F32_EPR);
+            GGML_F32_VEC_STORE(y + i + j*GGML_F32_EPR, GGML_F32_VEC_MUL(ax[j], ax[j]));
+        }
+    }
+
+    // leftovers
+    for (int i = np; i < n; ++i) {
+        y[i] = x[i]*x[i];
+    }
+#else
+    // scalar
+    for (int i = 0; i < n; ++i) y[i] = x[i]*x[i];
+#endif
+}
+
 inline static void ggml_vec_sqrt_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = sqrtf(x[i]); }
 inline static void ggml_vec_log_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = logf(x[i]);   }
 inline static void ggml_vec_abs_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = fabsf(x[i]); }
