@@ -9811,13 +9811,9 @@ static void ggml_compute_forward_add_and_trim(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ++ir) {
-        const int64_t i03 = ir/(ne02*ne01);
-        const int64_t i02 = (ir - i03*ne02*ne01)/ne01;
-        const int64_t i01 = (ir - i03*ne02*ne01 - i02*ne01);
-
-        float * dst_ptr  = (float *) ((char *) dst->data  + i03*nb3  + i02*nb2  + i01*nb1 );
-        float * src0_ptr = (float *) ((char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01 + (ne00 - ne0)*nb00);
-        float * src1_ptr = (float *) ((char *) src1->data + i03*nb13 + i02*nb12 + i01*nb11 + (ne10 - ne0)*nb10);
+        float * dst_ptr  = (float *) ((char *) dst->data  + ir*nb1 );
+        float * src0_ptr = (float *) ((char *) src0->data + ir*nb01 + (ne00 - ne0)*nb00);
+        float * src1_ptr = (float *) ((char *) src1->data + ir*nb11 + (ne10 - ne0)*nb10);
 #ifdef GGML_USE_ACCELERATE
         vDSP_vadd(src0_ptr, 1, src1_ptr, 1, dst_ptr, 1, ne0);
 #else
