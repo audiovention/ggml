@@ -4042,31 +4042,23 @@ inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x)
     vvtanhf(y, x, &n);
 #else
     #ifdef __AVX2__
-    int i = 0;
-    float tmp[8] = {0};
+        const int np = (n & ~(GGML_F32_STEP - 1));
 
-    for (; i + 8 <= n; i += 8) {
-        __m256 x1 = _mm256_loadu_ps(x + i);
-        __m256 y1 = tanh_fma(x1);
-        _mm256_storeu_ps(y + i, y1);
-    }
+        GGML_F32_VEC ax[GGML_F32_ARR];
 
-    if (i < n) {
-        for (int j=i; j < n; j++) {
-            tmp[j-i] = x[j];
+        for (int i = 0; i < np; i += GGML_F32_STEP) {
+            for (int j = 0; j < GGML_F32_ARR; j++) {
+                ax[j] = GGML_F32_VEC_LOAD(x + i + j*GGML_F32_EPR);
+                ax[j] = tanh_fma(ax[j]);
+                GGML_F32_VEC_STORE(y + i + j*GGML_F32_EPR, ax[j]);
+            }
         }
 
-        __m256 x1 = _mm256_loadu_ps(tmp);
-        __m256 y1 = tanh_fma(x1);
-        _mm256_storeu_ps(tmp, y1);
-
-        for (int j=i; j < n; j++) {
-            y[j] = tmp[j-i];
-        }
-    }
-
+        // leftovers
+        for (int i = np; i < n; ++i) y[i] = tanhf(x[i]); 
     #else
-    for (int i = 0; i < n; ++i) y[i] = tanhf(x[i]);  
+        // scalar
+        for (int i = 0;  i < n; ++i) y[i] = tanhf(x[i]); 
     #endif
 #endif
 }
