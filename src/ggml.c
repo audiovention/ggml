@@ -14915,6 +14915,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
     GGML_ASSERT(input_channels == ne11);
     GGML_ASSERT(output_channels == ne1);
 
+    const bool has_bias = (src2 != NULL);
 
     // total batches
     const int nr = ne12;
@@ -14929,11 +14930,12 @@ static void ggml_compute_forward_conv_1d_small_kern(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
-        
-        for (int j=0; j<output_channels; j++) {
-            const float val = src2 ? *((float *)((char *) src2->data + j*src2->nb[1])) : 0;
-            float * dst_data = (float *)((char *) dst->data + ir*nb2 + j*nb1);
-            ggml_vec_set_f32(output_len, dst_data, val);
+        if (has_bias) {
+            for (int j=0; j<output_channels; j++) {
+                const float val = src2 ? *((float *)((char *) src2->data + j*src2->nb[1])) : 0;
+                float * dst_data = (float *)((char *) dst->data + ir*nb2 + j*nb1);
+                ggml_vec_set_f32(output_len, dst_data, val);
+            }
         }
 
         for (int ik = 0; ik < nk; ik++) {
@@ -14947,7 +14949,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
                     output_len, output_channels, input_channels,
                     1.0f,   src_data,  input_len,
                             kern_data, output_channels,
-                    1.0f,   dst_data,  output_len);
+                    ((ik==0 && !has_bias) ? 0.0f : 1.0f),   dst_data,  output_len);
         }
     }
 }
