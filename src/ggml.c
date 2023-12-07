@@ -14956,11 +14956,11 @@ static void ggml_compute_forward_conv_1d_small_kern(
 
     for (int ir = ir0; ir < ir1; ir++) {
         if (initialize_output) {
-            for (int j=0; j<output_channels; j++) {
-                const float val = has_bias ? *((float *)((char *) src2->data + j*src2->nb[1])) : 0;
-                float * dst_data = (float *)((char *) dst->data + ir*nb2 + j*nb1);
+            for (int oc_idx=0; oc_idx<output_channels; oc_idx++) {
+                const float val = has_bias ? *((float *)((char *) src2->data + oc_idx*src2->nb[1])) : 0;
+                float * dst_data = (float *)((char *) dst->data + ir*nb2 + oc_idx*nb1);
                 if (has_inject_signal) {
-                    float * inject_src_data = (float *)((char *) src3->data + ir*src3->nb[2] + j*src3->nb[1]);
+                    float * inject_src_data = (float *)((char *) src3->data + ir*src3->nb[2] + oc_idx*src3->nb[1]);
                     ggml_vec_add1_f32(output_len, dst_data, inject_src_data, val);
                 } else {
                     ggml_vec_set_f32(output_len, dst_data, val);
