@@ -7999,6 +7999,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     struct ggml_tensor  * signal,
     struct ggml_tensor  * bias,
     struct ggml_tensor  * inject_signal,
+    bool                  apply_tanh,
     int                   s0,
     int                   p0,
     int                   d0,
@@ -8051,7 +8052,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
 
-    int32_t params[] = { s0, p0, d0 };
+    int32_t params[] = { s0, p0, d0, apply_tanh ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op = GGML_OP_CONV_1D_SMALL_KERN;
@@ -14909,6 +14910,8 @@ static void ggml_compute_forward_conv_1d_small_kern(
     const int32_t s0 = ((const int32_t*)(dst->op_params))[0];
     const int32_t p0 = ((const int32_t*)(dst->op_params))[1];
     const int32_t d0 = ((const int32_t*)(dst->op_params))[2];
+    const bool apply_tanh = (bool) ((int32_t *) dst->op_params)[3];
+
     GGML_ASSERT(s0 == 1);
     GGML_ASSERT(p0 == 0);
 
@@ -14966,18 +14969,23 @@ static void ggml_compute_forward_conv_1d_small_kern(
             }
         }
 
+        float * dst_data = (float *)((char *) dst->data + ir*nb2);
+
         for (int ik = 0; ik < nk; ik++) {
             const float * kern_data = (float *)((char *) src0->data + ik*nb02);
             const long offset = d0 * ik;
 
             float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb10 + (input_len - real_input_len)*nb0);
-            float * dst_data = (float *)((char *) dst->data + ir*nb2);
 
             cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
                     output_len, output_channels, input_channels,
                     1.0f,   src_data,  input_len,
                             kern_data, output_channels,
                     ((ik==0 && !initialize_output) ? 0.0f : 1.0f),   dst_data,  output_len);
+        }
+
+        if (apply_tanh) {
+            ggml_vec_tanh_f32(output_len * output_channels, dst_data, dst_data);
         }
     }
 }
@@ -19201,11 +19209,17 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 const int s0 = ((int32_t *) tensor->op_params)[0];
                 const int p0 = ((int32_t *) tensor->op_params)[1];
                 const int d0 = ((int32_t *) tensor->op_params)[2];
+                const bool apply_tanh = (bool) ((int32_t *) tensor->op_params)[3];
+
+                struct ggml_tensor * interim_tensor = tensor->grad;
+                if (interim_tensor && apply_tanh) {
+                    interim_tensor = ggml_add_and_tanh_back(ctx, tensor, tensor->grad);
+                }
 
                 if (src0->grad) {
                     src0->grad = ggml_add_or_set(ctx, src0->grad, ggml_conv_1d_small_kern_back_filter(ctx,
                             src1,
-                            tensor->grad,
+                            interim_tensor,
                             src0->ne[2],
                             s0,
                             p0,
@@ -19215,18 +19229,18 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (src1->grad) {
                     src1->grad = ggml_add_or_set(ctx, src1->grad, ggml_conv_1d_small_kern_back_input(ctx,
                             src0,
-                            tensor->grad,
+                            interim_tensor,
                             s0,
                             p0,
                             d0), zero_table);
                 }
 
                 if (tensor->src[2] && tensor->src[2]->grad) {
-                    tensor->src[2]->grad = ggml_add_or_set(ctx, tensor->src[2]->grad, ggml_conv_1d_small_kern_back_bias(ctx, tensor->grad), zero_table);
+                    tensor->src[2]->grad = ggml_add_or_set(ctx, tensor->src[2]->grad, ggml_conv_1d_small_kern_back_bias(ctx, interim_tensor), zero_table);
                 }
 
                 if (tensor->src[3] && tensor->src[3]->grad) {
-                    tensor->src[3]->grad = ggml_add_or_set(ctx, tensor->src[3]->grad, tensor->grad, zero_table);
+                    tensor->src[3]->grad = ggml_add_or_set(ctx, tensor->src[3]->grad, interim_tensor, zero_table);
                 }
 
             } break;

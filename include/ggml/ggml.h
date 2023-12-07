@@ -1427,6 +1427,7 @@ extern "C" {
             struct ggml_tensor  * signal,
             struct ggml_tensor  * bias,
             struct ggml_tensor  * inject_signal,
+            bool                  apply_tanh,
             int                   s0,  // stride
             int                   p0,  // padding
             int                   d0,  // dilation
