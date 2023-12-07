@@ -10559,9 +10559,7 @@ static void ggml_compute_forward_acc_f32(
     bool   zero_out_accumulator = (bool) ((int32_t *) dst->op_params)[5];
 
     if (params->type == GGML_TASK_INIT) {
-        if (zero_out_accumulator) {
-            ggml_set_zero(dst);
-        } else if (!inplace) {
+        if (!inplace && !zero_out_accumulator) {
             // memcpy needs to be synchronized across threads to avoid race conditions.
             // => do it in INIT phase
             memcpy(
@@ -10580,6 +10578,9 @@ static void ggml_compute_forward_acc_f32(
 
     const int nr = ggml_nrows(src1);
     const int nc = src1->ne[0];
+    const int nc_out = dst->ne[0];
+    const size_t offset_ne = offset / ggml_element_size(dst);
+    const size_t nc_after = nc_out - nc - offset_ne;
 
     GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne)
     GGML_TENSOR_LOCALS(size_t,  nb1, src1, nb)
@@ -10624,10 +10625,16 @@ static void ggml_compute_forward_acc_f32(
                     (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11));
 #endif
         } else {
+            float* ptr1 = (float *) ((char *) dst->data + i3*nb3  + i2*nb2  + i1*nb1);
+            float* ptr2 = ptr1 + offset_ne;
+            float* ptr3 = ptr2 + nc;
+
+            ggml_vec_set_f32(offset_ne, ptr1, 0.f);
             memcpy(
-                    (float *) ((char *) dst->data + i3*nb3  + i2*nb2  + i1*nb1  + offset),
+                    ptr2,
                     (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11),
                     nc*sizeof(float) );
+            ggml_vec_set_f32(nc_after, ptr3, 0.f);
         }
     }
 }
