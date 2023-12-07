@@ -1861,6 +1861,8 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
 #define GGML_F32x4_FMA(a, b, c) vfmaq_f32(a, b, c)
 #define GGML_F32x4_ADD          vaddq_f32
 #define GGML_F32x4_MUL          vmulq_f32
+#define GGML_F32x4_DIV          vdivq_f32
+#define GGML_F32x4_SQRT         vsqrtq_f32
 #define GGML_F32x4_REDUCE_ONE(x) vaddvq_f32(x)
 #define GGML_F32x4_REDUCE(res, x)              \
 {                                              \
@@ -1887,6 +1889,8 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
 #define GGML_F32_VEC_FMA    GGML_F32x4_FMA
 #define GGML_F32_VEC_ADD    GGML_F32x4_ADD
 #define GGML_F32_VEC_MUL    GGML_F32x4_MUL
+#define GGML_F32_VEC_SQRT   GGML_F32x4_SQRT
+#define GGML_F32_VEC_DIV    GGML_F32x4_DIV
 #define GGML_F32_VEC_REDUCE GGML_F32x4_REDUCE
 
 // F16 NEON
@@ -1980,6 +1984,8 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
 #endif
 #define GGML_F32x8_ADD     _mm256_add_ps
 #define GGML_F32x8_MUL     _mm256_mul_ps
+#define GGML_F32x8_SQRT    _mm256_sqrt_ps
+#define GGML_F32x8_DIV     _mm256_div_ps
 #define GGML_F32x8_REDUCE(res, x)                                 \
 do {                                                              \
     int offset = GGML_F32_ARR >> 1;                               \
@@ -2009,6 +2015,8 @@ do {                                                              \
 #define GGML_F32_VEC_FMA    GGML_F32x8_FMA
 #define GGML_F32_VEC_ADD    GGML_F32x8_ADD
 #define GGML_F32_VEC_MUL    GGML_F32x8_MUL
+#define GGML_F32_VEC_SQRT   GGML_F32x8_SQRT
+#define GGML_F32_VEC_DIV    GGML_F32x8_DIV
 #define GGML_F32_VEC_REDUCE GGML_F32x8_REDUCE
 
 // F16 AVX
@@ -2080,6 +2088,8 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
 #define GGML_F32x4_FMA(a, b, c) vec_madd(b, c, a)
 #define GGML_F32x4_ADD          vec_add
 #define GGML_F32x4_MUL          vec_mul
+#define GGML_F32x4_SQRT         vec_sqrt
+#define GGML_F32x4_DIV          vec_div
 #define GGML_F32x4_REDUCE(res, x)              \
 {                                              \
     int offset = GGML_F32_ARR >> 1;            \
@@ -2108,6 +2118,8 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
 #define GGML_F32_VEC_FMA    GGML_F32x4_FMA
 #define GGML_F32_VEC_ADD    GGML_F32x4_ADD
 #define GGML_F32_VEC_MUL    GGML_F32x4_MUL
+#define GGML_F32_VEC_SQRT   GGML_F32x4_SQRT
+#define GGML_F32_VEC_DIV    GGML_F32x4_DIV
 #define GGML_F32_VEC_REDUCE GGML_F32x4_REDUCE
 
 // F16 POWER9
@@ -2146,6 +2158,8 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
 #define GGML_F32x4_FMA(a, b, c) wasm_f32x4_add(wasm_f32x4_mul(b, c), a)
 #define GGML_F32x4_ADD          wasm_f32x4_add
 #define GGML_F32x4_MUL          wasm_f32x4_mul
+#define GGML_F32x4_SQRT         wasm_f32x4_sqrt
+#define GGML_F32x4_DIV          wasm_f32x4_div
 #define GGML_F32x4_REDUCE(res, x)                  \
 {                                                  \
     int offset = GGML_F32_ARR >> 1;                \
@@ -2174,6 +2188,8 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
 #define GGML_F32_VEC_FMA    GGML_F32x4_FMA
 #define GGML_F32_VEC_ADD    GGML_F32x4_ADD
 #define GGML_F32_VEC_MUL    GGML_F32x4_MUL
+#define GGML_F32_VEC_SQRT   GGML_F32x4_SQRT
+#define GGML_F32_VEC_DIV    GGML_F32x4_DIV
 #define GGML_F32_VEC_REDUCE GGML_F32x4_REDUCE
 
 // F16 WASM
@@ -2263,6 +2279,8 @@ inline static void __wasm_f16x4_store(ggml_fp16_t * p, v128_t x) {
 #endif
 #define GGML_F32x4_ADD     _mm_add_ps
 #define GGML_F32x4_MUL     _mm_mul_ps
+#define GGML_F32x4_SQRT    _mm_sqrt_ps
+#define GGML_F32x4_DIV     _mm_div_ps
 #define GGML_F32x4_REDUCE(res, x)                                 \
 {                                                                 \
     int offset = GGML_F32_ARR >> 1;                               \
@@ -2290,6 +2308,8 @@ inline static void __wasm_f16x4_store(ggml_fp16_t * p, v128_t x) {
 #define GGML_F32_VEC_FMA    GGML_F32x4_FMA
 #define GGML_F32_VEC_ADD    GGML_F32x4_ADD
 #define GGML_F32_VEC_MUL    GGML_F32x4_MUL
+#define GGML_F32_VEC_SQRT   GGML_F32x4_SQRT
+#define GGML_F32_VEC_DIV    GGML_F32x4_DIV
 #define GGML_F32_VEC_REDUCE GGML_F32x4_REDUCE
 
 // F16 SSE
@@ -21213,9 +21233,53 @@ static void ggml_opt_acc_grad(int np, struct ggml_tensor * const ps[], float * g
 //   ref: https://arxiv.org/pdf/1412.6980.pdf
 //
 
-static inline void ggml_single_adam_step_vec_f32(float* param, const float* g, float* m, float* v, const float beta1, const float beta2, const float beta1h, const float beta2h, const float eps, const float p_decay, const float gnorm, const int64_t ne)
+static inline void ggml_single_adam_step_vec_f32(float* param, const float* g, float* m, float* v, 
+    const float beta1, const float beta2, const float beta1h, const float beta2h, 
+    const float eps, const float p_decay, const float gnorm, const int n)
 {
-    for (int64_t j = 0; j < ne; ++j) {
+    int start_index = 0;
+#ifdef GGML_SIMD
+    const int np = (n & ~(GGML_F32_STEP - 1));
+
+    GGML_F32_VEC aparam[GGML_F32_ARR];
+    GGML_F32_VEC ag[GGML_F32_ARR];
+    GGML_F32_VEC am[GGML_F32_ARR];
+    GGML_F32_VEC av[GGML_F32_ARR];
+    GGML_F32_VEC v_gnorm = GGML_F32_VEC_SET1(gnorm);
+    GGML_F32_VEC v_beta1 = GGML_F32_VEC_SET1(beta1);
+    GGML_F32_VEC v_beta2 = GGML_F32_VEC_SET1(beta2);
+    GGML_F32_VEC v_1mbeta1 = GGML_F32_VEC_SET1((1.f-beta1));
+    GGML_F32_VEC v_1mbeta2 = GGML_F32_VEC_SET1((1.f-beta2));
+    GGML_F32_VEC v_beta1h = GGML_F32_VEC_SET1(beta1h);
+    GGML_F32_VEC v_beta2h = GGML_F32_VEC_SET1(beta2h);
+    GGML_F32_VEC v_eps = GGML_F32_VEC_SET1(eps);
+    GGML_F32_VEC v_1mp_decay = GGML_F32_VEC_SET1((1.f-p_decay));
+
+    for (int i = 0; i < np; i += GGML_F32_STEP) {
+        for (int j = 0; j < GGML_F32_ARR; j++) {
+            aparam[j] = GGML_F32_VEC_LOAD(param + i + j*GGML_F32_EPR);
+            ag[j] = GGML_F32_VEC_MUL(GGML_F32_VEC_LOAD(g + i + j*GGML_F32_EPR), v_gnorm);
+            am[j] = GGML_F32_VEC_LOAD(m + i + j*GGML_F32_EPR);
+            av[j] = GGML_F32_VEC_LOAD(v + i + j*GGML_F32_EPR);
+
+            am[j] = GGML_F32_VEC_FMA(GGML_F32_VEC_MUL(am[j], v_beta1), ag[j], v_1mbeta1);
+            av[j] = GGML_F32_VEC_FMA(GGML_F32_VEC_MUL(av[j], v_beta2), GGML_F32_VEC_MUL(ag[j], ag[j]), v_1mbeta2);
+
+            GGML_F32_VEC_STORE(m + i + j*GGML_F32_EPR, am[j]);
+            GGML_F32_VEC_STORE(v + i + j*GGML_F32_EPR, av[j]);
+            
+            am[j] = GGML_F32_VEC_MUL(am[j], v_beta1h);
+            av[j] = GGML_F32_VEC_ADD(GGML_F32_VEC_SQRT(GGML_F32_VEC_MUL(av[j], v_beta2h)), v_eps);
+            aparam[j] = GGML_F32_VEC_FMA(-GGML_F32_VEC_DIV(am[j], av[j]), aparam[j], v_1mp_decay);
+
+            GGML_F32_VEC_STORE(param + i + j*GGML_F32_EPR, aparam[j]);
+        }
+    }
+
+    start_index = np;
+#endif
+    // scalar
+    for (int j = start_index; j < n; ++j) {
         float x  = param[j];
         float g_ = g[j]*gnorm;
         m[j] = m[j]*beta1 +    g_*(1.0f - beta1);
