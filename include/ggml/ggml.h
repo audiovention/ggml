@@ -415,6 +415,7 @@ extern "C" {
         GGML_OP_POOL_1D,
         GGML_OP_POOL_2D,
         GGML_OP_ADD_AND_TANH,
+        GGML_OP_ADD_AND_TANH_BACK,
 
         GGML_OP_UPSCALE, // nearest interpolate
 
@@ -780,6 +781,11 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    GGML_API struct ggml_tensor * ggml_add_and_tanh_back(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * output,
+            struct ggml_tensor  * gradient);
 
     GGML_API struct ggml_tensor * ggml_add_cast(
             struct ggml_context * ctx,

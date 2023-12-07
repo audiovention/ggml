@@ -4088,6 +4088,35 @@ inline static void ggml_vec_add_and_tanh_f32 (const int n, float * y, const floa
     #endif
 // #endif
 }
+
+inline static void ggml_vec_add_and_tanh_back_f32 (const int n, float * z, const float * x, const float * y) 
+{
+#ifdef GGML_SIMD
+    const int np = (n & ~(GGML_F32_STEP - 1));
+
+    GGML_F32_VEC ax[GGML_F32_ARR];
+    GGML_F32_VEC ay[GGML_F32_ARR];
+    GGML_F32_VEC vx = GGML_F32_VEC_SET1(-1.f);
+
+    for (int i = 0; i < np; i += GGML_F32_STEP) {
+        for (int j = 0; j < GGML_F32_ARR; j++) {
+            ax[j] = GGML_F32_VEC_LOAD(x + i + j*GGML_F32_EPR);
+            ay[j] = GGML_F32_VEC_LOAD(y + i + j*GGML_F32_EPR);
+            ax[j] = -GGML_F32_VEC_FMA(vx, ax[j], ax[j]);
+            GGML_F32_VEC_STORE(z + i + j*GGML_F32_EPR, GGML_F32_VEC_MUL(ax[j], ay[j]));
+        }
+    }
+
+    // leftovers
+    for (int i = np; i < n; ++i) {
+        z[i]  = (1.f - x[i]*x[i]) * y[i];
+    }
+#else
+    // scalar
+    for (int i = 0; i < n; ++i) z[i]  = (1.f - x[i]*x[i]) * y[i];
+#endif
+}
+
 inline static void ggml_vec_elu_f32  (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? x[i] : expf(x[i])-1; }
 inline static void ggml_vec_relu_f32 (const int n, float * y, const float * x) { for (int i = 0; i < n; ++i) y[i] = (x[i] > 0.f) ? x[i] : 0.f; }
 
@@ -4326,6 +4355,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "POOL_1D",
     "POOL_2D",
     "ADD_AND_TANH",
+    "ADD_AND_TANH_BACK",
     "UPSCALE",
 
     "FLASH_ATTN",
@@ -4353,7 +4383,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CROSS_ENTROPY_LOSS_BACK",
 };
 
-static_assert(GGML_OP_COUNT == 79, "GGML_OP_COUNT != 79");
+static_assert(GGML_OP_COUNT == 80, "GGML_OP_COUNT != 80");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -4419,6 +4449,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "pool_1d(x)",
     "pool_2d(x)",
     "add_and_tanh(x)",
+    "add_and_tanh_back(x)",
     "upscale(x)",
 
     "flash_attn(x)",
@@ -4446,7 +4477,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "cross_entropy_loss_back(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 79, "GGML_OP_COUNT != 79");
+static_assert(GGML_OP_COUNT == 80, "GGML_OP_COUNT != 80");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -5912,6 +5943,27 @@ struct ggml_tensor * ggml_add_and_tanh_inplace(
         struct ggml_tensor  * a,
         struct ggml_tensor  * b) {
     return ggml_add_and_tanh_impl(ctx, a, b, true);
+}
+
+struct ggml_tensor * ggml_add_and_tanh_back(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * output,
+        struct ggml_tensor  * gradient) {
+    bool is_node = false;
+
+    // OP is a backwards op so making it a node does not make sense
+    // if (a->grad || b->grad) {
+    //     is_node = true;
+    // }
+
+    struct ggml_tensor * result = ggml_dup_tensor(ctx, output);
+
+    result->op   = GGML_OP_ADD_AND_TANH_BACK;
+    result->grad = NULL;
+    result->src[0] = output;
+    result->src[1] = gradient;
+
+    return result;
 }
 
 struct ggml_tensor * ggml_add(
@@ -11693,6 +11745,43 @@ static void ggml_compute_forward_add_and_tanh(
 
     for (int ir = ir0; ir < ir1; ir++) {
         ggml_vec_add_and_tanh_f32(nc,
+                (float *) ((char *) dst->data  + ir*( dst->nb[1])),
+                (float *) ((char *) src0->data + ir*(src0->nb[1])),
+                (float *) ((char *) src1->data + ir*(src1->nb[1]))
+        );
+    }
+}
+
+static void ggml_compute_forward_add_and_tanh_back(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst) {
+    assert(ggml_are_same_shape(src0, dst));
+    assert(ggml_are_same_shape(src1, dst));
+
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    const int nr  = ggml_nrows(src0);
+    const int nc = src0->ne[0];
+
+    assert(dst->nb[0]  == sizeof(float));
+    assert(src0->nb[0] == sizeof(float));
+
+    // rows per thread
+    const int dr = (nr + nth - 1)/nth;
+
+    // row range for this thread
+    const int ir0 = dr*ith;
+    const int ir1 = MIN(ir0 + dr, nr);
+
+    for (int ir = ir0; ir < ir1; ir++) {
+        ggml_vec_add_and_tanh_back_f32(nc,
                 (float *) ((char *) dst->data  + ir*( dst->nb[1])),
                 (float *) ((char *) src0->data + ir*(src0->nb[1])),
                 (float *) ((char *) src1->data + ir*(src1->nb[1]))
@@ -18112,6 +18201,10 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_add_and_tanh(params, tensor->src[0], tensor->src[1], tensor);
             } break;
+        case GGML_OP_ADD_AND_TANH_BACK:
+            {
+                ggml_compute_forward_add_and_tanh_back(params, tensor->src[0], tensor->src[1], tensor);
+            } break;
         case GGML_OP_UPSCALE:
             {
                 ggml_compute_forward_upscale(params, tensor->src[0], tensor);
@@ -19121,7 +19214,8 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 struct ggml_tensor* interim_tensor = NULL;
                 if (src0->grad || src1->grad) {
-                    interim_tensor = ggml_mul_inplace(ctx, ggml_add1_inplace(ctx, ggml_neg_inplace(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)), tensor->grad);
+                    interim_tensor = ggml_add_and_tanh_back(ctx, tensor, tensor->grad);
+                    // interim_tensor = ggml_mul_inplace(ctx, ggml_add1_inplace(ctx, ggml_neg_inplace(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)), tensor->grad);
                 }
 
                 if (src0->grad) {
@@ -19132,6 +19226,10 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     src1->grad = ggml_add_or_set(ctx, src1->grad, interim_tensor, zero_table);
                 }
 
+            } break;
+        case GGML_OP_ADD_AND_TANH_BACK:
+            {
+                GGML_ASSERT(false); // TODO: not implemented
             } break;
         case GGML_OP_UPSCALE:
             {
@@ -20119,6 +20217,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     n_tasks = 1;
                 } break;
             case GGML_OP_ADD_AND_TANH:
+            case GGML_OP_ADD_AND_TANH_BACK:
             case GGML_OP_UPSCALE:
                 {
                     n_tasks = n_threads;
