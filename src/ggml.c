@@ -8007,33 +8007,25 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
 
     const int64_t OL = ggml_calc_conv_output_size(signal->ne[0], filter->ne[2], s0, p0, d0);
     GGML_ASSERT(output_len <= OL);
+    const int64_t realOL = (output_len > 0) ? output_len : OL;
 
     if (inject_signal) {
         GGML_ASSERT(inject_signal->ne[1] == filter->ne[0]);
         GGML_ASSERT(inject_signal->ne[2] == signal->ne[2]);
         GGML_ASSERT(inject_signal->ne[3] == 1);
         GGML_ASSERT(inject_signal->type == GGML_TYPE_F32);
-
-        // TODO: remove those 2 last restrictions
-        GGML_ASSERT(inject_signal->ne[0] == OL);
-        GGML_ASSERT(output_len == -1);
+        GGML_ASSERT(inject_signal->ne[0] >= realOL);
     }
 
     // TODO: support other configurations
     GGML_ASSERT(s0==1);
     GGML_ASSERT(p0==0);
 
-    // We only support convolution with reshape with no bias and fixed input, as that is what we needed, TODO: easy to implement the other gradients
-    GGML_ASSERT(signal->grad == NULL || output_len == -1);
-    GGML_ASSERT(bias == NULL || bias->grad == NULL || output_len == -1);
+    // This special case is actually implemented, but not tested yet, TODO: just test and delete the assert
+    GGML_ASSERT(signal->grad == NULL || output_len == -1 || output_len == OL);
 
     if (filter->grad || signal->grad || (bias && bias->grad) || (inject_signal && inject_signal->grad)) {
         is_node = true;
-    }
-
-    int64_t realOL = OL;
-    if (output_len > 0 && output_len < OL ) {
-        realOL = output_len;
     }
 
     const int64_t ne[4] = {
@@ -14960,7 +14952,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
                 const float val = has_bias ? *((float *)((char *) src2->data + oc_idx*src2->nb[1])) : 0;
                 float * dst_data = (float *)((char *) dst->data + ir*nb2 + oc_idx*nb1);
                 if (has_inject_signal) {
-                    float * inject_src_data = (float *)((char *) src3->data + ir*src3->nb[2] + oc_idx*src3->nb[1]);
+                    float * inject_src_data = (float *)((char *) src3->data + ir*src3->nb[2] + oc_idx*src3->nb[1] + (src3->ne[0] - output_len)*src3->nb[0]);
                     ggml_vec_add1_f32(output_len, dst_data, inject_src_data, val);
                 } else {
                     ggml_vec_set_f32(output_len, dst_data, val);
@@ -15040,13 +15032,14 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
     GGML_ASSERT(input_channels == ne1);
     GGML_ASSERT(output_channels == ne11);
 
+    const int64_t real_input_len = ggml_calc_conv_input_size(output_len, nk, s0, p0, d0);
 
     // total batches
     const int nr = ne12;
 
     GGML_ASSERT(nr == ne2);
 
-    // btaches per thread
+    // batches per thread
     const int dr = (nr + nth - 1)/nth;
 
     // batch range for this thread
@@ -15065,13 +15058,13 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
             const float * kern_data = (float *)((char *) src0->data + ik*nb02);
 
             float * src_data = (float *)((char *) src1->data + ir*nb12);
-            float * dst_data = (float *)((char *) dst->data + ir*nb2 + ik*d0*nb0);
+            float * dst_data = (float *)((char *) dst->data + ir*nb2 + ik*d0*nb0 + 0*(input_len - real_input_len)*nb0);
 
             cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     output_len, input_channels, output_channels,
                     1.0f,   src_data,  output_len,
                             kern_data, output_channels,
-                    ((ik == 0) ? 0.0f : 1.0f),   dst_data,  input_len);
+                    1.0f,   dst_data,  input_len);
         }
     }
 }
@@ -19239,7 +19232,14 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 }
 
                 if (tensor->src[3] && tensor->src[3]->grad) {
-                    tensor->src[3]->grad = ggml_add_or_set(ctx, tensor->src[3]->grad, interim_tensor, zero_table);
+                    size_t offset = (tensor->src[3]->ne[0] - interim_tensor->ne[0]) * tensor->src[3]->nb[0];
+                    if (offset > 0) {
+                        tensor->src[3]->grad = ggml_acc_or_set(ctx, tensor->src[3]->grad, interim_tensor, 
+                            tensor->src[3]->nb[1], tensor->src[3]->nb[2], tensor->src[3]->nb[3],
+                            offset, zero_table);
+                    } else {
+                        tensor->src[3]->grad = ggml_add_or_set(ctx, tensor->src[3]->grad, interim_tensor, zero_table);
+                    }
                 }
 
             } break;
