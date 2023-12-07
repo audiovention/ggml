@@ -7991,11 +7991,14 @@ GGML_API struct ggml_tensor * ggml_conv_1d(
 // a: [OC，IC, K]
 // b: [IL, IC, N]
 // result: [OL, OC, N]
+// bias: [1, OC, 1]
+// inject_signal: [OL?, OC, N]
 struct ggml_tensor * ggml_conv_1d_small_kern(
     struct ggml_context * ctx,
     struct ggml_tensor  * filter,
     struct ggml_tensor  * signal,
     struct ggml_tensor  * bias,
+    struct ggml_tensor  * inject_signal,
     int                   s0,
     int                   p0,
     int                   d0,
@@ -8009,6 +8012,20 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
         GGML_ASSERT(bias->ne[1] == filter->ne[0]);
     }
 
+    const int64_t OL = ggml_calc_conv_output_size(signal->ne[0], filter->ne[2], s0, p0, d0);
+    GGML_ASSERT(output_len <= OL);
+
+    if (inject_signal) {
+        GGML_ASSERT(inject_signal->ne[1] == filter->ne[0]);
+        GGML_ASSERT(inject_signal->ne[2] == signal->ne[2]);
+        GGML_ASSERT(inject_signal->ne[3] == 1);
+        GGML_ASSERT(inject_signal->type == GGML_TYPE_F32);
+
+        // TODO: remove those 2 last restrictions
+        GGML_ASSERT(inject_signal->ne[0] == OL);
+        GGML_ASSERT(output_len == -1);
+    }
+
     // TODO: support other configurations
     GGML_ASSERT(s0==1);
     GGML_ASSERT(p0==0);
@@ -8017,12 +8034,10 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     GGML_ASSERT(signal->grad == NULL || output_len == -1);
     GGML_ASSERT(bias == NULL || bias->grad == NULL || output_len == -1);
 
-    if (filter->grad || signal->grad || (bias && bias->grad)) {
+    if (filter->grad || signal->grad || (bias && bias->grad) || (inject_signal && inject_signal->grad)) {
         is_node = true;
     }
 
-    const int64_t OL = ggml_calc_conv_output_size(signal->ne[0], filter->ne[2], s0, p0, d0);
-    GGML_ASSERT(output_len <= OL);
     int64_t realOL = OL;
     if (output_len > 0 && output_len < OL ) {
         realOL = output_len;
@@ -8044,6 +8059,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     result->src[0] = filter;
     result->src[1] = signal;
     result->src[2] = bias;
+    result->src[3] = inject_signal;
 
 
     return result;
@@ -14866,6 +14882,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         const struct ggml_tensor * src2,
+        const struct ggml_tensor * src3,
               struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
@@ -14873,6 +14890,10 @@ static void ggml_compute_forward_conv_1d_small_kern(
 
     if (src2) {
         GGML_ASSERT(src2->type == GGML_TYPE_F32);
+    }
+
+    if (src3) {
+        GGML_ASSERT(src3->type == GGML_TYPE_F32);
     }
 
     int64_t t0 = ggml_perf_time_us();
@@ -14916,6 +14937,8 @@ static void ggml_compute_forward_conv_1d_small_kern(
     GGML_ASSERT(output_channels == ne1);
 
     const bool has_bias = (src2 != NULL);
+    const bool has_inject_signal = (src3 != NULL);
+    const bool initialize_output = has_bias || has_inject_signal;
 
     // total batches
     const int nr = ne12;
@@ -14930,11 +14953,16 @@ static void ggml_compute_forward_conv_1d_small_kern(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
-        if (has_bias) {
+        if (initialize_output) {
             for (int j=0; j<output_channels; j++) {
-                const float val = src2 ? *((float *)((char *) src2->data + j*src2->nb[1])) : 0;
+                const float val = has_bias ? *((float *)((char *) src2->data + j*src2->nb[1])) : 0;
                 float * dst_data = (float *)((char *) dst->data + ir*nb2 + j*nb1);
-                ggml_vec_set_f32(output_len, dst_data, val);
+                if (has_inject_signal) {
+                    float * inject_src_data = (float *)((char *) src3->data + ir*src3->nb[2] + j*src3->nb[1]);
+                    ggml_vec_add1_f32(output_len, dst_data, inject_src_data, val);
+                } else {
+                    ggml_vec_set_f32(output_len, dst_data, val);
+                }
             }
         }
 
@@ -14949,7 +14977,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
                     output_len, output_channels, input_channels,
                     1.0f,   src_data,  input_len,
                             kern_data, output_channels,
-                    ((ik==0 && !has_bias) ? 0.0f : 1.0f),   dst_data,  output_len);
+                    ((ik==0 && !initialize_output) ? 0.0f : 1.0f),   dst_data,  output_len);
         }
     }
 }
@@ -18177,7 +18205,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_CONV_1D_SMALL_KERN:
             {
-                ggml_compute_forward_conv_1d_small_kern(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
+                ggml_compute_forward_conv_1d_small_kern(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor->src[3], tensor);
             } break;
         case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
             {
@@ -19196,7 +19224,11 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (tensor->src[2] && tensor->src[2]->grad) {
                     tensor->src[2]->grad = ggml_add_or_set(ctx, tensor->src[2]->grad, ggml_conv_1d_small_kern_back_bias(ctx, tensor->grad), zero_table);
                 }
-    
+
+                if (tensor->src[3] && tensor->src[3]->grad) {
+                    tensor->src[3]->grad = ggml_add_or_set(ctx, tensor->src[3]->grad, tensor->grad, zero_table);
+                }
+
             } break;
         case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
         case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
@@ -19359,9 +19391,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                             if (src0->grad) {
                                 src0->grad = ggml_add_or_set(ctx,
                                         src0->grad,
-                                        ggml_mul(ctx,
-                                            ggml_add1(ctx, ggml_neg(ctx, ggml_sqr(ctx, tensor)), ggml_new_f32(ctx, 1.0f)),
-                                            tensor->grad),
+                                        ggml_add_and_tanh_back(ctx, tensor, tensor->grad),
                                         zero_table);
                             }
                         } break;
