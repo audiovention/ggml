@@ -21213,6 +21213,22 @@ static void ggml_opt_acc_grad(int np, struct ggml_tensor * const ps[], float * g
 //   ref: https://arxiv.org/pdf/1412.6980.pdf
 //
 
+static inline void ggml_single_adam_step_vec_f32(float* param, const float* g, float* m, float* v, const float beta1, const float beta2, const float beta1h, const float beta2h, const float eps, const float p_decay, const float gnorm, const int64_t ne)
+{
+    for (int64_t j = 0; j < ne; ++j) {
+        float x  = param[j];
+        float g_ = g[j]*gnorm;
+        m[j] = m[j]*beta1 +    g_*(1.0f - beta1);
+        v[j] = v[j]*beta2 + g_*g_*(1.0f - beta2);
+        float mh = m[j]*beta1h;
+        float vh = v[j]*beta2h;
+        vh = sqrtf(vh) + eps;
+        x  = x*(1.0f - p_decay) - mh/vh;
+        param[j] = x;
+    }
+}
+
+
 static enum ggml_opt_result ggml_opt_adam(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
@@ -21346,19 +21362,10 @@ static enum ggml_opt_result ggml_opt_adam(
             int64_t i = 0;
             for (int p = 0; p < np; ++p) {
                 const int64_t ne = ggml_nelements(ps[p]);
+                GGML_ASSERT(ggml_is_contiguous(ps[p]));
                 const float p_decay = ((ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * sched;
-                for (int64_t j = 0; j < ne; ++j) {
-                    float x  = ggml_get_f32_1d(ps[p], j);
-                    float g_ = g[i]*gnorm;
-                    m[i] = m[i]*beta1 +    g_*(1.0f - beta1);
-                    v[i] = v[i]*beta2 + g_*g_*(1.0f - beta2);
-                    float mh = m[i]*beta1h;
-                    float vh = v[i]*beta2h;
-                    vh = sqrtf(vh) + eps;
-                    x  = x*(1.0f - p_decay) - mh/vh;
-                    ggml_set_f32_1d(ps[p], j, x);
-                    ++i;
-                }
+                ggml_single_adam_step_vec_f32(ps[p]->data, &g[i], &m[i], &v[i], beta1, beta2, beta1h, beta2h, eps, p_decay, gnorm, ne);
+                i += ne;
             }
         }
 
