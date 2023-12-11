@@ -21338,7 +21338,7 @@ static inline void ggml_single_adam_step_vec_f32(float* param, const float* g, f
 }
 
 
-static enum ggml_opt_result ggml_opt_adam_step(
+GGML_API enum ggml_opt_result ggml_opt_adam_step(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
         struct ggml_opt_params params,

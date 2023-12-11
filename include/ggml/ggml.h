@@ -1980,6 +1980,16 @@ extern "C" {
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb);
 
+    GGML_API enum ggml_opt_result ggml_opt_adam_step(
+            struct ggml_context * ctx,
+            struct ggml_opt_context * opt,
+            struct ggml_opt_params params,
+            struct ggml_tensor * f,
+            struct ggml_cgraph * gf,
+            struct ggml_cgraph * gb,
+            ggml_opt_callback callback,
+            void * callback_data);
+
     // continue optimizing the function defined by the tensor f
     GGML_API enum ggml_opt_result ggml_opt_resume(
             struct ggml_context * ctx,
