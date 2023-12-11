@@ -21338,7 +21338,7 @@ static inline void ggml_single_adam_step_vec_f32(float* param, const float* g, f
 }
 
 
-static enum ggml_opt_result ggml_opt_adam(
+static enum ggml_opt_result ggml_opt_adam_step(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
         struct ggml_opt_params params,
@@ -21347,8 +21347,8 @@ static enum ggml_opt_result ggml_opt_adam(
         struct ggml_cgraph * gb,
         ggml_opt_callback callback,
         void * callback_data) {
-    GGML_ASSERT(ggml_is_scalar(f));
 
+    enum ggml_opt_result result = GGML_OPT_DID_NOT_CONVERGE;
     // constants
     float sched = params.adam.sched;
     const float alpha = params.adam.alpha;
@@ -21369,6 +21369,11 @@ static enum ggml_opt_result ggml_opt_adam(
 
     bool cancel = false;
 
+    const int64_t t_start_wall = ggml_time_us();
+    const int64_t t_start_cpu = ggml_cycles();
+    UNUSED(t_start_wall);
+    UNUSED(t_start_cpu);
+
     // compute the function value
     float fx = 0;
     ggml_set_zero(opt->adam.g);
@@ -21376,7 +21381,7 @@ static enum ggml_opt_result ggml_opt_adam(
         if (callback) {
             callback(callback_data, accum_step, &sched, &cancel);
             if (cancel) {
-                return GGML_OPT_CANCEL;
+                result = GGML_OPT_CANCEL;
             }
         }
         // ggml_graph_reset  (gf);
@@ -21387,20 +21392,10 @@ static enum ggml_opt_result ggml_opt_adam(
     }
     fx *= accum_norm;
 
-    opt->adam.fx_prev = fx;
-    opt->adam.fx_best = opt->adam.fx_prev;
-    if (pf) {
-        pf[opt->iter % params.past] = opt->adam.fx_prev;
-    }
 
     opt->loss_before = opt->adam.fx_prev;
-    opt->loss_after  = opt->adam.fx_prev;
+    opt->loss_after  = fx;
 
-    // initialize
-    if (opt->just_initialized) {
-        opt->adam.n_no_improvement = 0;
-        opt->just_initialized = false;
-    }
 
     float * fx_best = &opt->adam.fx_best;
     float * fx_prev = &opt->adam.fx_prev;
@@ -21408,114 +21403,119 @@ static enum ggml_opt_result ggml_opt_adam(
 
     int iter0 = opt->iter;
 
-    // run the optimizer
-    for (int t = 0; t < params.adam.n_iter; ++t) {
-        opt->iter = iter0 + t + 1;
-        GGML_PRINT_DEBUG  ("=== iter %d ===\n", t);
 
-        GGML_PRINT_DEBUG  ("f      = %10.6f\n", ggml_get_f32_1d(f, 0));
-        GGML_PRINT_DEBUG_5("df/dx0 = %10.6f\n", ggml_get_f32_1d(ps[0]->grad, 0));
-        GGML_PRINT_DEBUG_5("df/dx1 = %10.6f\n", ggml_get_f32_1d(ps[1]->grad, 0));
-
-        for (int i = 0; i < opt->np; ++i) {
-            GGML_PRINT_DEBUG_5("param %d: %10.6f, g = %10.6f\n", i,
-                    ggml_get_f32_1d(ps[i], 0), ggml_get_f32_1d(ps[i]->grad, 0));
-        }
-
-        const int64_t t_start_wall = ggml_time_us();
-        const int64_t t_start_cpu = ggml_cycles();
-        UNUSED(t_start_wall);
-        UNUSED(t_start_cpu);
-
-        {
-            float gnorm = 1.0f;
-            if (gclip > 0.0f) {
-                // gradient clipping
-                ggml_float sum = 0.0;
-                for (int64_t i = 0; i < opt->nx; ++i) {
-                    sum += (ggml_float)(g[i]*g[i]);
-                }
-                ggml_float norm = sqrt(sum);
-                if (norm > (ggml_float) gclip) {
-                    gnorm = (float) ((ggml_float) gclip / norm);
-                }
-            }
-            const float beta1h = alpha*sched/(1.0f - powf(beta1, opt->iter));
-            const float beta2h =        1.0f/(1.0f - powf(beta2, opt->iter));
-            int64_t i = 0;
-            for (int p = 0; p < opt->np; ++p) {
-                const int64_t ne = ggml_nelements(opt->ps[p]);
-                GGML_ASSERT(ggml_is_contiguous(opt->ps[p]));
-                const float p_decay = ((opt->ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * sched;
-                ggml_single_adam_step_vec_f32(opt->ps[p]->data, &g[i], &m[i], &v[i], beta1, beta2, beta1h, beta2h, eps, p_decay, gnorm, ne);
-                i += ne;
-            }
-        }
-
-        fx = 0;
-        ggml_set_zero(opt->adam.g);
-        for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
-            if (callback) {
-                callback(callback_data, accum_step, &sched, &cancel);
-                if (cancel) {
-                    return GGML_OPT_CANCEL;;
-                }
-            }
-            // ggml_graph_reset  (gf);
-            ggml_set_f32      (f->grad, 1.0f);
-            ggml_graph_compute(gb, &opt->cplan);
-            ggml_opt_acc_grad(opt->np, opt->ps, g, accum_norm);
-            fx += ggml_get_f32_1d(f, 0);
-        }
-        fx *= accum_norm;
-
-        opt->loss_after = fx;
-
+    // initialize
+    if (opt->just_initialized) {
+        opt->adam.n_no_improvement = 0;
+        opt->just_initialized = false;
+        opt->adam.fx_best = opt->adam.fx_prev;
+    } else {
         // check convergence
         if (fabsf(fx - fx_prev[0])/fx < params.adam.eps_f) {
             GGML_PRINT_DEBUG("converged\n");
 
-            return GGML_OPT_OK;
+            result = GGML_OPT_OK;
         }
+    }
 
-        // delta-based convergence test
-        if (pf != NULL) {
-            // need at least params.past iterations to start checking for convergence
-            if (params.past <= iter0 + t) {
-                const float rate = (pf[(iter0 + t)%params.past] - fx)/fx;
+    // delta-based convergence test
+    if (pf != NULL) {
+        // need at least params.past iterations to start checking for convergence
+        if (params.past <= iter0 ) {
+            const float rate = (pf[(iter0)%params.past] - fx)/fx;
 
-                if (fabsf(rate) < params.delta) {
-                    return GGML_OPT_OK;
-                }
-            }
-
-            pf[(iter0 + t)%params.past] = fx;
-        }
-
-        // check for improvement
-        if (params.max_no_improvement > 0) {
-            if (fx_best[0] > fx) {
-                fx_best[0] = fx;
-                n_no_improvement[0] = 0;
-            } else {
-                ++n_no_improvement[0];
-
-                if (n_no_improvement[0] >= params.max_no_improvement) {
-                    return GGML_OPT_OK;
-                }
+            if (fabsf(rate) < params.delta) {
+                result = GGML_OPT_OK;
             }
         }
 
-        fx_prev[0] = fx;
+        pf[(iter0)%params.past] = fx;
+    }
 
-        {
-            const int64_t t_end_cpu = ggml_cycles();
-            GGML_PRINT_DEBUG("time iter:      %5.3f s\n", ((float)(t_end_cpu - t_start_cpu))/CLOCKS_PER_SEC);
-            UNUSED(t_end_cpu);
+    // check for improvement
+    if (params.max_no_improvement > 0) {
+        if (fx_best[0] > fx) {
+            fx_best[0] = fx;
+            n_no_improvement[0] = 0;
+        } else {
+            ++n_no_improvement[0];
 
-            const int64_t t_end_wall = ggml_time_us();
-            GGML_PRINT_DEBUG("wall time iter: %5.3f s\n", (t_end_wall - t_start_wall)/1e6);
-            UNUSED(t_end_wall);
+            if (n_no_improvement[0] >= params.max_no_improvement) {
+                result = GGML_OPT_OK;
+            }
+        }
+    }
+
+    fx_prev[0] = fx;
+
+
+    opt->iter = iter0 + 1;
+    GGML_PRINT_DEBUG  ("=== iter %d ===\n", iter0);
+
+    GGML_PRINT_DEBUG  ("f      = %10.6f\n", ggml_get_f32_1d(f, 0));
+    GGML_PRINT_DEBUG_5("df/dx0 = %10.6f\n", ggml_get_f32_1d(ps[0]->grad, 0));
+    GGML_PRINT_DEBUG_5("df/dx1 = %10.6f\n", ggml_get_f32_1d(ps[1]->grad, 0));
+
+    for (int i = 0; i < opt->np; ++i) {
+        GGML_PRINT_DEBUG_5("param %d: %10.6f, g = %10.6f\n", i,
+                ggml_get_f32_1d(ps[i], 0), ggml_get_f32_1d(ps[i]->grad, 0));
+    }
+
+    {
+        float gnorm = 1.0f;
+        if (gclip > 0.0f) {
+            // gradient clipping
+            ggml_float sum = 0.0;
+            for (int64_t i = 0; i < opt->nx; ++i) {
+                sum += (ggml_float)(g[i]*g[i]);
+            }
+            ggml_float norm = sqrt(sum);
+            if (norm > (ggml_float) gclip) {
+                gnorm = (float) ((ggml_float) gclip / norm);
+            }
+        }
+        const float beta1h = alpha*sched/(1.0f - powf(beta1, opt->iter));
+        const float beta2h =        1.0f/(1.0f - powf(beta2, opt->iter));
+        int64_t i = 0;
+        for (int p = 0; p < opt->np; ++p) {
+            const int64_t ne = ggml_nelements(opt->ps[p]);
+            GGML_ASSERT(ggml_is_contiguous(opt->ps[p]));
+            const float p_decay = ((opt->ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * sched;
+            ggml_single_adam_step_vec_f32(opt->ps[p]->data, &g[i], &m[i], &v[i], beta1, beta2, beta1h, beta2h, eps, p_decay, gnorm, ne);
+            i += ne;
+        }
+    }
+
+    {
+        const int64_t t_end_cpu = ggml_cycles();
+        GGML_PRINT_DEBUG("time iter:      %5.3f s\n", ((float)(t_end_cpu - t_start_cpu))/CLOCKS_PER_SEC);
+        UNUSED(t_end_cpu);
+
+        const int64_t t_end_wall = ggml_time_us();
+        GGML_PRINT_DEBUG("wall time iter: %5.3f s\n", (t_end_wall - t_start_wall)/1e6);
+        UNUSED(t_end_wall);
+    }
+
+    return result;
+}
+
+
+static enum ggml_opt_result ggml_opt_adam(
+        struct ggml_context * ctx,
+        struct ggml_opt_context * opt,
+        struct ggml_opt_params params,
+        struct ggml_tensor * f,
+        struct ggml_cgraph * gf,
+        struct ggml_cgraph * gb,
+        ggml_opt_callback callback,
+        void * callback_data) {
+    GGML_ASSERT(ggml_is_scalar(f));
+
+    // run the optimizer
+    for (int t = 0; t < params.adam.n_iter; ++t) {
+        enum ggml_opt_result res = ggml_opt_adam_step(ctx, opt, params, f, gf, gb, callback, callback_data);
+        if (res != GGML_OPT_DID_NOT_CONVERGE) {
+            return res;
         }
     }
 
