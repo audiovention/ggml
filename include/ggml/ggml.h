@@ -1916,12 +1916,15 @@ extern "C" {
 
         int iter;
         int64_t nx; // number of parameter elements
+        int np; // number of parameter tensors
 
         bool just_initialized;
 
         float loss_before;
         float loss_after;
 
+        // these will store the parameters we want to optimize
+        struct ggml_tensor * ps[GGML_MAX_PARAMS];
         struct {
             struct ggml_tensor * g;  // current gradient
             struct ggml_tensor * m;  // first moment
@@ -1966,6 +1969,13 @@ extern "C" {
             struct ggml_opt_context * opt,
             struct ggml_opt_params    params,
             int64_t                   nx);
+
+    // populate opt context with the tensors to be optimized
+    GGML_API void ggml_opt_initialize_opt_params(
+        struct ggml_context * ctx,
+        struct ggml_opt_context * opt,
+        struct ggml_opt_params params,
+        struct ggml_cgraph * gf);
 
     // continue optimizing the function defined by the tensor f
     GGML_API enum ggml_opt_result ggml_opt_resume(

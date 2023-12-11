@@ -21349,28 +21349,6 @@ static enum ggml_opt_result ggml_opt_adam(
         void * callback_data) {
     GGML_ASSERT(ggml_is_scalar(f));
 
-    // these will store the parameters we want to optimize
-    struct ggml_tensor * ps[GGML_MAX_PARAMS];
-
-    int np = 0;
-    int64_t nx = 0;
-    for (int i = 0; i < gf->n_nodes; ++i) {
-        if (gf->nodes[i]->is_param) {
-            GGML_PRINT_DEBUG_5("found param %d: grad->op = %d\n", np, gf->nodes[i]->grad->op);
-
-            GGML_ASSERT(np < GGML_MAX_PARAMS);
-
-            ps[np++] = gf->nodes[i];
-            nx += ggml_nelements(gf->nodes[i]);
-        }
-    }
-
-    if ((opt->params.type != params.type) || (opt->nx != nx) || (opt->params.past != params.past)) {
-        int iter = opt->iter;
-        ggml_opt_init(opt->ctx, opt, params, nx);
-        opt->iter = iter;
-    }
-
     // constants
     float sched = params.adam.sched;
     const float alpha = params.adam.alpha;
@@ -21408,7 +21386,7 @@ static enum ggml_opt_result ggml_opt_adam(
         // ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
         ggml_graph_compute(gb, &cplan);
-        ggml_opt_acc_grad(np, ps, g, accum_norm);
+        ggml_opt_acc_grad(opt->np, opt->ps, g, accum_norm);
         fx += ggml_get_f32_1d(f, 0);
     }
     fx *= accum_norm;
@@ -21443,7 +21421,7 @@ static enum ggml_opt_result ggml_opt_adam(
         GGML_PRINT_DEBUG_5("df/dx0 = %10.6f\n", ggml_get_f32_1d(ps[0]->grad, 0));
         GGML_PRINT_DEBUG_5("df/dx1 = %10.6f\n", ggml_get_f32_1d(ps[1]->grad, 0));
 
-        for (int i = 0; i < np; ++i) {
+        for (int i = 0; i < opt->np; ++i) {
             GGML_PRINT_DEBUG_5("param %d: %10.6f, g = %10.6f\n", i,
                     ggml_get_f32_1d(ps[i], 0), ggml_get_f32_1d(ps[i]->grad, 0));
         }
@@ -21458,7 +21436,7 @@ static enum ggml_opt_result ggml_opt_adam(
             if (gclip > 0.0f) {
                 // gradient clipping
                 ggml_float sum = 0.0;
-                for (int64_t i = 0; i < nx; ++i) {
+                for (int64_t i = 0; i < opt->nx; ++i) {
                     sum += (ggml_float)(g[i]*g[i]);
                 }
                 ggml_float norm = sqrt(sum);
@@ -21469,11 +21447,11 @@ static enum ggml_opt_result ggml_opt_adam(
             const float beta1h = alpha*sched/(1.0f - powf(beta1, opt->iter));
             const float beta2h =        1.0f/(1.0f - powf(beta2, opt->iter));
             int64_t i = 0;
-            for (int p = 0; p < np; ++p) {
-                const int64_t ne = ggml_nelements(ps[p]);
-                GGML_ASSERT(ggml_is_contiguous(ps[p]));
-                const float p_decay = ((ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * sched;
-                ggml_single_adam_step_vec_f32(ps[p]->data, &g[i], &m[i], &v[i], beta1, beta2, beta1h, beta2h, eps, p_decay, gnorm, ne);
+            for (int p = 0; p < opt->np; ++p) {
+                const int64_t ne = ggml_nelements(opt->ps[p]);
+                GGML_ASSERT(ggml_is_contiguous(opt->ps[p]));
+                const float p_decay = ((opt->ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * sched;
+                ggml_single_adam_step_vec_f32(opt->ps[p]->data, &g[i], &m[i], &v[i], beta1, beta2, beta1h, beta2h, eps, p_decay, gnorm, ne);
                 i += ne;
             }
         }
@@ -21490,7 +21468,7 @@ static enum ggml_opt_result ggml_opt_adam(
             // ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
             ggml_graph_compute(gb, &cplan);
-            ggml_opt_acc_grad(np, ps, g, accum_norm);
+            ggml_opt_acc_grad(opt->np, opt->ps, g, accum_norm);
             fx += ggml_get_f32_1d(f, 0);
         }
         fx *= accum_norm;
@@ -21703,28 +21681,6 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
     const int m = params.lbfgs.m;
 
-    // these will store the parameters we want to optimize
-    struct ggml_tensor * ps[GGML_MAX_PARAMS];
-
-    int np = 0;
-    int nx = 0;
-    for (int i = 0; i < gf->n_nodes; ++i) {
-        if (gf->nodes[i]->is_param) {
-            GGML_PRINT_DEBUG("found param %d: grad->op = %d\n", np, gf->nodes[i]->grad->op);
-
-            GGML_ASSERT(np < GGML_MAX_PARAMS);
-
-            ps[np++] = gf->nodes[i];
-            nx += ggml_nelements(gf->nodes[i]);
-        }
-    }
-
-    if ((opt->params.type != params.type) || (opt->nx != nx) || (opt->params.past != params.past) || (opt->params.lbfgs.m != params.lbfgs.m)) {
-        int iter = opt->iter;
-        ggml_opt_init(ctx, opt, params, nx);
-        opt->iter = iter;
-    }
-
     struct ggml_cplan cplan = ggml_graph_plan(gb, params.n_threads);
     struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
     cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
@@ -21745,7 +21701,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
     float gnorm = 0.0f; // ||g||
 
     // initialize x from the graph nodes
-    ggml_opt_get_params(np, ps, x);
+    ggml_opt_get_params(opt->np, opt->ps, x);
 
     // the L-BFGS memory
     float * lm_alpha = opt->lbfgs.lmal->data;
@@ -21757,10 +21713,10 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
     // evaluate the function value and its gradient
     {
-        ggml_opt_set_params(np, ps, x);
+        ggml_opt_set_params(opt->np, opt->ps, x);
 
         fx = 0;
-        memset(g, 0, sizeof(float)*nx);
+        memset(g, 0, sizeof(float)*opt->nx);
         for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
             if (callback) {
                 // LBFG-S does not support learning rate -> ignore learning schedule
@@ -21773,7 +21729,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
             // ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
             ggml_graph_compute(gb, &cplan);
-            ggml_opt_acc_grad(np, ps, g, accum_norm);
+            ggml_opt_acc_grad(opt->np, opt->ps, g, accum_norm);
             fx += ggml_get_f32_1d(f, 0);
         }
         fx *= accum_norm;
@@ -21783,11 +21739,11 @@ static enum ggml_opt_result ggml_opt_lbfgs(
     }
 
     // search direction = -gradient
-    ggml_vec_neg_f32(nx, d, g);
+    ggml_vec_neg_f32(opt->nx, d, g);
 
     // ||x||, ||g||
-    ggml_vec_norm_f32(nx, &xnorm, x);
-    ggml_vec_norm_f32(nx, &gnorm, g);
+    ggml_vec_norm_f32(opt->nx, &xnorm, x);
+    ggml_vec_norm_f32(opt->nx, &gnorm, g);
 
     if (xnorm < 1.0f) {
         xnorm = 1.0f;
@@ -21805,7 +21761,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         opt->lbfgs.fx_best = fx;
 
         // initial step
-        ggml_vec_norm_inv_f32(nx, &opt->lbfgs.step, d);
+        ggml_vec_norm_inv_f32(opt->nx, &opt->lbfgs.step, d);
         opt->lbfgs.j                = 0;
         opt->lbfgs.k                = 1;
         opt->lbfgs.end              = 0;
@@ -21831,30 +21787,30 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
     while (true) {
         // store the current position and gradient vectors
-        ggml_vec_cpy_f32(nx, xp, x);
-        ggml_vec_cpy_f32(nx, gp, g);
+        ggml_vec_cpy_f32(opt->nx, xp, x);
+        ggml_vec_cpy_f32(opt->nx, gp, g);
 
         // TODO: instead of passing &cancel here, use the return code of the linesearch
         //       to determine if the optimization should be cancelled
         //       this is a simple change, but not doing this atm, since I don't have a nice
         //       way to test and don't want to break something with so many changes lined up
-        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, &cancel, callback, callback_data);
+        ls = linesearch_backtracking(&params, opt->nx, x, &fx, g, d, step, xp, f, gb, &cplan, opt->np, opt->ps, &cancel, callback, callback_data);
         if (cancel) {
             return GGML_OPT_CANCEL;
         }
 
         if (ls < 0) {
             // linesearch failed - go back to the previous point and return
-            ggml_vec_cpy_f32(nx, x, xp);
-            ggml_vec_cpy_f32(nx, g, gp);
+            ggml_vec_cpy_f32(opt->nx, x, xp);
+            ggml_vec_cpy_f32(opt->nx, g, gp);
 
             return ls;
         }
 
         opt->loss_after = fx;
 
-        ggml_vec_norm_f32(nx, &xnorm, x);
-        ggml_vec_norm_f32(nx, &gnorm, g);
+        ggml_vec_norm_f32(opt->nx, &xnorm, x);
+        ggml_vec_norm_f32(opt->nx, &gnorm, g);
 
         GGML_PRINT_DEBUG("f = %10.6f\n", ggml_get_f32_1d(f, 0));
 
@@ -21903,15 +21859,15 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         //   s_{k+1} = x_{k+1} - x_{k} = \step * d_{k}.
         //   y_{k+1} = g_{k+1} - g_{k}.
         //
-        ggml_vec_sub_f32(nx, &lm_s[end[0]*nx], x, xp);
-        ggml_vec_sub_f32(nx, &lm_y[end[0]*nx], g, gp);
+        ggml_vec_sub_f32(opt->nx, &lm_s[end[0]*opt->nx], x, xp);
+        ggml_vec_sub_f32(opt->nx, &lm_y[end[0]*opt->nx], g, gp);
 
         // compute scalars ys and yy:
         //     ys = y^t \cdot s    -> 1 / \rho.
         //     yy = y^t \cdot y.
         //
-        ggml_vec_dot_f32(nx, &ys, &lm_y[end[0]*nx], &lm_s[end[0]*nx]);
-        ggml_vec_dot_f32(nx, &yy, &lm_y[end[0]*nx], &lm_y[end[0]*nx]);
+        ggml_vec_dot_f32(opt->nx, &ys, &lm_y[end[0]*opt->nx], &lm_s[end[0]*opt->nx]);
+        ggml_vec_dot_f32(opt->nx, &yy, &lm_y[end[0]*opt->nx], &lm_y[end[0]*opt->nx]);
 
         lm_ys[end[0]] = ys;
 
@@ -21924,26 +21880,26 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         end[0] = (end[0] + 1)%m;
 
         // initialize search direction with -g
-        ggml_vec_neg_f32(nx, d, g);
+        ggml_vec_neg_f32(opt->nx, d, g);
 
         j[0] = end[0];
         for (int i = 0; i < bound; ++i) {
             j[0] = (j[0] + m - 1) % m;
             // \alpha_{j} = \rho_{j} s^{t}_{j} \cdot q_{k+1}
-            ggml_vec_dot_f32(nx, &lm_alpha[j[0]], &lm_s[j[0]*nx], d);
+            ggml_vec_dot_f32(opt->nx, &lm_alpha[j[0]], &lm_s[j[0]*opt->nx], d);
             lm_alpha[j[0]] /= lm_ys[j[0]];
             // q_{i} = q_{i+1} - \alpha_{i} y_{i}
-            ggml_vec_mad_f32(nx, d, &lm_y[j[0]*nx], -lm_alpha[j[0]]);
+            ggml_vec_mad_f32(opt->nx, d, &lm_y[j[0]*opt->nx], -lm_alpha[j[0]]);
         }
 
-        ggml_vec_scale_f32(nx, d, ys/yy);
+        ggml_vec_scale_f32(opt->nx, d, ys/yy);
 
         for (int i = 0; i < bound; ++i) {
             // \beta_{j} = \rho_{j} y^t_{j} \cdot \gamma_{i}
-            ggml_vec_dot_f32(nx, &beta, &lm_y[j[0]*nx], d);
+            ggml_vec_dot_f32(opt->nx, &beta, &lm_y[j[0]*opt->nx], d);
             beta /= lm_ys[j[0]];
             // \gamma_{i+1} = \gamma_{i} + (\alpha_{j} - \beta_{j}) s_{j}
-            ggml_vec_mad_f32(nx, d, &lm_s[j[0]*nx], lm_alpha[j[0]] - beta);
+            ggml_vec_mad_f32(opt->nx, d, &lm_s[j[0]*opt->nx], lm_alpha[j[0]] - beta);
             j[0] = (j[0] + 1)%m;
         }
 
@@ -22095,6 +22051,34 @@ GGML_API void ggml_opt_init(
     }
 }
 
+GGML_API void ggml_opt_initialize_opt_params(
+    struct ggml_context * ctx,
+    struct ggml_opt_context * opt,
+    struct ggml_opt_params params,
+    struct ggml_cgraph * gf) {
+    
+    int np = 0;
+    int64_t nx = 0;
+    for (int i = 0; i < gf->n_nodes; ++i) {
+        if (gf->nodes[i]->is_param) {
+            GGML_PRINT_DEBUG_5("found param %d: grad->op = %d\n", np, gf->nodes[i]->grad->op);
+
+            GGML_ASSERT(np < GGML_MAX_PARAMS);
+
+            opt->ps[np++] = gf->nodes[i];
+            nx += ggml_nelements(gf->nodes[i]);
+        }
+    }
+
+    if ((opt->params.type != params.type) || (opt->nx != nx) || (opt->np != np) || (opt->params.past != params.past) || (opt->params.lbfgs.m != params.lbfgs.m)) {
+        int iter = opt->iter;
+        ggml_opt_init(opt->ctx, opt, params, nx);
+        opt->iter = iter;
+        opt->np = np;
+    }
+}
+
+
 enum ggml_opt_result ggml_opt(
         struct ggml_context * ctx,
         struct ggml_opt_params params,
@@ -22143,6 +22127,7 @@ enum ggml_opt_result ggml_opt_resume(
 
     *gf = ggml_build_forward (f);
     *gb = ggml_build_backward(ctx, gf, true);
+    ggml_opt_initialize_opt_params(ctx, opt, opt->params, gf);
 
     return ggml_opt_resume_g(ctx, opt, f, gf, gb, NULL, NULL);
 }
