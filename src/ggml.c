@@ -21341,7 +21341,7 @@ static inline void ggml_single_adam_step_vec_f32(float* param, const float* g, f
 GGML_API enum ggml_opt_result ggml_opt_adam_step(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
-        struct ggml_opt_params params,
+        struct ggml_opt_params* params,
         struct ggml_tensor * f,
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
@@ -21350,22 +21350,22 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
 
     enum ggml_opt_result result = GGML_OPT_DID_NOT_CONVERGE;
     // constants
-    float sched = params.adam.sched;
-    const float alpha = params.adam.alpha;
-    const float decay = params.adam.decay * alpha;
-    const float beta1 = params.adam.beta1;
-    const float beta2 = params.adam.beta2;
-    const float eps   = params.adam.eps;
-    const float gclip = params.adam.gclip;
-    const int decay_min_ndim = params.adam.decay_min_ndim;
-    const int n_accum = MAX(1, params.n_gradient_accumulation);
+    float* sched = &params->adam.sched;
+    const float alpha = params->adam.alpha;
+    const float decay = params->adam.decay * alpha;
+    const float beta1 = params->adam.beta1;
+    const float beta2 = params->adam.beta2;
+    const float eps   = params->adam.eps;
+    const float gclip = params->adam.gclip;
+    const int decay_min_ndim = params->adam.decay_min_ndim;
+    const int n_accum = MAX(1, params->n_gradient_accumulation);
     const float accum_norm = 1.0f / (float) n_accum;
 
     float * g  = opt->adam.g->data;  // gradients
     float * m  = opt->adam.m->data;  // first moment
     float * v  = opt->adam.v->data;  // second moment
 
-    float * pf = params.past > 0 ? opt->adam.pf->data : NULL; // past function values
+    float * pf = params->past > 0 ? opt->adam.pf->data : NULL; // past function values
 
     bool cancel = false;
 
@@ -21379,7 +21379,7 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
     ggml_set_zero(opt->adam.g);
     for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
         if (callback) {
-            callback(callback_data, accum_step, &sched, &cancel);
+            callback(callback_data, accum_step, sched, &cancel);
             if (cancel) {
                 result = GGML_OPT_CANCEL;
             }
@@ -21411,7 +21411,7 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
         opt->adam.fx_best = opt->adam.fx_prev;
     } else {
         // check convergence
-        if (fabsf(fx - fx_prev[0])/fx < params.adam.eps_f) {
+        if (fabsf(fx - fx_prev[0])/fx < params->adam.eps_f) {
             GGML_PRINT_DEBUG("converged\n");
 
             result = GGML_OPT_OK;
@@ -21420,27 +21420,27 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
 
     // delta-based convergence test
     if (pf != NULL) {
-        // need at least params.past iterations to start checking for convergence
-        if (params.past <= iter0 ) {
-            const float rate = (pf[(iter0)%params.past] - fx)/fx;
+        // need at least params->past iterations to start checking for convergence
+        if (params->past <= iter0 ) {
+            const float rate = (pf[(iter0)%params->past] - fx)/fx;
 
-            if (fabsf(rate) < params.delta) {
+            if (fabsf(rate) < params->delta) {
                 result = GGML_OPT_OK;
             }
         }
 
-        pf[(iter0)%params.past] = fx;
+        pf[(iter0)%params->past] = fx;
     }
 
     // check for improvement
-    if (params.max_no_improvement > 0) {
+    if (params->max_no_improvement > 0) {
         if (fx_best[0] > fx) {
             fx_best[0] = fx;
             n_no_improvement[0] = 0;
         } else {
             ++n_no_improvement[0];
 
-            if (n_no_improvement[0] >= params.max_no_improvement) {
+            if (n_no_improvement[0] >= params->max_no_improvement) {
                 result = GGML_OPT_OK;
             }
         }
@@ -21474,13 +21474,13 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
                 gnorm = (float) ((ggml_float) gclip / norm);
             }
         }
-        const float beta1h = alpha*sched/(1.0f - powf(beta1, opt->iter));
+        const float beta1h = alpha*(*sched)/(1.0f - powf(beta1, opt->iter));
         const float beta2h =        1.0f/(1.0f - powf(beta2, opt->iter));
         int64_t i = 0;
         for (int p = 0; p < opt->np; ++p) {
             const int64_t ne = ggml_nelements(opt->ps[p]);
             GGML_ASSERT(ggml_is_contiguous(opt->ps[p]));
-            const float p_decay = ((opt->ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * sched;
+            const float p_decay = ((opt->ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * (*sched);
             ggml_single_adam_step_vec_f32(opt->ps[p]->data, &g[i], &m[i], &v[i], beta1, beta2, beta1h, beta2h, eps, p_decay, gnorm, ne);
             i += ne;
         }
@@ -21513,7 +21513,7 @@ static enum ggml_opt_result ggml_opt_adam(
 
     // run the optimizer
     for (int t = 0; t < params.adam.n_iter; ++t) {
-        enum ggml_opt_result res = ggml_opt_adam_step(ctx, opt, params, f, gf, gb, callback, callback_data);
+        enum ggml_opt_result res = ggml_opt_adam_step(ctx, opt, &params, f, gf, gb, callback, callback_data);
         if (res != GGML_OPT_DID_NOT_CONVERGE) {
             return res;
         }

@@ -1983,7 +1983,7 @@ extern "C" {
     GGML_API enum ggml_opt_result ggml_opt_adam_step(
             struct ggml_context * ctx,
             struct ggml_opt_context * opt,
-            struct ggml_opt_params params,
+            struct ggml_opt_params * params,
             struct ggml_tensor * f,
             struct ggml_cgraph * gf,
             struct ggml_cgraph * gb,
