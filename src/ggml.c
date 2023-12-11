@@ -21367,10 +21367,6 @@ static enum ggml_opt_result ggml_opt_adam(
 
     float * pf = params.past > 0 ? opt->adam.pf->data : NULL; // past function values
 
-    struct ggml_cplan cplan = ggml_graph_plan(gb, params.n_threads);
-    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
-    cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
-
     bool cancel = false;
 
     // compute the function value
@@ -21385,7 +21381,7 @@ static enum ggml_opt_result ggml_opt_adam(
         }
         // ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
-        ggml_graph_compute(gb, &cplan);
+        ggml_graph_compute(gb, &opt->cplan);
         ggml_opt_acc_grad(opt->np, opt->ps, g, accum_norm);
         fx += ggml_get_f32_1d(f, 0);
     }
@@ -21467,7 +21463,7 @@ static enum ggml_opt_result ggml_opt_adam(
             }
             // ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
-            ggml_graph_compute(gb, &cplan);
+            ggml_graph_compute(gb, &opt->cplan);
             ggml_opt_acc_grad(opt->np, opt->ps, g, accum_norm);
             fx += ggml_get_f32_1d(f, 0);
         }
@@ -21681,10 +21677,6 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
     const int m = params.lbfgs.m;
 
-    struct ggml_cplan cplan = ggml_graph_plan(gb, params.n_threads);
-    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
-    cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
-
     float * x  = opt->lbfgs.x->data;  // current parameters
     float * xp = opt->lbfgs.xp->data; // previous parameters
     float * g  = opt->lbfgs.g->data;  // current gradient
@@ -21728,7 +21720,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
             }
             // ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
-            ggml_graph_compute(gb, &cplan);
+            ggml_graph_compute(gb, &opt->cplan);
             ggml_opt_acc_grad(opt->np, opt->ps, g, accum_norm);
             fx += ggml_get_f32_1d(f, 0);
         }
@@ -21794,7 +21786,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         //       to determine if the optimization should be cancelled
         //       this is a simple change, but not doing this atm, since I don't have a nice
         //       way to test and don't want to break something with so many changes lined up
-        ls = linesearch_backtracking(&params, opt->nx, x, &fx, g, d, step, xp, f, gb, &cplan, opt->np, opt->ps, &cancel, callback, callback_data);
+        ls = linesearch_backtracking(&params, opt->nx, x, &fx, g, d, step, xp, f, gb, &opt->cplan, opt->np, opt->ps, &cancel, callback, callback_data);
         if (cancel) {
             return GGML_OPT_CANCEL;
         }
@@ -22055,7 +22047,8 @@ GGML_API void ggml_opt_initialize_opt_params(
     struct ggml_context * ctx,
     struct ggml_opt_context * opt,
     struct ggml_opt_params params,
-    struct ggml_cgraph * gf) {
+    struct ggml_cgraph * gf,
+    struct ggml_cgraph * gb) {
     
     int np = 0;
     int64_t nx = 0;
@@ -22076,6 +22069,11 @@ GGML_API void ggml_opt_initialize_opt_params(
         opt->iter = iter;
         opt->np = np;
     }
+
+    opt->cplan = ggml_graph_plan(gb, params.n_threads);
+    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, opt->cplan.work_size);
+    opt->cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
+
 }
 
 
@@ -22127,7 +22125,7 @@ enum ggml_opt_result ggml_opt_resume(
 
     *gf = ggml_build_forward (f);
     *gb = ggml_build_backward(ctx, gf, true);
-    ggml_opt_initialize_opt_params(ctx, opt, opt->params, gf);
+    ggml_opt_initialize_opt_params(ctx, opt, opt->params, gf, gb);
 
     return ggml_opt_resume_g(ctx, opt, f, gf, gb, NULL, NULL);
 }
