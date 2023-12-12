@@ -127,7 +127,7 @@ typedef void * thread_ret_t;
 #endif
 
 /*#define GGML_PERF*/
-#define GGML_DEBUG 1
+#define GGML_DEBUG 0
 #define GGML_GELU_FP16
 #define GGML_GELU_QUICK_FP16
 #define GGML_SILU_FP16
