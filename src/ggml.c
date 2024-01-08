@@ -21453,12 +21453,12 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
     GGML_PRINT_DEBUG  ("=== iter %d ===\n", iter0);
 
     GGML_PRINT_DEBUG  ("f      = %10.6f\n", ggml_get_f32_1d(f, 0));
-    GGML_PRINT_DEBUG_5("df/dx0 = %10.6f\n", ggml_get_f32_1d(ps[0]->grad, 0));
-    GGML_PRINT_DEBUG_5("df/dx1 = %10.6f\n", ggml_get_f32_1d(ps[1]->grad, 0));
+    GGML_PRINT_DEBUG_5("df/dx0 = %10.6f\n", ggml_get_f32_1d(opt->ps[0]->grad, 0));
+    GGML_PRINT_DEBUG_5("df/dx1 = %10.6f\n", ggml_get_f32_1d(opt->ps[1]->grad, 0));
 
     for (int i = 0; i < opt->np; ++i) {
         GGML_PRINT_DEBUG_5("param %d: %10.6f, g = %10.6f\n", i,
-                ggml_get_f32_1d(ps[i], 0), ggml_get_f32_1d(ps[i]->grad, 0));
+                ggml_get_f32_1d(opt->ps[i], 0), ggml_get_f32_1d(opt->ps[i]->grad, 0));
     }
 
     {
