@@ -70,6 +70,7 @@ struct ggml_allocr {
     struct free_block free_blocks[MAX_FREE_BLOCKS];
     struct hash_node hash_table[GGML_GRAPH_HASHTABLE_SIZE];
     size_t max_size;
+    size_t largest_tensor_size;
     bool measure;
     int parse_seq[GGML_MAX_CONCUR];
     int parse_seq_len;
@@ -181,6 +182,7 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
 #endif
 
     alloc->max_size = MAX(alloc->max_size, (char*)addr - (char*)alloc->data + size);
+    alloc->largest_tensor_size = MAX(alloc->largest_tensor_size, size);
 }
 
 // this is a very naive implementation, but for our case the number of free blocks should be very small
@@ -281,6 +283,7 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
         /*.free_blocks   = */ {{0}},
         /*.hash_table    = */ {{0}},
         /*.max_size      = */ 0,
+        /*.largest_tensor_size = */ 0,
         /*.measure       = */ false,
         /*.parse_seq     = */ {0},
         /*.parse_seq_len = */ 0,
@@ -313,6 +316,7 @@ struct ggml_allocr * ggml_allocr_new_from_buffer(struct ggml_backend_buffer * bu
         /*.free_blocks   = */ {{0}},
         /*.hash_table    = */ {{0}},
         /*.max_size      = */ 0,
+        /*.largest_tensor_size = */ 0,
         /*.measure       = */ false,
         /*.parse_seq     = */ {0},
         /*.parse_seq_len = */ 0,
@@ -591,4 +595,8 @@ size_t ggml_allocr_alloc_graph(struct ggml_allocr * alloc, struct ggml_cgraph * 
 
 size_t ggml_allocr_max_size(struct ggml_allocr * alloc) {
     return alloc->max_size;
+}
+
+size_t ggml_allocr_largest_tensor_size(struct ggml_allocr * alloc) {
+    return alloc->largest_tensor_size;
 }
