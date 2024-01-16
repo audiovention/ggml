@@ -672,7 +672,7 @@ void ggml_wgpu_graph_compute(
                     });
         ASSERT_CHECK(bind_group);
 
-        WGPUComputePassEncoder compute_pass_encoder;
+        WGPUComputePassEncoder compute_pass_encoder = NULL;
 
 
         //GGML_METAL_LOG_INFO("%s: op - %s\n", __func__, ggml_op_name(dst->op));
