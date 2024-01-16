@@ -7,6 +7,13 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+
+#define GGML_WGPU_DST_BINDING_INDEX (GGML_MAX_SRC)
+#define GGML_WGPU_DIM_PARAMS_BINDING_INDEX (GGML_WGPU_DST_BINDING_INDEX+1)
+#define GGML_WGPU_DIM_PARAMS_SIZE (GGML_MAX_SRC+1)
+#define GGML_WGPU_BINDINGS_SIZE (GGML_WGPU_DIM_PARAMS_BINDING_INDEX+1)
+
+
 #define MIN_STORAGE_BUFFER_ALIGNMENT 256
 #define UNUSED(x) (void)(x)
 
@@ -38,40 +45,20 @@ static void handle_buffer_map(WGPUBufferMapAsyncStatus status, void *userdata) {
 
 #define MULTILINE(...) #__VA_ARGS__
 static const char* shader_src = MULTILINE(
+
+struct TensorDimensionParam {
+        ne : vec4i,
+        nb : vec4u,
+        offset : u32,
+        ph1 : u32,
+        ph2 : u32,
+        ph3 : u32,
+}
+
+
 struct TensorDimensionParams {
-        ne00 : i32,
-        ne01 : i32,
-        ne02 : i32,
-        ne03 : i32,
-
-        nb00 : u32,
-        nb01 : u32,
-        nb02 : u32,
-        nb03 : u32,
-
-        ne10 : i32,
-        ne11 : i32,
-        ne12 : i32,
-        ne13 : i32,
-
-        nb10 : u32,
-        nb11 : u32,
-        nb12 : u32,
-        nb13 : u32,
-
-        ne0 : i32,
-        ne1 : i32,
-        ne2 : i32,
-        ne3 : i32,
-
-        nb0 : u32,
-        nb1 : u32,
-        nb2 : u32,
-        nb3 : u32,
-
-        offs_src0 : u32,
-        offs_src1 : u32,
-        offs_dst  : u32,
+        src : array<TensorDimensionParam, 6>,
+        dst : TensorDimensionParam,
 }
 
 
@@ -83,9 +70,21 @@ var<storage,read_write> src0: array<f32>;
 var<storage,read_write> src1: array<f32>;
 
 @group(0) @binding(2)
-var<storage,read_write> dst: array<f32>;
+var<storage,read_write> src2: array<f32>;
 
 @group(0) @binding(3)
+var<storage,read_write> src3: array<f32>;
+
+@group(0) @binding(4)
+var<storage,read_write> src4: array<f32>;
+
+@group(0) @binding(5)
+var<storage,read_write> src5: array<f32>;
+
+@group(0) @binding(6)
+var<storage,read_write> dst: array<f32>;
+
+@group(0) @binding(7)
 var<uniform> tensor_dimension_params: TensorDimensionParams;
 
 
@@ -93,8 +92,8 @@ var<uniform> tensor_dimension_params: TensorDimensionParams;
 @compute
 @workgroup_size(1)
 fn test_kernel(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let x = src0[global_id.x + tensor_dimension_params.offs_src0/4u];
-    dst[global_id.x + tensor_dimension_params.offs_dst/4u] = x / (1.0 + exp(-x)); ;
+    let x = src0[global_id.x + tensor_dimension_params.src[0].offset/4u];
+    dst[global_id.x + tensor_dimension_params.dst.offset/4u] = x / (1.0 + exp(-x)); ;
 }
 
 
@@ -127,6 +126,15 @@ struct ggml_wgpu_buffer {
 };
 
 
+struct ggml_wgpu_dim_param {
+    int32_t ne[4];
+    uint32_t nb[4];
+    uint32_t offset;
+    uint32_t ph1;
+    uint32_t ph2;
+    uint32_t ph3;
+};
+
 struct ggml_wgpu_context {
     WGPUInstance instance;
     WGPUAdapter adapter;
@@ -139,9 +147,9 @@ struct ggml_wgpu_context {
 
     WGPUBuffer tensor_dimension_params;
     WGPUBuffer placeholder_buffer;
-    int32_t tensor_dimension_params_host[24+3];
+    struct ggml_wgpu_dim_param tensor_dimension_params_host[GGML_WGPU_DIM_PARAMS_SIZE];
 
-    WGPUBindGroupEntry bind_group_entries[4];
+    WGPUBindGroupEntry bind_group_entries[GGML_WGPU_BINDINGS_SIZE];
 
     int n_buffers;
     struct ggml_wgpu_buffer buffers[GGML_WGPU_MAX_BUFFERS];
@@ -243,7 +251,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
     ctx->tensor_dimension_params = wgpuDeviceCreateBuffer(ctx->device, &(const WGPUBufferDescriptor){
                                                             .label = "tensor_dimension_params",
                                                             .usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst,
-                                                            .size = 96+12,
+                                                            .size = sizeof(ctx->tensor_dimension_params_host),
                                                             .mappedAtCreation = false,
                                                          });
     ASSERT_CHECK(ctx->tensor_dimension_params);
@@ -257,10 +265,10 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
                                                          });
     ASSERT_CHECK(ctx->placeholder_buffer);
 
-    ctx->bind_group_entries[3].binding = 3;
-    ctx->bind_group_entries[3].buffer = ctx->tensor_dimension_params;
-    ctx->bind_group_entries[3].offset = 0;
-    ctx->bind_group_entries[3].size = 96+12;
+    ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].binding = GGML_WGPU_DIM_PARAMS_BINDING_INDEX;
+    ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].buffer = ctx->tensor_dimension_params;
+    ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].offset = 0;
+    ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].size = sizeof(ctx->tensor_dimension_params_host);
 
 
 
@@ -283,38 +291,28 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
 
     ASSERT_CHECK(ctx->shader_module);
 
-    WGPUBindGroupLayoutEntry bindGroupLayoutEntries[4] = {0};
+    WGPUBindGroupLayoutEntry bindGroupLayoutEntries[GGML_WGPU_BINDINGS_SIZE] = {0};
     {
-        bindGroupLayoutEntries[0].binding = 0;
-        bindGroupLayoutEntries[0].visibility = WGPUShaderStage_Compute;
-        bindGroupLayoutEntries[0].buffer.type = WGPUBufferBindingType_Storage;
-        bindGroupLayoutEntries[0].buffer.hasDynamicOffset = false;
-        bindGroupLayoutEntries[0].buffer.minBindingSize = 0;
+        for (int i = 0; i < GGML_WGPU_DIM_PARAMS_BINDING_INDEX; ++i) {
+            bindGroupLayoutEntries[i].binding = i;
+            bindGroupLayoutEntries[i].visibility = WGPUShaderStage_Compute;
+            bindGroupLayoutEntries[i].buffer.type = WGPUBufferBindingType_Storage;
+            bindGroupLayoutEntries[i].buffer.hasDynamicOffset = false;
+            bindGroupLayoutEntries[i].buffer.minBindingSize = 0;
+        }
 
-        bindGroupLayoutEntries[1].binding = 1;
-        bindGroupLayoutEntries[1].visibility = WGPUShaderStage_Compute;
-        bindGroupLayoutEntries[1].buffer.type = WGPUBufferBindingType_Storage;
-        bindGroupLayoutEntries[1].buffer.hasDynamicOffset = false;
-        bindGroupLayoutEntries[1].buffer.minBindingSize = 0;
-
-        bindGroupLayoutEntries[2].binding = 2;
-        bindGroupLayoutEntries[2].visibility = WGPUShaderStage_Compute;
-        bindGroupLayoutEntries[2].buffer.type = WGPUBufferBindingType_Storage;
-        bindGroupLayoutEntries[2].buffer.hasDynamicOffset = false;
-        bindGroupLayoutEntries[2].buffer.minBindingSize = 0;
-
-        bindGroupLayoutEntries[3].binding = 3;
-        bindGroupLayoutEntries[3].visibility = WGPUShaderStage_Compute;
-        bindGroupLayoutEntries[3].buffer.type = WGPUBufferBindingType_Uniform;
-        bindGroupLayoutEntries[3].buffer.hasDynamicOffset = false;
-        bindGroupLayoutEntries[3].buffer.minBindingSize = 96+12;
+        bindGroupLayoutEntries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].binding = GGML_WGPU_DIM_PARAMS_BINDING_INDEX;
+        bindGroupLayoutEntries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].visibility = WGPUShaderStage_Compute;
+        bindGroupLayoutEntries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].buffer.type = WGPUBufferBindingType_Uniform;
+        bindGroupLayoutEntries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].buffer.hasDynamicOffset = false;
+        bindGroupLayoutEntries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].buffer.minBindingSize = sizeof(ctx->tensor_dimension_params_host);
     }
 
 
     ctx->bind_group_layout = wgpuDeviceCreateBindGroupLayout(ctx->device, &(const WGPUBindGroupLayoutDescriptor){
                            .label = "ggml-wgpu-bind-group-layout",
                            .entries = bindGroupLayoutEntries,
-                           .entryCount = 4,
+                           .entryCount = GGML_WGPU_BINDINGS_SIZE,
                        });
     ASSERT_CHECK(ctx->bind_group_layout);
 
@@ -592,82 +590,57 @@ void ggml_wgpu_graph_compute(
     for (int i = 0; i < gf->n_nodes; ++i) {
         GGML_WGPU_LOG_INFO("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
-        struct ggml_tensor * src0 = gf->nodes[i]->src[0];
-        struct ggml_tensor * src1 = gf->nodes[i]->src[1];
         struct ggml_tensor * dst  = gf->nodes[i];
-
-
-        const enum ggml_type src0t = src0 ? src0->type : GGML_TYPE_COUNT;
-        const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
         const enum ggml_type dstt  = dst  ? dst->type  : GGML_TYPE_COUNT;
-
-        size_t offs_src0 = 0;
-        size_t offs_src1 = 0;
+        GGML_ASSERT(dstt == GGML_TYPE_F32);
         size_t offs_dst  = 0;
-        WGPUBuffer id_src0 = src0 ? ggml_wgpu_get_buffer(ctx, src0, &offs_src0) : NULL;
-        WGPUBuffer id_src1 = src1 ? ggml_wgpu_get_buffer(ctx, src1, &offs_src1) : NULL;
         WGPUBuffer id_dst  = dst  ? ggml_wgpu_get_buffer(ctx, dst,  &offs_dst)  : NULL;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].ne[0] = dst ? dst->ne[0] : 0;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].ne[1] = dst ? dst->ne[1] : 0;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].ne[2] = dst ? dst->ne[2] : 0;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].ne[3] = dst ? dst->ne[3] : 0;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].nb[0] = dst ? dst->nb[0] : 0;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].nb[1] = dst ? dst->nb[1] : 0;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].nb[2] = dst ? dst->nb[2] : 0;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].nb[3] = dst ? dst->nb[3] : 0;
+        ctx->tensor_dimension_params_host[GGML_WGPU_DST_BINDING_INDEX].offset = offs_dst;
+
+        ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].binding = GGML_WGPU_DST_BINDING_INDEX;
+        ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].buffer = id_dst ? id_dst : ctx->placeholder_buffer;
+        ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].offset = id_dst ? 0*offs_dst : 0;
+        ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].size = id_dst ? (wgpuBufferGetSize(id_dst) - 0*offs_dst) : MIN_STORAGE_BUFFER_ALIGNMENT;
+
+        for (int src_idx=0; src_idx < GGML_MAX_SRC; ++src_idx) {
+            struct ggml_tensor * srci = gf->nodes[i]->src[src_idx];
+            const enum ggml_type srcit = srci ? srci->type : GGML_TYPE_COUNT;
+            GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_COUNT);
+            size_t offs_srci = 0;
+            WGPUBuffer id_srci = srci ? ggml_wgpu_get_buffer(ctx, srci, &offs_srci) : NULL;
+
+            ctx->tensor_dimension_params_host[src_idx].ne[0] = srci ? srci->ne[0] : 0;
+            ctx->tensor_dimension_params_host[src_idx].ne[1] = srci ? srci->ne[1] : 0;
+            ctx->tensor_dimension_params_host[src_idx].ne[2] = srci ? srci->ne[2] : 0;
+            ctx->tensor_dimension_params_host[src_idx].ne[3] = srci ? srci->ne[3] : 0;
+            ctx->tensor_dimension_params_host[src_idx].nb[0] = srci ? srci->nb[0] : 0;
+            ctx->tensor_dimension_params_host[src_idx].nb[1] = srci ? srci->nb[1] : 0;
+            ctx->tensor_dimension_params_host[src_idx].nb[2] = srci ? srci->nb[2] : 0;
+            ctx->tensor_dimension_params_host[src_idx].nb[3] = srci ? srci->nb[3] : 0;
+            ctx->tensor_dimension_params_host[src_idx].offset = offs_srci;
+
+            ctx->bind_group_entries[src_idx].binding = src_idx;
+            ctx->bind_group_entries[src_idx].buffer = id_srci ? id_srci : ctx->placeholder_buffer;
+            ctx->bind_group_entries[src_idx].offset = id_srci ? 0*offs_srci : 0;
+            ctx->bind_group_entries[src_idx].size = id_srci ? (wgpuBufferGetSize(id_srci) - 0*offs_srci) : MIN_STORAGE_BUFFER_ALIGNMENT;
+        }
 
 
-        ctx->tensor_dimension_params_host[0]  = src0 ? src0->ne[0] : 0;
-        ctx->tensor_dimension_params_host[1]  = src0 ? src0->ne[1] : 0;
-        ctx->tensor_dimension_params_host[2]  = src0 ? src0->ne[2] : 0;
-        ctx->tensor_dimension_params_host[3]  = src0 ? src0->ne[3] : 0;
-
-        ctx->tensor_dimension_params_host[4]  = src0 ? src0->nb[0] : 0;
-        ctx->tensor_dimension_params_host[5]  = src0 ? src0->nb[1] : 0;
-        ctx->tensor_dimension_params_host[6]  = src0 ? src0->nb[2] : 0;
-        ctx->tensor_dimension_params_host[7]  = src0 ? src0->nb[3] : 0;
-
-        ctx->tensor_dimension_params_host[8]  = src1 ? src1->ne[0] : 0;
-        ctx->tensor_dimension_params_host[9]  = src1 ? src1->ne[1] : 0;
-        ctx->tensor_dimension_params_host[10] = src1 ? src1->ne[2] : 0;
-        ctx->tensor_dimension_params_host[11] = src1 ? src1->ne[3] : 0;
-
-        ctx->tensor_dimension_params_host[12] = src1 ? src1->nb[0] : 0;
-        ctx->tensor_dimension_params_host[13] = src1 ? src1->nb[1] : 0;
-        ctx->tensor_dimension_params_host[14] = src1 ? src1->nb[2] : 0;
-        ctx->tensor_dimension_params_host[15] = src1 ? src1->nb[3] : 0;
-
-        ctx->tensor_dimension_params_host[16] = dst ? dst->ne[0] : 0;
-        ctx->tensor_dimension_params_host[17] = dst ? dst->ne[1] : 0;
-        ctx->tensor_dimension_params_host[18] = dst ? dst->ne[2] : 0;
-        ctx->tensor_dimension_params_host[19] = dst ? dst->ne[3] : 0;
-
-        ctx->tensor_dimension_params_host[20] = dst ? dst->nb[0] : 0;
-        ctx->tensor_dimension_params_host[21] = dst ? dst->nb[1] : 0;
-        ctx->tensor_dimension_params_host[22] = dst ? dst->nb[2] : 0;
-        ctx->tensor_dimension_params_host[23] = dst ? dst->nb[3] : 0;
-
-        ctx->tensor_dimension_params_host[24] = offs_src0;
-        ctx->tensor_dimension_params_host[25] = offs_src1;
-        ctx->tensor_dimension_params_host[26] = offs_dst;
-
-        wgpuQueueWriteBuffer(ctx->queue, ctx->tensor_dimension_params, 0, ctx->tensor_dimension_params_host, 96+12);
-
-
-
-        ctx->bind_group_entries[0].binding = 0;
-        ctx->bind_group_entries[0].buffer = id_src0 ? id_src0 : ctx->placeholder_buffer;
-        ctx->bind_group_entries[0].offset = id_src0 ? 0*offs_src0 : 0;
-        ctx->bind_group_entries[0].size = id_src0 ? (wgpuBufferGetSize(id_src0) - 0*offs_src0) : MIN_STORAGE_BUFFER_ALIGNMENT;
-
-        ctx->bind_group_entries[1].binding = 1;
-        ctx->bind_group_entries[1].buffer = id_src1 ? id_src1 : ctx->placeholder_buffer;
-        ctx->bind_group_entries[1].offset = id_src1 ? 0*offs_src1 : 0;;
-        ctx->bind_group_entries[1].size = id_src1 ? (wgpuBufferGetSize(id_src1) - 0*offs_src1) : MIN_STORAGE_BUFFER_ALIGNMENT;
-
-        ctx->bind_group_entries[2].binding = 2;
-        ctx->bind_group_entries[2].buffer = id_dst ? id_dst : ctx->placeholder_buffer;
-        ctx->bind_group_entries[2].offset = id_dst ? 0*offs_dst : 0;;
-        ctx->bind_group_entries[2].size = id_dst ? (wgpuBufferGetSize(id_dst) - 0*offs_dst) : MIN_STORAGE_BUFFER_ALIGNMENT;
-
+        wgpuQueueWriteBuffer(ctx->queue, ctx->tensor_dimension_params, 0, ctx->tensor_dimension_params_host, sizeof(ctx->tensor_dimension_params_host));
 
         WGPUBindGroup bind_group = wgpuDeviceCreateBindGroup(
             ctx->device, &(const WGPUBindGroupDescriptor){
                         .label = "bind_group",
                         .layout = ctx->bind_group_layout,
-                        .entryCount = 4,
+                        .entryCount = GGML_WGPU_BINDINGS_SIZE,
                         .entries = ctx->bind_group_entries,
                     });
         ASSERT_CHECK(bind_group);
