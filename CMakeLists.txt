@@ -46,6 +46,7 @@ option(GGML_BLIS                    "ggml: use BLIS"                     OFF)
 option(GGML_CLBLAST                 "ggml: use clBLAST"                  OFF)
 option(GGML_CUBLAS                  "ggml: use cuBLAS"                   OFF)
 option(GGML_METAL                   "ggml: use Metal"                    OFF)
+option(GGML_WGPU                    "ggml: use WebGPU"                   OFF)
 
 # sanitizers
 
