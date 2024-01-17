@@ -668,6 +668,17 @@ void ggml_wgpu_graph_compute(
         //            dst->name);
         //}
 
+        #define GGML_WGPU_ENCODE_KERNEL(name, wcX, wcY, wcZ) \
+            compute_pass_encoder = wgpuCommandEncoderBeginComputePass( \
+                command_encoder, &(const WGPUComputePassDescriptor){    \
+                                    .label = "compute_pass",          \
+                                });                                   \
+            ASSERT_CHECK(compute_pass_encoder);                        \
+            wgpuComputePassEncoderSetPipeline(compute_pass_encoder, ctx->pipeline_##name); \
+            wgpuComputePassEncoderSetBindGroup(compute_pass_encoder, 0, bind_group, 0, NULL); \
+            wgpuComputePassEncoderDispatchWorkgroups(compute_pass_encoder, (wcX), (wcY), (wcZ)); \
+            wgpuComputePassEncoderEnd(compute_pass_encoder);
+
         switch (dst->op) {
             case GGML_OP_NONE:
             case GGML_OP_RESHAPE:
@@ -681,16 +692,7 @@ void ggml_wgpu_graph_compute(
                 switch (ggml_get_unary_op(gf->nodes[i])) {
                     case GGML_UNARY_OP_SILU:
                         {
-                            compute_pass_encoder = wgpuCommandEncoderBeginComputePass(
-                                command_encoder, &(const WGPUComputePassDescriptor){
-                                                    .label = "compute_pass",
-                                                });
-                            ASSERT_CHECK(compute_pass_encoder);
-
-                            wgpuComputePassEncoderSetPipeline(compute_pass_encoder, ctx->pipeline_silu);
-                            wgpuComputePassEncoderSetBindGroup(compute_pass_encoder, 0, bind_group, 0, NULL);
-                            wgpuComputePassEncoderDispatchWorkgroups(compute_pass_encoder, ggml_nelements(dst), 1, 1);
-                            wgpuComputePassEncoderEnd(compute_pass_encoder);
+                            GGML_WGPU_ENCODE_KERNEL(silu, ggml_nelements(dst), 1, 1)
                         } break;
                     default:
                         {
@@ -704,6 +706,8 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(false);
                 }
         }
+
+        #undef GGML_WGPU_ENCODE_KERNEL
 
         if (bind_group) wgpuBindGroupRelease(bind_group);
         if (compute_pass_encoder) wgpuComputePassEncoderRelease(compute_pass_encoder);
