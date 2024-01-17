@@ -89,7 +89,7 @@ var<uniform> tensor_dimension_params: TensorDimensionParams;
 
 @compute
 @workgroup_size(1)
-fn test_kernel(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let x = src0[global_id.x + tensor_dimension_params.src[0].offset/4u];
     dst[global_id.x + tensor_dimension_params.dst.offset/4u] = x / (1.0 + exp(-x)); ;
 }
@@ -334,12 +334,12 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
 #define GGML_WGPU_ADD_KERNEL(name) \
         ctx->pipeline_##name = wgpuDeviceCreateComputePipeline(     \
             ctx->device, &(const WGPUComputePipelineDescriptor){    \
-                        .label = "compute_pipeline_##name",         \
+                        .label = "compute_pipeline_" #name,         \
                         .layout = ctx->pipeline_layout,             \
                         .compute =                                  \
                             (const WGPUProgrammableStageDescriptor){\
                                 .module = ctx->shader_module,       \
-                                .entryPoint = "test_kernel",      \
+                                .entryPoint = "kernel_" #name,      \
                             },                                      \
                     });                                             \
         ASSERT_CHECK(ctx->pipeline_##name);
