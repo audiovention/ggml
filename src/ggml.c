@@ -8036,7 +8036,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
 
-    int32_t params[] = { s0, p0, d0, apply_tanh ? 1 : 0 };
+    int32_t params[] = { s0, p0, d0, apply_tanh ? 1 : 0, bias ? 1 : 0, inject_signal ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op = GGML_OP_CONV_1D_SMALL_KERN;
