@@ -233,6 +233,19 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
+@compute
+@workgroup_size(1)
+fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let num_el = u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
+    var sum : f32 = 0.0;
+    for (var i = 0u; i < num_el; i = i + 1u) {
+        sum = sum + src0[i];
+    }
+    dst[0] = sum;
+}
+
+
+
 );
 #undef MULTILINE
 
@@ -305,6 +318,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(scale);
     GGML_WGPU_DECL_KERNEL(sub);
     GGML_WGPU_DECL_KERNEL(sqr);
+    GGML_WGPU_DECL_KERNEL(sum);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -494,6 +508,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(scale);
         GGML_WGPU_ADD_KERNEL(sub);
         GGML_WGPU_ADD_KERNEL(sqr);
+        GGML_WGPU_ADD_KERNEL(sum);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -514,6 +529,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(scale);
     GGML_WGPU_DEL_KERNEL(sub);
     GGML_WGPU_DEL_KERNEL(sqr);
+    GGML_WGPU_DEL_KERNEL(sum);
 
 #undef GGML_WGPU_DEL_KERNEL
 
@@ -885,6 +901,12 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
                     GGML_WGPU_ENCODE_KERNEL(sqr, dispatch_x, 1, 1)
+                } break;
+            case GGML_OP_SUM:
+                {
+                    GGML_ASSERT(ggml_is_contiguous(dst));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
+                    GGML_WGPU_ENCODE_KERNEL(sum, 1, 1, 1)
                 } break;
             default:
                 {
