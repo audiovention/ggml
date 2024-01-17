@@ -866,16 +866,23 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_SCALE:
                 {
+                    GGML_ASSERT(ggml_is_contiguous(dst));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
                     GGML_WGPU_ENCODE_KERNEL(scale, dispatch_x, 1, 1)
                 } break;
             case GGML_OP_SUB:
                 {
+                    GGML_ASSERT(ggml_is_contiguous(dst));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
                     GGML_WGPU_ENCODE_KERNEL(sub, dispatch_x, 1, 1)
                 } break;
             case GGML_OP_SQR:
                 {
+                    GGML_ASSERT(ggml_is_contiguous(dst));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
                     GGML_WGPU_ENCODE_KERNEL(sqr, dispatch_x, 1, 1)
                 } break;
