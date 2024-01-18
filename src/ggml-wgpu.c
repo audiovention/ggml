@@ -698,6 +698,7 @@ void ggml_wgpu_set_tensor(
         struct ggml_tensor * t) {
     size_t offs;
     WGPUBuffer id_dst = ggml_wgpu_get_buffer(ctx, t, &offs);
+    GGML_ASSERT(id_dst);
 
     GGML_ASSERT(ggml_is_contiguous(t));
     wgpuQueueWriteBuffer(ctx->queue, id_dst, offs, t->data, ggml_nbytes(t));
@@ -709,6 +710,7 @@ void ggml_wgpu_get_tensor(
     GGML_ASSERT(ggml_is_contiguous(t));
     size_t offs;
     WGPUBuffer id_src = ggml_wgpu_get_buffer(ctx, t, &offs);
+    GGML_ASSERT(id_src);
 
     const size_t nbytes = ggml_nbytes(t);
 
