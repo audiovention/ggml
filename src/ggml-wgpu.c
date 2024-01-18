@@ -207,7 +207,7 @@ fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el) {
         return;
     }
-    dst[global_id.x] = src0[global_id.x] * src1[0];
+    dst[global_id.x + tensor_dimension_params.dst.offset/4u] = src0[global_id.x + tensor_dimension_params.src[0].offset/4u] * src1[0u + tensor_dimension_params.src[1].offset/4u];
 }
 
 
@@ -218,7 +218,7 @@ fn kernel_sub(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el) {
         return;
     }
-    dst[global_id.x] = src0[global_id.x] - src1[global_id.x];
+    dst[global_id.x + tensor_dimension_params.dst.offset/4u] = src0[global_id.x + tensor_dimension_params.src[0].offset/4u] - src1[global_id.x + tensor_dimension_params.src[1].offset/4u];
 }
 
 
@@ -229,7 +229,7 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el) {
         return;
     }
-    dst[global_id.x] = src0[global_id.x] * src0[global_id.x];
+    dst[global_id.x + tensor_dimension_params.dst.offset/4u] = src0[global_id.x + tensor_dimension_params.src[0].offset/4u] * src0[global_id.x + tensor_dimension_params.src[0].offset/4u];
 }
 
 
@@ -239,9 +239,9 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let num_el = u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
     var sum : f32 = 0.0;
     for (var i = 0u; i < num_el; i = i + 1u) {
-        sum = sum + src0[i];
+        sum = sum + src0[i + tensor_dimension_params.src[0].offset/4u];
     }
-    dst[0] = sum;
+    dst[0u + tensor_dimension_params.dst.offset/4u] = sum;
 }
 
 
