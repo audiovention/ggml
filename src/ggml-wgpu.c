@@ -817,9 +817,14 @@ void ggml_wgpu_graph_compute(
 
         wgpuQueueWriteBuffer(ctx->queue, ctx->tensor_dimension_operation_params, 0, &(ctx->tensor_dimension_operation_params_host), sizeof(ctx->tensor_dimension_operation_params_host));
 
+        char bind_group_name[30];
+        char compute_pass_name[30];
+        sprintf(bind_group_name, "bind_group_%d", i);
+        sprintf(compute_pass_name, "compute_pass_%d", i);
+
         WGPUBindGroup bind_group = wgpuDeviceCreateBindGroup(
             ctx->device, &(const WGPUBindGroupDescriptor){
-                        .label = "bind_group",
+                        .label = bind_group_name,
                         .layout = ctx->bind_group_layout,
                         .entryCount = GGML_WGPU_BINDINGS_SIZE,
                         .entries = ctx->bind_group_entries,
@@ -846,7 +851,7 @@ void ggml_wgpu_graph_compute(
         #define GGML_WGPU_ENCODE_KERNEL(name, wcX, wcY, wcZ) \
             compute_pass_encoder = wgpuCommandEncoderBeginComputePass( \
                 command_encoder, &(const WGPUComputePassDescriptor){    \
-                                    .label = "compute_pass",          \
+                                    .label = compute_pass_name,          \
                                 });                                   \
             ASSERT_CHECK(compute_pass_encoder);                        \
             wgpuComputePassEncoderSetPipeline(compute_pass_encoder, ctx->pipeline_##name); \
