@@ -14966,7 +14966,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
             const float * kern_data = (float *)((char *) src0->data + ik*nb02);
             const long offset = d0 * ik;
 
-            float * src_data = (float *)((char *) src1->data + ir*nb12 + offset*nb10 + (input_len - real_input_len)*nb0);
+            float * src_data = (float *)((char *) src1->data + ir*nb12 + (offset + input_len - real_input_len)*nb10);
 
             cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
                     output_len, output_channels, input_channels,

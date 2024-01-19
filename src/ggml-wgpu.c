@@ -144,7 +144,7 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
         let base_kern_index = global_id.y * tensor_dimension_params.src[0].nb[0]/4u + 
             k * tensor_dimension_params.src[0].nb[2]/4u + tensor_dimension_params.src[0].offset/4u;
         let base_input_index = global_id.z * tensor_dimension_params.src[1].nb[2]/4u +
-            (k * d0 +input_len - real_input_len + global_id.x) * tensor_dimension_params.src[1].nb[0]/4u + 
+            (k * d0 + input_len - real_input_len + global_id.x) * tensor_dimension_params.src[1].nb[0]/4u + 
             tensor_dimension_params.src[1].offset/4u;
         for (var c = 0u; c < input_channels; c = c + 1u) {
             let input_index = base_input_index + c * tensor_dimension_params.src[1].nb[1]/4u;
