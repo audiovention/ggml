@@ -240,7 +240,7 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
 @compute
 @workgroup_size(1)
 fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let num_el = u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
+    let num_el = u32(tensor_dimension_params.src[0].ne[0] * tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
     var sum : f32 = 0.0;
     for (var i = 0u; i < num_el; i = i + 1u) {
         sum = sum + src0[i + tensor_dimension_params.src[0].offset/4u];
