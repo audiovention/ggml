@@ -87,6 +87,104 @@ var<storage,read_write> dst: array<f32>;
 var<uniform> tensor_dimension_params: TensorDimensionParams;
 
 
+fn get_src0(x: u32, y: u32, z: u32) -> f32 {
+    return src0[x * tensor_dimension_params.src[0].nb[0]/4u +
+                y * tensor_dimension_params.src[0].nb[1]/4u +
+                z * tensor_dimension_params.src[0].nb[2]/4u +
+                    tensor_dimension_params.src[0].offset/4u];
+}
+
+fn get_src1(x: u32, y: u32, z: u32) -> f32 {
+    return src1[x * tensor_dimension_params.src[1].nb[0]/4u +
+                y * tensor_dimension_params.src[1].nb[1]/4u +
+                z * tensor_dimension_params.src[1].nb[2]/4u +
+                    tensor_dimension_params.src[1].offset/4u];
+}
+
+fn get_src2(x: u32, y: u32, z: u32) -> f32 {
+    return src2[x * tensor_dimension_params.src[2].nb[0]/4u +
+                y * tensor_dimension_params.src[2].nb[1]/4u +
+                z * tensor_dimension_params.src[2].nb[2]/4u +
+                    tensor_dimension_params.src[2].offset/4u];
+}
+
+fn get_src3(x: u32, y: u32, z: u32) -> f32 {
+    return src3[x * tensor_dimension_params.src[3].nb[0]/4u +
+                y * tensor_dimension_params.src[3].nb[1]/4u +
+                z * tensor_dimension_params.src[3].nb[2]/4u +
+                    tensor_dimension_params.src[3].offset/4u];
+}
+
+fn get_src4(x: u32, y: u32, z: u32) -> f32 {
+    return src4[x * tensor_dimension_params.src[4].nb[0]/4u +
+                y * tensor_dimension_params.src[4].nb[1]/4u +
+                z * tensor_dimension_params.src[4].nb[2]/4u +
+                    tensor_dimension_params.src[4].offset/4u];
+}
+
+fn get_src5(x: u32, y: u32, z: u32) -> f32 {
+    return src5[x * tensor_dimension_params.src[5].nb[0]/4u +
+                y * tensor_dimension_params.src[5].nb[1]/4u +
+                z * tensor_dimension_params.src[5].nb[2]/4u +
+                    tensor_dimension_params.src[5].offset/4u];
+}
+
+fn get_dst(x: u32, y: u32, z: u32) -> f32 {
+    return dst[ x * tensor_dimension_params.dst.nb[0]/4u +
+                y * tensor_dimension_params.dst.nb[1]/4u +
+                z * tensor_dimension_params.dst.nb[2]/4u +
+                    tensor_dimension_params.dst.offset/4u];
+}
+
+fn set_src0(x: u32, y: u32, z: u32, v: f32) {
+    src0[x * tensor_dimension_params.src[0].nb[0]/4u +
+         y * tensor_dimension_params.src[0].nb[1]/4u +
+         z * tensor_dimension_params.src[0].nb[2]/4u +
+             tensor_dimension_params.src[0].offset/4u] = v;
+}
+
+fn set_src1(x: u32, y: u32, z: u32, v: f32) {
+    src1[x * tensor_dimension_params.src[1].nb[0]/4u +
+         y * tensor_dimension_params.src[1].nb[1]/4u +
+         z * tensor_dimension_params.src[1].nb[2]/4u +
+             tensor_dimension_params.src[1].offset/4u] = v;
+}
+
+fn set_src2(x: u32, y: u32, z: u32, v: f32) {
+    src2[x * tensor_dimension_params.src[2].nb[0]/4u +
+         y * tensor_dimension_params.src[2].nb[1]/4u +
+         z * tensor_dimension_params.src[2].nb[2]/4u +
+             tensor_dimension_params.src[2].offset/4u] = v;
+}
+
+fn set_src3(x: u32, y: u32, z: u32, v: f32) {
+    src3[x * tensor_dimension_params.src[3].nb[0]/4u +
+         y * tensor_dimension_params.src[3].nb[1]/4u +
+         z * tensor_dimension_params.src[3].nb[2]/4u +
+             tensor_dimension_params.src[3].offset/4u] = v;
+}
+
+fn set_src4(x: u32, y: u32, z: u32, v: f32) {
+    src4[x * tensor_dimension_params.src[4].nb[0]/4u +
+         y * tensor_dimension_params.src[4].nb[1]/4u +
+         z * tensor_dimension_params.src[4].nb[2]/4u +
+             tensor_dimension_params.src[4].offset/4u] = v;
+}
+
+fn set_src5(x: u32, y: u32, z: u32, v: f32) {
+    src5[x * tensor_dimension_params.src[5].nb[0]/4u +
+         y * tensor_dimension_params.src[5].nb[1]/4u +
+         z * tensor_dimension_params.src[5].nb[2]/4u +
+             tensor_dimension_params.src[5].offset/4u] = v;
+}
+
+fn set_dst(x: u32, y: u32, z: u32, v: f32) {
+    dst[ x * tensor_dimension_params.dst.nb[0]/4u +
+         y * tensor_dimension_params.dst.nb[1]/4u +
+         z * tensor_dimension_params.dst.nb[2]/4u +
+             tensor_dimension_params.dst.offset/4u] = v;
+}
+
 
 @compute
 @workgroup_size(1)
