@@ -271,6 +271,32 @@ fn kernel_repeat(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
+@compute
+@workgroup_size(256)
+fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
+        return;
+    }
+
+    let idx0 = global_id.x * u32(tensor_dimension_params.src[1].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+    let idx1 = global_id.y * u32(tensor_dimension_params.src[1].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
+    let idx2 = global_id.z * u32(tensor_dimension_params.src[1].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
+
+    dst[global_id.z * tensor_dimension_params.dst.nb[2]/4u +
+        global_id.y * tensor_dimension_params.dst.nb[1]/4u +
+        global_id.x * tensor_dimension_params.dst.nb[0]/4u + 
+        tensor_dimension_params.dst.offset/4u] = 
+    src0[global_id.x * tensor_dimension_params.src[0].nb[0]/4u +
+        global_id.y * tensor_dimension_params.src[0].nb[1]/4u +
+        global_id.z * tensor_dimension_params.src[0].nb[2]/4u +
+        tensor_dimension_params.src[0].offset/4u] *
+    src1[idx0 * tensor_dimension_params.src[1].nb[0]/4u +
+        idx1 * tensor_dimension_params.src[1].nb[1]/4u +
+        idx2 * tensor_dimension_params.src[1].nb[2]/4u +
+        tensor_dimension_params.src[1].offset/4u];
+}
+
+
 
 );
 #undef MULTILINE
@@ -348,6 +374,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(sqr);
     GGML_WGPU_DECL_KERNEL(sum);
     GGML_WGPU_DECL_KERNEL(repeat);
+    GGML_WGPU_DECL_KERNEL(mul);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -539,6 +566,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(sqr);
         GGML_WGPU_ADD_KERNEL(sum);
         GGML_WGPU_ADD_KERNEL(repeat);
+        GGML_WGPU_ADD_KERNEL(mul);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -561,6 +589,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(sqr);
     GGML_WGPU_DEL_KERNEL(sum);
     GGML_WGPU_DEL_KERNEL(repeat);
+    GGML_WGPU_DEL_KERNEL(mul);
 
 #undef GGML_WGPU_DEL_KERNEL
 
@@ -953,6 +982,12 @@ void ggml_wgpu_graph_compute(
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(repeat, dispatch_x, dst->ne[1], dst->ne[2])
+                } break;
+            case GGML_OP_MUL:
+                {
+                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    GGML_ASSERT(dst->ne[3] == 1);
+                    GGML_WGPU_ENCODE_KERNEL(mul, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             default:
                 {
