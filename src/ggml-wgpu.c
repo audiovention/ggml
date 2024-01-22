@@ -989,6 +989,14 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(mul, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
+            case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
+            case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
+            case GGML_OP_ACC:
+            case GGML_OP_ADD_AND_TANH_BACK:
+            case GGML_OP_ADD:
+            case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
+                {
+                } break;
             default:
                 {
                     GGML_WGPU_LOG_ERROR("%s: error: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
