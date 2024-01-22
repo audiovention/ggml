@@ -162,6 +162,7 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
         }
     }
 
+    GGML_ASSERT(((addr-alloc->data)%(alloc->alignment))==0);
     tensor->data = addr;
     AT_PRINTF("%s: allocated data at %p\n", __func__, tensor->data);
     tensor->buffer = alloc->buffer;
@@ -310,7 +311,7 @@ struct ggml_allocr * ggml_allocr_new_from_buffer(struct ggml_backend_buffer * bu
     *alloc = (struct ggml_allocr){
         /*.buffer        = */ buffer,
         /*.buffer_owned  = */ false,
-        /*.base          = */ ggml_backend_buffer_get_base(buffer),
+        /*.data          = */ ggml_backend_buffer_get_base(buffer),
         /*.alignment     = */ ggml_backend_buffer_get_alignment(buffer),
         /*.n_free_blocks = */ 0,
         /*.free_blocks   = */ {{0}},

@@ -202,8 +202,16 @@ static void ggml_backend_cpu_free(ggml_backend_t backend) {
     free(backend);
 }
 
+static const size_t TENSOR_ALIGNMENT = 256; // should be enough for AVX 512 // 256 is the new value - enough for webgpu alignment requirements
+
 static void * ggml_backend_cpu_buffer_get_base(ggml_backend_buffer_t buffer) {
-    return (void *)buffer->context;
+    size_t base = (void *)(buffer->context);
+    size_t addr_incr = 0;
+    if (base % TENSOR_ALIGNMENT) {
+        addr_incr = TENSOR_ALIGNMENT - (base % TENSOR_ALIGNMENT);
+    }
+    base += addr_incr;
+    return (void*)base;
 }
 
 static void ggml_backend_cpu_buffer_free_buffer(ggml_backend_buffer_t buffer) {
@@ -228,7 +236,6 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i_from_ptr = {
     /* .free_tensor    = */ NULL,
 };
 
-static const size_t TENSOR_ALIGNMENT = 64; // should be enough for AVX 512
 
 static ggml_backend_buffer_t ggml_backend_cpu_alloc_buffer(ggml_backend_t backend, size_t size) {
     size += TENSOR_ALIGNMENT;   // malloc may return an address that is not aligned
