@@ -530,6 +530,22 @@ fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>)
 }
 
 
+@compute
+@workgroup_size(256)
+fn kernel_add(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
+        return;
+    }
+
+    let idx0 = global_id.x * u32(tensor_dimension_params.src[1].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+    let idx1 = global_id.y * u32(tensor_dimension_params.src[1].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
+    let idx2 = global_id.z * u32(tensor_dimension_params.src[1].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
+
+    set_dst(global_id.x, global_id.y, global_id.z, 
+        get_src0(global_id.x, global_id.y, global_id.z) + get_src1(idx0, idx1, idx2));
+}
+
+
 
 
 
@@ -614,6 +630,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_input);
     GGML_WGPU_DECL_KERNEL(acc);
     GGML_WGPU_DECL_KERNEL(add_and_tanh_back);
+    GGML_WGPU_DECL_KERNEL(add);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -810,6 +827,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_input);
         GGML_WGPU_ADD_KERNEL(acc);
         GGML_WGPU_ADD_KERNEL(add_and_tanh_back);
+        GGML_WGPU_ADD_KERNEL(add);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -837,6 +855,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_input);
     GGML_WGPU_DEL_KERNEL(acc);
     GGML_WGPU_DEL_KERNEL(add_and_tanh_back);
+    GGML_WGPU_DEL_KERNEL(add);
 
 #undef GGML_WGPU_DEL_KERNEL
 
@@ -1239,24 +1258,33 @@ void ggml_wgpu_graph_compute(
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                 {
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_input, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_ACC:
                 {
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(acc, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_ADD_AND_TANH_BACK:
                 {
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_ADD:
+                {
+                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    GGML_ASSERT(dst->ne[3] == 1);
+                    GGML_WGPU_ENCODE_KERNEL(add, dispatch_x, dst->ne[1], dst->ne[2])
+                } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
                 {
                 } break;
