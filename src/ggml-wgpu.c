@@ -454,7 +454,7 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
             for (var idx_oc = 0u; idx_oc < output_channels; idx_oc = idx_oc + 1u) {
                 output = output + 
                     get_src0(idx_oc, global_id.y, ik) * 
-                    get_src1(global_id.x - idx_offset, global_id.y, global_id.z);
+                    get_src1(global_id.x - idx_offset, idx_oc, global_id.z);
             }
         }
     }
