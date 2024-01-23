@@ -450,7 +450,7 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
         let idx_offset = ik * d0;
-        if (global_id.x >= idx_offset) {
+        if (global_id.x >= idx_offset && (global_id.x < (idx_offset+output_len))) {
             for (var idx_oc = 0u; idx_oc < output_channels; idx_oc = idx_oc + 1u) {
                 output = output + 
                     get_src0(idx_oc, global_id.y, ik) * 
