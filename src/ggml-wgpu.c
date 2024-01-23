@@ -358,14 +358,7 @@ fn kernel_repeat(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx1 = global_id.y * u32(tensor_dimension_params.src[0].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
     let idx2 = global_id.z * u32(tensor_dimension_params.src[0].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
 
-    dst[global_id.z * tensor_dimension_params.dst.nb[2]/4u +
-        global_id.y * tensor_dimension_params.dst.nb[1]/4u +
-        global_id.x * tensor_dimension_params.dst.nb[0]/4u + 
-        tensor_dimension_params.dst.offset/4u] = 
-    src0[idx0 * tensor_dimension_params.src[0].nb[0]/4u +
-        idx1 * tensor_dimension_params.src[0].nb[1]/4u +
-        idx2 * tensor_dimension_params.src[0].nb[2]/4u +
-        tensor_dimension_params.src[0].offset/4u];
+    set_dst(global_id.x, global_id.y, global_id.z, get_src0(idx0, idx1, idx2));
 }
 
 
@@ -380,18 +373,8 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx1 = global_id.y * u32(tensor_dimension_params.src[1].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
     let idx2 = global_id.z * u32(tensor_dimension_params.src[1].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
 
-    dst[global_id.z * tensor_dimension_params.dst.nb[2]/4u +
-        global_id.y * tensor_dimension_params.dst.nb[1]/4u +
-        global_id.x * tensor_dimension_params.dst.nb[0]/4u + 
-        tensor_dimension_params.dst.offset/4u] = 
-    src0[global_id.x * tensor_dimension_params.src[0].nb[0]/4u +
-        global_id.y * tensor_dimension_params.src[0].nb[1]/4u +
-        global_id.z * tensor_dimension_params.src[0].nb[2]/4u +
-        tensor_dimension_params.src[0].offset/4u] *
-    src1[idx0 * tensor_dimension_params.src[1].nb[0]/4u +
-        idx1 * tensor_dimension_params.src[1].nb[1]/4u +
-        idx2 * tensor_dimension_params.src[1].nb[2]/4u +
-        tensor_dimension_params.src[1].offset/4u];
+    set_dst(global_id.x, global_id.y, global_id.z, 
+        get_src0(global_id.x, global_id.y, global_id.z) * get_src1(idx0, idx1, idx2));
 }
 
 
