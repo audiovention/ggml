@@ -480,6 +480,58 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
 }
 
 
+@compute
+@workgroup_size(256)
+fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let nb0 = 4u;
+    let nb1 = u32(tensor_dimension_params.params[0][0]);
+    let nb2 = u32(tensor_dimension_params.params[0][1]);
+    let nb3 = u32(tensor_dimension_params.params[0][2]);
+    let offset = u32(tensor_dimension_params.params[0][3]);
+    let inplace = bool(tensor_dimension_params.params[1][0]);
+    let zero_out_accumulator = bool(tensor_dimension_params.params[1][1]);
+
+    let nc = u32(tensor_dimension_params.src[1].ne[0]);
+    let nc_out = u32(tensor_dimension_params.dst.ne[0]);
+    let offset_ne = offset / 4u;
+    let nc_limit = nc + offset_ne;
+    let nc_after = nc_out - nc_limit;
+
+    if (global_id.x >= nc_out) {
+        return;
+    }
+    if (global_id.y >= u32(tensor_dimension_params.dst.ne[1])) {
+        return;
+    }
+    if (global_id.z >= u32(tensor_dimension_params.dst.ne[2])) {
+        return;
+    }
+
+    var output : f32 = 0.0;
+    if (!zero_out_accumulator) {
+        output = get_src0(global_id.x, global_id.y, global_id.z);
+    }
+
+    var dst_addr_offset = global_id.z * tensor_dimension_params.dst.nb[2] +
+        global_id.y * tensor_dimension_params.dst.nb[1] +
+        global_id.x * tensor_dimension_params.dst.nb[0];
+
+    if (dst_addr_offset >= offset) {
+        dst_addr_offset = dst_addr_offset - offset;
+        let idx2 = dst_addr_offset / nb2;
+        dst_addr_offset = dst_addr_offset - idx2 * nb2;
+        let idx1 = dst_addr_offset / nb1;
+        dst_addr_offset = dst_addr_offset - idx1 * nb1;
+        let idx0 = dst_addr_offset / nb0;
+        if (idx0 < nc && idx1 < u32(tensor_dimension_params.src[1].ne[1]) && idx2 < u32(tensor_dimension_params.src[1].ne[2])) {
+            output = output + get_src1(idx0, idx1, idx2);
+        }
+    }
+
+    set_dst(global_id.x, global_id.y, global_id.z, output);
+}
+
+
 
 );
 #undef MULTILINE
@@ -560,6 +612,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(mul);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_input);
+    GGML_WGPU_DECL_KERNEL(acc);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -754,6 +807,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(mul);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_filter);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_input);
+        GGML_WGPU_ADD_KERNEL(acc);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -779,6 +833,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(mul);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_input);
+    GGML_WGPU_DEL_KERNEL(acc);
 
 #undef GGML_WGPU_DEL_KERNEL
 
@@ -1189,6 +1244,10 @@ void ggml_wgpu_graph_compute(
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_input, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_ACC:
+                {
+                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    GGML_WGPU_ENCODE_KERNEL(acc, dispatch_x, dst->ne[1], dst->ne[2])
+                } break;
             case GGML_OP_ADD_AND_TANH_BACK:
             case GGML_OP_ADD:
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
