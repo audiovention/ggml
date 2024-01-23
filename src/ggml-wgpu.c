@@ -546,6 +546,29 @@ fn kernel_add(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
+@compute
+@workgroup_size(256)
+fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let output_len = u32(tensor_dimension_params.src[0].ne[0]);
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+
+    if (global_id.x >= output_channels) {
+        return;
+    }
+
+    var output : f32 = 0.0;
+
+    for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
+        for (var isample = 0u; isample < output_len; isample = isample + 1u) {
+            output = output + get_src0(isample, global_id.x, ir);
+        }
+    }
+
+    set_dst(0u, global_id.x, 0u, output);
+}
+
+
 
 
 
@@ -631,6 +654,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(acc);
     GGML_WGPU_DECL_KERNEL(add_and_tanh_back);
     GGML_WGPU_DECL_KERNEL(add);
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -828,6 +852,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(acc);
         GGML_WGPU_ADD_KERNEL(add_and_tanh_back);
         GGML_WGPU_ADD_KERNEL(add);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -856,6 +881,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(acc);
     GGML_WGPU_DEL_KERNEL(add_and_tanh_back);
     GGML_WGPU_DEL_KERNEL(add);
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias);
 
 #undef GGML_WGPU_DEL_KERNEL
 
@@ -1287,6 +1313,11 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
                 {
+                    const int32_t dispatch_x = CEIL_DIV(dst->ne[1], 256);
+                    GGML_ASSERT(dst->ne[0] == 1);
+                    GGML_ASSERT(dst->ne[2] == 1);
+                    GGML_ASSERT(dst->ne[3] == 1);
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dispatch_x, 1, 1)
                 } break;
             default:
                 {
