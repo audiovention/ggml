@@ -360,6 +360,7 @@ static bool ggml_are_same_layout(const struct ggml_tensor * a, const struct ggml
 }
 
 static bool ggml_op_can_inplace(enum ggml_op op) {
+    return false;
     switch (op) {
         case GGML_OP_SCALE:
         case GGML_OP_DIAG_MASK_ZERO:
