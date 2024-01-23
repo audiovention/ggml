@@ -495,20 +495,25 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
         output = get_src0(global_id.x, global_id.y, global_id.z);
     }
 
-    var dst_addr_offset = global_id.z * tensor_dimension_params.dst.nb[2] +
-        global_id.y * tensor_dimension_params.dst.nb[1] +
-        global_id.x * tensor_dimension_params.dst.nb[0];
+    // var dst_addr_offset = global_id.z * tensor_dimension_params.dst.nb[2] +
+    //     global_id.y * tensor_dimension_params.dst.nb[1] +
+    //     global_id.x * tensor_dimension_params.dst.nb[0];
 
-    if (dst_addr_offset >= offset) {
-        dst_addr_offset = dst_addr_offset - offset;
-        let idx2 = dst_addr_offset / nb2;
-        dst_addr_offset = dst_addr_offset - idx2 * nb2;
-        let idx1 = dst_addr_offset / nb1;
-        dst_addr_offset = dst_addr_offset - idx1 * nb1;
-        let idx0 = dst_addr_offset / nb0;
-        if (idx0 < nc && idx1 < u32(tensor_dimension_params.src[1].ne[1]) && idx2 < u32(tensor_dimension_params.src[1].ne[2])) {
-            output = output + get_src1(idx0, idx1, idx2);
-        }
+    // if (dst_addr_offset >= offset) {
+    //     dst_addr_offset = dst_addr_offset - offset;
+    //     let idx2 = dst_addr_offset / nb2;
+    //     dst_addr_offset = dst_addr_offset - idx2 * nb2;
+    //     let idx1 = dst_addr_offset / nb1;
+    //     dst_addr_offset = dst_addr_offset - idx1 * nb1;
+    //     let idx0 = dst_addr_offset / nb0;
+    //     if (idx0 < nc && idx1 < u32(tensor_dimension_params.src[1].ne[1]) && idx2 < u32(tensor_dimension_params.src[1].ne[2])) {
+    //         output = output + get_src1(idx0, idx1, idx2);
+    //     }
+    // }
+
+    if (global_id.x >= offset_ne && global_id.x < nc_limit) {
+        let idx0 = global_id.x - offset_ne;
+        output = output + get_src1(idx0, global_id.y, global_id.z);
     }
 
     set_dst(global_id.x, global_id.y, global_id.z, output);

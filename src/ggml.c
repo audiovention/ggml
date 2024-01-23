@@ -4041,6 +4041,7 @@ inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x)
 #ifdef GGML_USE_ACCELERATE
     vvtanhf(y, x, &n);
 #else
+    // #ifdef aASDASD__AVX2__
     #ifdef __AVX2__
         const int np = (n & ~(GGML_F32_STEP - 1));
 
@@ -6086,6 +6087,16 @@ static struct ggml_tensor * ggml_acc_impl(
     GGML_ASSERT(ggml_is_contiguous(a));
     GGML_ASSERT(a->type == GGML_TYPE_F32);
     GGML_ASSERT(b->type == GGML_TYPE_F32);
+
+
+    // Few extra limitations to simplify wgpu kernel
+    GGML_ASSERT(nb1 == a->nb[1]);
+    GGML_ASSERT(nb2 == a->nb[2]);
+    GGML_ASSERT(nb3 == a->nb[3]);
+    GGML_ASSERT(a->ne[1] == b->ne[1]);
+    GGML_ASSERT(a->ne[2] == b->ne[2]);
+    GGML_ASSERT(a->ne[3] == b->ne[3]);
+    
 
     bool is_node = false;
 
