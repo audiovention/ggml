@@ -89,6 +89,9 @@ var<storage,read_write> dst: array<f32>;
 var<uniform> tensor_dimension_params: TensorDimensionParams;
 
 
+var<workgroup> workgroup_data: array<f32, 256>;
+
+
 fn get_src0(x: u32, y: u32, z: u32) -> f32 {
     return src0[x * tensor_dimension_params.src[0].nb[0]/4u +
                 y * tensor_dimension_params.src[0].nb[1]/4u +
@@ -338,14 +341,27 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 
 @compute
-@workgroup_size(1)
-fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>) {
+@workgroup_size(256)
+fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
     let num_el = u32(tensor_dimension_params.src[0].ne[0] * tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
     var sum : f32 = 0.0;
-    for (var i = 0u; i < num_el; i = i + 1u) {
+    
+    for (var i = local_id.x; i < num_el; i = i + 256u) {
         sum = sum + src0[i + tensor_dimension_params.src[0].offset/4u];
     }
-    dst[0u + tensor_dimension_params.dst.offset/4u] = sum;
+
+    workgroup_data[local_id.x] = sum;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        sum = 0.0;
+        for (var i = 0u; i < 256u; i = i + 1u) {
+            sum = sum + workgroup_data[i];
+        }
+        dst[0u + tensor_dimension_params.dst.offset/4u] = sum;
+    }
 }
 
 
@@ -380,7 +396,6 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
-var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1350,7 +1365,6 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_SUM:
                 {
-                    GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_WGPU_ENCODE_KERNEL(sum, 1, 1, 1)
                 } break;
