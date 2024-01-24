@@ -643,6 +643,8 @@ struct ggml_wgpu_context {
     int n_buffers;
     struct ggml_wgpu_buffer buffers[GGML_WGPU_MAX_BUFFERS];
 
+    WGPUQuerySet timestampQueries;
+
     // custom kernels
 #define GGML_WGPU_DECL_KERNEL(name) \
     WGPUComputePipeline pipeline_##name
@@ -732,8 +734,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
     // Configure context
     struct ggml_wgpu_context * ctx = malloc(sizeof(struct ggml_wgpu_context));
 
-    WGPUInstanceDescriptor desc;
-    desc.nextInChain = NULL;
+    WGPUInstanceDescriptor desc = {0};
 
     ctx->instance = wgpuCreateInstance(&desc);
     ASSERT_CHECK(ctx->instance);
@@ -742,9 +743,33 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
                                 (void *)&(ctx->adapter));
     ASSERT_CHECK(ctx->adapter);
 
-    wgpuAdapterRequestDevice(ctx->adapter, NULL, handle_request_device,
+    WGPUDeviceDescriptor deviceDesc = {0};
+#if GGML_PERF
+    if (wgpuAdapterHasFeature(ctx->adapter, WGPUFeatureName_TimestampQuery)) {
+        deviceDesc.requiredFeatureCount = 1;
+        WGPUFeatureName features[] = {WGPUFeatureName_TimestampQuery};
+        deviceDesc.requiredFeatures = features;
+    }
+#endif
+    
+    wgpuAdapterRequestDevice(ctx->adapter, &deviceDesc, handle_request_device,
                             (void *)&(ctx->device));
     ASSERT_CHECK(ctx->device);
+
+
+#if GGML_PERF
+    if (wgpuDeviceHasFeature(ctx->device, WGPUFeatureName_TimestampQuery)) {
+        GGML_WGPU_LOG_INFO("Enabling timestamp queries\n");
+        // Create timestamp queries
+        WGPUQuerySetDescriptor querySetDesc = {0};
+        querySetDesc.nextInChain = NULL;
+        querySetDesc.type = WGPUQueryType_Timestamp;
+        querySetDesc.count = GGML_MAX_NODES+1;
+        ctx->timestampQueries = wgpuDeviceCreateQuerySet(ctx->device, &querySetDesc);
+    } else {
+        GGML_WGPU_LOG_INFO("Timestamp queries not supported\n");
+    }
+#endif
 
     ASSERT_CHECK(wgpuDeviceGetLimits(ctx->device, &(ctx->limits)));
 
