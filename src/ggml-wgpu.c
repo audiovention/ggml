@@ -299,7 +299,7 @@ fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el_dst()) {
         return;
     }
-    dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] * src1[0u + tensor_dimension_params.src[1].offset];
+    set_dst_lin(global_id.x, get_src0_lin(global_id.x) * get_src1_lin(0u));
 }
 
 
@@ -309,7 +309,7 @@ fn kernel_sub(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el_dst()) {
         return;
     }
-    dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] - src1[global_id.x + tensor_dimension_params.src[1].offset];
+    set_dst_lin(global_id.x, get_src0_lin(global_id.x) - get_src1_lin(global_id.x));
 }
 
 
@@ -319,7 +319,8 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el_dst()) {
         return;
     }
-    dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] * src0[global_id.x + tensor_dimension_params.src[0].offset];
+    let x = get_src0_lin(global_id.x);
+    set_dst_lin(global_id.x, x * x);
 }
 
 
@@ -333,7 +334,7 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
     var sum : f32 = 0.0;
     
     for (var i = local_id.x; i < num_el_src0; i = i + 256u) {
-        sum = sum + src0[i + tensor_dimension_params.src[0].offset];
+        sum = sum + get_src0_lin(i);
     }
 
     workgroup_data[local_id.x] = sum;
@@ -344,7 +345,7 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
         for (var i = 0u; i < 256u; i = i + 1u) {
             sum = sum + workgroup_data[i];
         }
-        dst[0u + tensor_dimension_params.dst.offset] = sum;
+        set_dst_lin(0u, sum);
     }
 }
 
@@ -541,11 +542,11 @@ fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>)
         return;
     }
 
-    let x = src0[global_id.x];
-    let y = src1[global_id.x];
+    let x = get_src0_lin(global_id.x);
+    let y = get_src1_lin(global_id.x);
     let z = (1.0 - x*x)*y;
 
-    dst[global_id.x] = z;
+    set_dst_lin(global_id.x, z);
 }
 
 
