@@ -21033,17 +21033,31 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
     GGML_PRINT("n_nodes = %d\n", cgraph->n_nodes);
     for (int i = 0; i < cgraph->n_nodes; i++) {
         struct ggml_tensor * node = cgraph->nodes[i];
+        if (node->op == GGML_OP_NONE) {
+            continue;
+        }
 
         perf_total_per_op_us[node->op] += MAX(1, node->perf_time_us);
 
-        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms\n",
+        size_t numel_bytes_this_node = ggml_nelements(node) * ggml_element_size(node);
+        for (int isrc=0; isrc<GGML_MAX_SRC; isrc++) {
+            if (node->src[isrc]) {
+                numel_bytes_this_node += ggml_nelements(node->src[isrc]) * ggml_element_size(node->src[isrc]);
+            }
+        }
+
+        const double bw_gbps = (double) numel_bytes_this_node / (1024.0*1024.0*1024.0) / ((double) MAX(1, node->perf_time_us) / 1000000.0 / node->perf_runs);
+
+
+        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms / %7.3f GB/s\n",
                 i,
                 node->ne[0], node->ne[1], node->ne[2],
                 ggml_op_name(node->op), node->is_param ? "x" : node->grad ? "g" : " ", node->perf_runs,
                 (double) node->perf_cycles  / (double) ggml_cycles_per_ms(),
                 (double) node->perf_cycles  / (double) ggml_cycles_per_ms() / (double) node->perf_runs,
                 (double) node->perf_time_us / 1000.0,
-                (double) node->perf_time_us / 1000.0 / node->perf_runs);
+                (double) node->perf_time_us / 1000.0 / node->perf_runs,
+                bw_gbps);
     }
 
     GGML_PRINT("n_leafs = %d\n", cgraph->n_leafs);
