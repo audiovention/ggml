@@ -93,109 +93,74 @@ var<workgroup> workgroup_data: array<f32, 256>;
 
 
 fn get_src0(x: u32, y: u32, z: u32) -> f32 {
-    return src0[x * tensor_dimension_params.src[0].nb[0]/4u +
-                y * tensor_dimension_params.src[0].nb[1]/4u +
-                z * tensor_dimension_params.src[0].nb[2]/4u +
-                    tensor_dimension_params.src[0].offset/4u];
+    return src0[x 
+                //   * tensor_dimension_params.src[0].nb[0]
+                + y * tensor_dimension_params.src[0].nb[1] +
+                z * tensor_dimension_params.src[0].nb[2]
+                    // + tensor_dimension_params.src[0].offset
+                    ];
 }
 
 fn get_src1(x: u32, y: u32, z: u32) -> f32 {
-    return src1[x * tensor_dimension_params.src[1].nb[0]/4u +
-                y * tensor_dimension_params.src[1].nb[1]/4u +
-                z * tensor_dimension_params.src[1].nb[2]/4u +
-                    tensor_dimension_params.src[1].offset/4u];
+    return src1[x 
+                //   * tensor_dimension_params.src[1].nb[0]
+                + y * tensor_dimension_params.src[1].nb[1] +
+                z * tensor_dimension_params.src[1].nb[2]
+                    // + tensor_dimension_params.src[1].offset
+                    ];
 }
 
 fn get_src2(x: u32, y: u32, z: u32) -> f32 {
-    return src2[x * tensor_dimension_params.src[2].nb[0]/4u +
-                y * tensor_dimension_params.src[2].nb[1]/4u +
-                z * tensor_dimension_params.src[2].nb[2]/4u +
-                    tensor_dimension_params.src[2].offset/4u];
+    return src2[x 
+                //   * tensor_dimension_params.src[2].nb[0]
+                + y * tensor_dimension_params.src[2].nb[1] +
+                z * tensor_dimension_params.src[2].nb[2]
+                    // + tensor_dimension_params.src[2].offset
+                    ];
 }
 
 fn get_src3(x: u32, y: u32, z: u32) -> f32 {
-    return src3[x * tensor_dimension_params.src[3].nb[0]/4u +
-                y * tensor_dimension_params.src[3].nb[1]/4u +
-                z * tensor_dimension_params.src[3].nb[2]/4u +
-                    tensor_dimension_params.src[3].offset/4u];
+    return src3[x 
+                //   * tensor_dimension_params.src[3].nb[0]
+                + y * tensor_dimension_params.src[3].nb[1] +
+                z * tensor_dimension_params.src[3].nb[2]
+                    // + tensor_dimension_params.src[3].offset
+                    ];
 }
 
 fn get_src4(x: u32, y: u32, z: u32) -> f32 {
-    return src4[x * tensor_dimension_params.src[4].nb[0]/4u +
-                y * tensor_dimension_params.src[4].nb[1]/4u +
-                z * tensor_dimension_params.src[4].nb[2]/4u +
-                    tensor_dimension_params.src[4].offset/4u];
+    return src4[x 
+                //   * tensor_dimension_params.src[4].nb[0]
+                + y * tensor_dimension_params.src[4].nb[1] +
+                z * tensor_dimension_params.src[4].nb[2]
+                    // + tensor_dimension_params.src[4].offset
+                    ];
 }
 
 fn get_src5(x: u32, y: u32, z: u32) -> f32 {
-    return src5[x * tensor_dimension_params.src[5].nb[0]/4u +
-                y * tensor_dimension_params.src[5].nb[1]/4u +
-                z * tensor_dimension_params.src[5].nb[2]/4u +
-                    tensor_dimension_params.src[5].offset/4u];
-}
-
-fn get_dst(x: u32, y: u32, z: u32) -> f32 {
-    return dst[ x * tensor_dimension_params.dst.nb[0]/4u +
-                y * tensor_dimension_params.dst.nb[1]/4u +
-                z * tensor_dimension_params.dst.nb[2]/4u +
-                    tensor_dimension_params.dst.offset/4u];
-}
-
-fn set_src0(x: u32, y: u32, z: u32, v: f32) {
-    src0[x * tensor_dimension_params.src[0].nb[0]/4u +
-         y * tensor_dimension_params.src[0].nb[1]/4u +
-         z * tensor_dimension_params.src[0].nb[2]/4u +
-             tensor_dimension_params.src[0].offset/4u] = v;
-}
-
-fn set_src1(x: u32, y: u32, z: u32, v: f32) {
-    src1[x * tensor_dimension_params.src[1].nb[0]/4u +
-         y * tensor_dimension_params.src[1].nb[1]/4u +
-         z * tensor_dimension_params.src[1].nb[2]/4u +
-             tensor_dimension_params.src[1].offset/4u] = v;
-}
-
-fn set_src2(x: u32, y: u32, z: u32, v: f32) {
-    src2[x * tensor_dimension_params.src[2].nb[0]/4u +
-         y * tensor_dimension_params.src[2].nb[1]/4u +
-         z * tensor_dimension_params.src[2].nb[2]/4u +
-             tensor_dimension_params.src[2].offset/4u] = v;
-}
-
-fn set_src3(x: u32, y: u32, z: u32, v: f32) {
-    src3[x * tensor_dimension_params.src[3].nb[0]/4u +
-         y * tensor_dimension_params.src[3].nb[1]/4u +
-         z * tensor_dimension_params.src[3].nb[2]/4u +
-             tensor_dimension_params.src[3].offset/4u] = v;
-}
-
-fn set_src4(x: u32, y: u32, z: u32, v: f32) {
-    src4[x * tensor_dimension_params.src[4].nb[0]/4u +
-         y * tensor_dimension_params.src[4].nb[1]/4u +
-         z * tensor_dimension_params.src[4].nb[2]/4u +
-             tensor_dimension_params.src[4].offset/4u] = v;
-}
-
-fn set_src5(x: u32, y: u32, z: u32, v: f32) {
-    src5[x * tensor_dimension_params.src[5].nb[0]/4u +
-         y * tensor_dimension_params.src[5].nb[1]/4u +
-         z * tensor_dimension_params.src[5].nb[2]/4u +
-             tensor_dimension_params.src[5].offset/4u] = v;
+    return src5[x 
+                //   * tensor_dimension_params.src[5].nb[0]
+                + y * tensor_dimension_params.src[5].nb[1] +
+                z * tensor_dimension_params.src[5].nb[2]
+                    // + tensor_dimension_params.src[5].offset
+                    ];
 }
 
 fn set_dst(x: u32, y: u32, z: u32, v: f32) {
-    dst[ x * tensor_dimension_params.dst.nb[0]/4u +
-         y * tensor_dimension_params.dst.nb[1]/4u +
-         z * tensor_dimension_params.dst.nb[2]/4u +
-             tensor_dimension_params.dst.offset/4u] = v;
+    dst[ x 
+        //    * tensor_dimension_params.dst.nb[0]
+         + y * tensor_dimension_params.dst.nb[1] +
+         z * tensor_dimension_params.dst.nb[2]
+            // + tensor_dimension_params.dst.offset
+             ] = v;
 }
 
 
 @compute
 @workgroup_size(1)
 fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let x = src0[global_id.x + tensor_dimension_params.src[0].offset/4u];
-    dst[global_id.x + tensor_dimension_params.dst.offset/4u] = x / (1.0 + exp(-x)); ;
+    let x = src0[global_id.x + tensor_dimension_params.src[0].offset];
+    dst[global_id.x + tensor_dimension_params.dst.offset] = x / (1.0 + exp(-x)); ;
 }
 
 
@@ -275,18 +240,18 @@ fn kernel_add_and_trim(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
     
-    let input_index0 = global_id.z * tensor_dimension_params.src[0].nb[2]/4u +
-        global_id.y * tensor_dimension_params.src[0].nb[1]/4u +
-        (global_id.x + u32(tensor_dimension_params.src[0].ne[0]) - output_len) * tensor_dimension_params.src[0].nb[0]/4u +
-        tensor_dimension_params.src[0].offset/4u;
-    let input_index1 = global_id.z * tensor_dimension_params.src[1].nb[2]/4u +
-        global_id.y * tensor_dimension_params.src[1].nb[1]/4u +
-        (global_id.x + u32(tensor_dimension_params.src[1].ne[0]) - output_len) * tensor_dimension_params.src[1].nb[0]/4u +
-        tensor_dimension_params.src[1].offset/4u;
-    let output_index = global_id.z * tensor_dimension_params.dst.nb[2]/4u +
-        global_id.y * tensor_dimension_params.dst.nb[1]/4u +
-        global_id.x * tensor_dimension_params.dst.nb[0]/4u +
-        tensor_dimension_params.dst.offset/4u;
+    let input_index0 = global_id.z * tensor_dimension_params.src[0].nb[2] +
+        global_id.y * tensor_dimension_params.src[0].nb[1] +
+        (global_id.x + u32(tensor_dimension_params.src[0].ne[0]) - output_len) * tensor_dimension_params.src[0].nb[0] +
+        tensor_dimension_params.src[0].offset;
+    let input_index1 = global_id.z * tensor_dimension_params.src[1].nb[2] +
+        global_id.y * tensor_dimension_params.src[1].nb[1] +
+        (global_id.x + u32(tensor_dimension_params.src[1].ne[0]) - output_len) * tensor_dimension_params.src[1].nb[0] +
+        tensor_dimension_params.src[1].offset;
+    let output_index = global_id.z * tensor_dimension_params.dst.nb[2] +
+        global_id.y * tensor_dimension_params.dst.nb[1] +
+        global_id.x * tensor_dimension_params.dst.nb[0] +
+        tensor_dimension_params.dst.offset;
 
     dst[output_index] = src0[input_index0] + src1[input_index1];
 }
@@ -299,7 +264,7 @@ fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el) {
         return;
     }
-    dst[global_id.x + tensor_dimension_params.dst.offset/4u] = src0[global_id.x + tensor_dimension_params.src[0].offset/4u] * src1[0u + tensor_dimension_params.src[1].offset/4u];
+    dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] * src1[0u + tensor_dimension_params.src[1].offset];
 }
 
 
@@ -310,7 +275,7 @@ fn kernel_sub(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el) {
         return;
     }
-    dst[global_id.x + tensor_dimension_params.dst.offset/4u] = src0[global_id.x + tensor_dimension_params.src[0].offset/4u] - src1[global_id.x + tensor_dimension_params.src[1].offset/4u];
+    dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] - src1[global_id.x + tensor_dimension_params.src[1].offset];
 }
 
 
@@ -321,7 +286,7 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el) {
         return;
     }
-    dst[global_id.x + tensor_dimension_params.dst.offset/4u] = src0[global_id.x + tensor_dimension_params.src[0].offset/4u] * src0[global_id.x + tensor_dimension_params.src[0].offset/4u];
+    dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] * src0[global_id.x + tensor_dimension_params.src[0].offset];
 }
 
 
@@ -334,7 +299,7 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
     var sum : f32 = 0.0;
     
     for (var i = local_id.x; i < num_el; i = i + 256u) {
-        sum = sum + src0[i + tensor_dimension_params.src[0].offset/4u];
+        sum = sum + src0[i + tensor_dimension_params.src[0].offset];
     }
 
     workgroup_data[local_id.x] = sum;
@@ -345,7 +310,7 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
         for (var i = 0u; i < 256u; i = i + 1u) {
             sum = sum + workgroup_data[i];
         }
-        dst[0u + tensor_dimension_params.dst.offset/4u] = sum;
+        dst[0u + tensor_dimension_params.dst.offset] = sum;
     }
 }
 
@@ -523,7 +488,7 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 @compute
 @workgroup_size(256)
-fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn kernel_add_and_tanh_back1(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
         return;
     }
@@ -533,6 +498,21 @@ fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>)
     let z = (1.0 - x*x)*y;
     
     set_dst(global_id.x, global_id.y, global_id.z, z);
+}
+
+@compute
+@workgroup_size(256)
+fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let num_el = u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
+    if (global_id.x >= num_el) {
+        return;
+    }
+
+    let x = src0[global_id.x];
+    let y = src1[global_id.x];
+    let z = (1.0 - x*x)*y;
+
+    dst[global_id.x] = z;
 }
 
 
@@ -1195,11 +1175,11 @@ void ggml_wgpu_graph_compute(
         ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[1] = dst ? dst->ne[1] : 0;
         ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[2] = dst ? dst->ne[2] : 0;
         ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[3] = dst ? dst->ne[3] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[0] = dst ? dst->nb[0] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[1] = dst ? dst->nb[1] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[2] = dst ? dst->nb[2] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[3] = dst ? dst->nb[3] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].offset = 0*offs_dst;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[0] = dst ? dst->nb[0]/4 : 0;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[1] = dst ? dst->nb[1]/4 : 0;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[2] = dst ? dst->nb[2]/4 : 0;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[3] = dst ? dst->nb[3]/4 : 0;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].offset = 0*offs_dst/4;
 
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].binding = GGML_WGPU_DST_BINDING_INDEX;
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].buffer = id_dst ? id_dst : ctx->placeholder_buffer;
@@ -1217,11 +1197,11 @@ void ggml_wgpu_graph_compute(
             ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[1] = srci ? srci->ne[1] : 0;
             ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[2] = srci ? srci->ne[2] : 0;
             ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[3] = srci ? srci->ne[3] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[0] = srci ? srci->nb[0] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[1] = srci ? srci->nb[1] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[2] = srci ? srci->nb[2] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[3] = srci ? srci->nb[3] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].offset = 0*offs_srci;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[0] = srci ? srci->nb[0]/4 : 0;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[1] = srci ? srci->nb[1]/4 : 0;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[2] = srci ? srci->nb[2]/4 : 0;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[3] = srci ? srci->nb[3]/4 : 0;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].offset = 0*offs_srci/4;
 
             ctx->bind_group_entries[src_idx].binding = src_idx;
             ctx->bind_group_entries[src_idx].buffer = id_srci ? id_srci : ctx->placeholder_buffer;
@@ -1369,9 +1349,13 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_ADD_AND_TANH_BACK:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    GGML_ASSERT(ggml_is_contiguous(dst));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
+
+                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0]*dst->ne[1]*dst->ne[2], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, dst->ne[1], dst->ne[2])
+                    GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, 1+0*dst->ne[1], 1+0*dst->ne[2])
                 } break;
             case GGML_OP_ADD:
                 {
