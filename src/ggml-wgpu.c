@@ -252,7 +252,7 @@ fn kernel_add_and_trim(@builtin(global_invocation_id) global_id: vec3<u32>) {
         global_id.y * tensor_dimension_params.dst.nb[1] +
         global_id.x * tensor_dimension_params.dst.nb[0] +
         tensor_dimension_params.dst.offset;
-
+    
     dst[output_index] = src0[input_index0] + src1[input_index1];
 }
 
@@ -1171,20 +1171,22 @@ void ggml_wgpu_graph_compute(
         GGML_ASSERT(dstt == GGML_TYPE_F32);
         size_t offs_dst  = 0;
         WGPUBuffer id_dst  = dst  ? ggml_wgpu_get_buffer(ctx, dst,  &offs_dst)  : NULL;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[0] = dst ? dst->ne[0] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[1] = dst ? dst->ne[1] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[2] = dst ? dst->ne[2] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[3] = dst ? dst->ne[3] : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[0] = dst ? dst->nb[0]/4 : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[1] = dst ? dst->nb[1]/4 : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[2] = dst ? dst->nb[2]/4 : 0;
-        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[3] = dst ? dst->nb[3]/4 : 0;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[0] = dst ? dst->ne[0] : 1;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[1] = dst ? dst->ne[1] : 1;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[2] = dst ? dst->ne[2] : 1;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].ne[3] = dst ? dst->ne[3] : 1;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[0] = dst ? dst->nb[0]/4 : 1;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[1] = dst ? dst->nb[1]/4 : 1;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[2] = dst ? dst->nb[2]/4 : 1;
+        ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[3] = dst ? dst->nb[3]/4 : 1;
         ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].offset = 0*offs_dst/4;
 
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].binding = GGML_WGPU_DST_BINDING_INDEX;
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].buffer = id_dst ? id_dst : ctx->placeholder_buffer;
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].offset = id_dst ? offs_dst : 0;
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].size = id_dst ? ggml_nbytes(dst) : MIN_STORAGE_BUFFER_ALIGNMENT;
+
+        GGML_ASSERT(ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[0] == 1);
 
         for (int src_idx=0; src_idx < GGML_MAX_SRC; ++src_idx) {
             struct ggml_tensor * srci = gf->nodes[i]->src[src_idx];
@@ -1193,20 +1195,22 @@ void ggml_wgpu_graph_compute(
             size_t offs_srci = 0;
             WGPUBuffer id_srci = srci ? ggml_wgpu_get_buffer(ctx, srci, &offs_srci) : NULL;
 
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[0] = srci ? srci->ne[0] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[1] = srci ? srci->ne[1] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[2] = srci ? srci->ne[2] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[3] = srci ? srci->ne[3] : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[0] = srci ? srci->nb[0]/4 : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[1] = srci ? srci->nb[1]/4 : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[2] = srci ? srci->nb[2]/4 : 0;
-            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[3] = srci ? srci->nb[3]/4 : 0;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[0] = srci ? srci->ne[0] : 1;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[1] = srci ? srci->ne[1] : 1;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[2] = srci ? srci->ne[2] : 1;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].ne[3] = srci ? srci->ne[3] : 1;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[0] = srci ? srci->nb[0]/4 : 1;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[1] = srci ? srci->nb[1]/4 : 1;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[2] = srci ? srci->nb[2]/4 : 1;
+            ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[3] = srci ? srci->nb[3]/4 : 1;
             ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].offset = 0*offs_srci/4;
 
             ctx->bind_group_entries[src_idx].binding = src_idx;
             ctx->bind_group_entries[src_idx].buffer = id_srci ? id_srci : ctx->placeholder_buffer;
             ctx->bind_group_entries[src_idx].offset = id_srci ? offs_srci : 0;
             ctx->bind_group_entries[src_idx].size = id_srci ? ggml_nbytes(srci) : MIN_STORAGE_BUFFER_ALIGNMENT;
+
+            GGML_ASSERT(ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[0] == 1);
         }
 
         for (int op_par_idx=0; op_par_idx < (GGML_MAX_OP_PARAMS/sizeof(int32_t)); ++op_par_idx) {
