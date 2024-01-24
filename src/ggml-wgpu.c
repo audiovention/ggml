@@ -201,7 +201,9 @@ fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 @compute
 @workgroup_size(256)
-fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
     let s0 = u32(tensor_dimension_params.params[0][0]);
     let p0 = u32(tensor_dimension_params.params[0][1]);
     let d0 = u32(tensor_dimension_params.params[0][2]);
@@ -234,6 +236,7 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     if (has_bias) {
         output += get_src2(0u, global_id.y, 0u);
     }
+
     if (has_inject_signal) {
         output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
     }
