@@ -156,11 +156,65 @@ fn set_dst(x: u32, y: u32, z: u32, v: f32) {
 }
 
 
+fn get_src0_lin(x: u32) -> f32 {
+    return src0[x 
+                //   * tensor_dimension_params.src[0].nb[0]
+                    // + tensor_dimension_params.src[0].offset
+                    ];
+}
+
+fn get_src1_lin(x: u32) -> f32 {
+    return src1[x 
+                //   * tensor_dimension_params.src[1].nb[0]
+                    // + tensor_dimension_params.src[1].offset
+                    ];
+}
+
+fn get_src2_lin(x: u32) -> f32 {
+    return src2[x 
+                //   * tensor_dimension_params.src[2].nb[0]
+                    // + tensor_dimension_params.src[2].offset
+                    ];
+}
+
+fn get_src3_lin(x: u32) -> f32 {
+    return src3[x 
+                //   * tensor_dimension_params.src[3].nb[0]
+                    // + tensor_dimension_params.src[3].offset
+                    ];
+}
+
+fn get_src4_lin(x: u32) -> f32 {
+    return src4[x 
+                //   * tensor_dimension_params.src[4].nb[0]
+                    // + tensor_dimension_params.src[4].offset
+                    ];
+}
+
+fn get_src5_lin(x: u32) -> f32 {
+    return src5[x 
+                //   * tensor_dimension_params.src[5].nb[0]
+                    // + tensor_dimension_params.src[5].offset
+                    ];
+}
+
+fn set_dst_lin(x: u32, v: f32) {
+    dst[ x 
+        //    * tensor_dimension_params.dst.nb[0]
+            // + tensor_dimension_params.dst.offset
+             ] = v;
+}
+
+
+fn num_el_dst() -> u32 {
+    return u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
+}
+
 @compute
 @workgroup_size(1)
 fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let x = src0[global_id.x + tensor_dimension_params.src[0].offset];
-    dst[global_id.x + tensor_dimension_params.dst.offset] = x / (1.0 + exp(-x)); ;
+    let x =  get_src0_lin(global_id.x);
+    set_dst_lin(global_id.x, x / (1.0 + exp(-x)));
 }
 
 
@@ -242,8 +296,7 @@ fn kernel_add_and_trim(@builtin(global_invocation_id) global_id: vec3<u32>) {
 @compute
 @workgroup_size(256)
 fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let num_el = u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
-    if (global_id.x >= num_el) {
+    if (global_id.x >= num_el_dst()) {
         return;
     }
     dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] * src1[0u + tensor_dimension_params.src[1].offset];
@@ -253,8 +306,7 @@ fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
 @compute
 @workgroup_size(256)
 fn kernel_sub(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let num_el = u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
-    if (global_id.x >= num_el) {
+    if (global_id.x >= num_el_dst()) {
         return;
     }
     dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] - src1[global_id.x + tensor_dimension_params.src[1].offset];
@@ -264,8 +316,7 @@ fn kernel_sub(@builtin(global_invocation_id) global_id: vec3<u32>) {
 @compute
 @workgroup_size(256)
 fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let num_el = u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
-    if (global_id.x >= num_el) {
+    if (global_id.x >= num_el_dst()) {
         return;
     }
     dst[global_id.x + tensor_dimension_params.dst.offset] = src0[global_id.x + tensor_dimension_params.src[0].offset] * src0[global_id.x + tensor_dimension_params.src[0].offset];
@@ -277,10 +328,11 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
 fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>, 
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
-    let num_el = u32(tensor_dimension_params.src[0].ne[0] * tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
+    let num_el_src0 = u32(tensor_dimension_params.src[0].ne[0] * tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
+
     var sum : f32 = 0.0;
     
-    for (var i = local_id.x; i < num_el; i = i + 256u) {
+    for (var i = local_id.x; i < num_el_src0; i = i + 256u) {
         sum = sum + src0[i + tensor_dimension_params.src[0].offset];
     }
 
@@ -485,8 +537,7 @@ fn kernel_add_and_tanh_back1(@builtin(global_invocation_id) global_id: vec3<u32>
 @compute
 @workgroup_size(256)
 fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let num_el = u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
-    if (global_id.x >= num_el) {
+    if (global_id.x >= num_el_dst()) {
         return;
     }
 
