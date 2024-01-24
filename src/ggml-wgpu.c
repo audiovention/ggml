@@ -428,10 +428,10 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     if (wg_id.x >= nk) {
         return;
     }
-    if (global_id.y >= input_channels) {
+    if (global_id.z >= input_channels) {
         return;
     }
-    if (global_id.z >= output_channels) {
+    if (global_id.y >= output_channels) {
         return;
     }
 
@@ -444,7 +444,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
             output = output + 
-                get_src0(base_offset + isample, global_id.y, ir) * get_src1(isample, global_id.z, ir);
+                get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
         }
     }
 
@@ -457,7 +457,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
             output = output + workgroup_data[i];
         }
 
-        set_dst(global_id.z, global_id.y, wg_id.x, output);
+        set_dst(global_id.y, global_id.z, wg_id.x, output);
     }
 }
 
@@ -1418,7 +1418,7 @@ void ggml_wgpu_graph_compute(
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[1], dst->ne[0])
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                 {
