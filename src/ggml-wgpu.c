@@ -6,6 +6,8 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 
 #define GGML_WGPU_DST_BINDING_INDEX (GGML_MAX_SRC)
@@ -1182,7 +1184,7 @@ void ggml_wgpu_get_tensor(
             ctx->device, &(const WGPUCommandEncoderDescriptor){
                         .label = "ggml_command_encoder_get_tensor",
                     });
-    ASSERT_CHECK(command_encoder);
+    GGML_ASSERT(command_encoder);
 
 
     wgpuCommandEncoderCopyBufferToBuffer(command_encoder, id_src, offs,
@@ -1192,7 +1194,7 @@ void ggml_wgpu_get_tensor(
         command_encoder, &(const WGPUCommandBufferDescriptor){
                             .label = "command_buffer_get_tensor",
                         });
-    ASSERT_CHECK(command_buffer);
+    GGML_ASSERT(command_buffer);
 
     wgpuQueueSubmit(ctx->queue, 1, &command_buffer);
 
@@ -1215,7 +1217,7 @@ void ggml_wgpu_graph_compute(
             ctx->device, &(const WGPUCommandEncoderDescriptor){
                         .label = "ggml_command_encoder",
                     });
-    ASSERT_CHECK(command_encoder);
+    GGML_ASSERT(command_encoder);
 
 
     for (int i = 0; i < gf->n_nodes; ++i) {
@@ -1291,7 +1293,7 @@ void ggml_wgpu_graph_compute(
                         .entryCount = GGML_WGPU_BINDINGS_SIZE,
                         .entries = ctx->bind_group_entries,
                     });
-        ASSERT_CHECK(bind_group);
+        GGML_ASSERT(bind_group);
 
         WGPUComputePassEncoder compute_pass_encoder = NULL;
 
@@ -1315,7 +1317,7 @@ void ggml_wgpu_graph_compute(
                 command_encoder, &(const WGPUComputePassDescriptor){    \
                                     .label = compute_pass_name,          \
                                 });                                   \
-            ASSERT_CHECK(compute_pass_encoder);                        \
+            GGML_ASSERT(compute_pass_encoder);                        \
             wgpuComputePassEncoderSetPipeline(compute_pass_encoder, ctx->pipeline_##name); \
             wgpuComputePassEncoderSetBindGroup(compute_pass_encoder, 0, bind_group, 0, NULL); \
             wgpuComputePassEncoderDispatchWorkgroups(compute_pass_encoder, (wcX), (wcY), (wcZ)); \
@@ -1456,7 +1458,7 @@ void ggml_wgpu_graph_compute(
                                         command_encoder, &(const WGPUCommandBufferDescriptor){
                                                             .label = "command_buffer",
                        });
-    ASSERT_CHECK(command_buffer);
+    GGML_ASSERT(command_buffer);
 
     wgpuQueueSubmit(ctx->queue, 1, &command_buffer);
 
