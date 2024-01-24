@@ -407,6 +407,7 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
+var<workgroup> workgroup_data_3: array<array<f32, 256>, 3>;
 
 @compute
 @workgroup_size(256)
@@ -425,9 +426,6 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     let output_len = u32(tensor_dimension_params.src[1].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    if (wg_id.x >= nk) {
-        return;
-    }
     if (global_id.z >= input_channels) {
         return;
     }
@@ -437,27 +435,34 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f32 = 0.0;
+    var output = array<f32, 3>();
 
-    let base_offset = wg_id.x * d0 + input_len - real_input_len;
+    let base_offset = input_len - real_input_len;
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-            output = output + 
-                get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
+            let this_src1 = get_src1(isample, global_id.y, ir);
+            let base_offset2 = base_offset + isample;
+            for (var ik = 0u; ik < nk; ik = ik + 1u) {
+                let this_src0 = get_src0(base_offset2 + ik * d0, global_id.z, ir);
+                output[ik] = output[ik] + this_src0 * this_src1;
+            }
         }
     }
 
-    workgroup_data[local_id.x] = output;
+    for (var ik = 0u; ik < nk; ik = ik + 1u) {
+        workgroup_data_3[ik][local_id.x] = output[ik];
+    }
     workgroupBarrier();
 
-    if (0u == local_id.x) {
-        output = 0.0;
+    if (local_id.x < nk) {
+        var new_out : f32 = 0.0;
+        new_out = 0.0;
         for (var i = 0u; i < 256u; i = i + 1u) {
-            output = output + workgroup_data[i];
+            new_out = new_out + workgroup_data_3[local_id.x][i];
         }
 
-        set_dst(global_id.y, global_id.z, wg_id.x, output);
+        set_dst(global_id.y, global_id.z, local_id.x, new_out);
     }
 }
 
@@ -1418,7 +1423,7 @@ void ggml_wgpu_graph_compute(
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, 1, dst->ne[0], dst->ne[1])
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                 {
