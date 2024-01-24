@@ -381,7 +381,7 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 
 @compute
-@workgroup_size(256)
+@workgroup_size(32)
 fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let s0 = u32(tensor_dimension_params.params[0][0]);
     let p0 = u32(tensor_dimension_params.params[0][1]);
@@ -554,7 +554,7 @@ fn kernel_add(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 
 @compute
-@workgroup_size(256)
+@workgroup_size(32)
 fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let output_channels = u32(tensor_dimension_params.dst.ne[1]);
     let output_len = u32(tensor_dimension_params.src[0].ne[0]);
@@ -1337,7 +1337,7 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 32);
                     GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
@@ -1367,7 +1367,7 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[1], 256);
+                    const int32_t dispatch_x = CEIL_DIV(dst->ne[1], 32);
                     GGML_ASSERT(dst->ne[0] == 1);
                     GGML_ASSERT(dst->ne[2] == 1);
                     GGML_ASSERT(dst->ne[3] == 1);
