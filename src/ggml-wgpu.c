@@ -443,20 +443,11 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
     let d0 = u32(tensor_dimension_params.params[0][2]);
     let nk = u32(tensor_dimension_params.src[0].ne[2]);
 
-
-    let input_channels = u32(tensor_dimension_params.dst.ne[1]);
     let output_channels = u32(tensor_dimension_params.src[0].ne[0]);
     let input_len = u32(tensor_dimension_params.dst.ne[0]);
     let output_len = u32(tensor_dimension_params.src[1].ne[0]);
-    let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
     if (global_id.x >= input_len) {
-        return;
-    }
-    if (global_id.y >= input_channels) {
-        return;
-    }
-    if (global_id.z >= num_batches) {
         return;
     }
 
@@ -497,12 +488,6 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let nc_after = nc_out - nc_limit;
 
     if (global_id.x >= nc_out) {
-        return;
-    }
-    if (global_id.y >= u32(tensor_dimension_params.dst.ne[1])) {
-        return;
-    }
-    if (global_id.z >= u32(tensor_dimension_params.dst.ne[2])) {
         return;
     }
 
