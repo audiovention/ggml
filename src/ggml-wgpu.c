@@ -41,7 +41,9 @@ static void handle_request_device(WGPURequestDeviceStatus status,
 }
 static void handle_buffer_map(WGPUBufferMapAsyncStatus status, void *userdata) {
   UNUSED(userdata);
-  printf(LOG_PREFIX " buffer_map status=%#.8x\n", status);
+  if(status != WGPUBufferMapAsyncStatus_Success) {
+    printf(LOG_PREFIX " buffer_map status=%#.8x\n", status);
+  }
 }
 
 #define MULTILINE(...) #__VA_ARGS__
