@@ -264,7 +264,7 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
-    if (global_id.x >= output_len) {
+    if (global_id.x >= output_len/4u) {
         return;
     }
     if (global_id.y >= output_channels) {
@@ -276,20 +276,27 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f32 = 0.0;
+    var output = vec4f(0.0);
 
     if (has_bias) {
         output += get_src2(0u, global_id.y, 0u);
     }
 
     if (has_inject_signal) {
-        output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
+        output[0] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + 4u*global_id.x, global_id.y, global_id.z);
+        output[1] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + 1u+4u*global_id.x, global_id.y, global_id.z);
+        output[2] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + 2u+4u*global_id.x, global_id.y, global_id.z);
+        output[3] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + 3u+4u*global_id.x, global_id.y, global_id.z);
     }
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
-        let in_idx_offset = ik * d0 + input_len - real_input_len + global_id.x;
+        let in_idx_offset = ik * d0 + input_len - real_input_len + 4u*global_id.x;
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            let input = get_src1(in_idx_offset, ic, global_id.z);
+            var input = vec4f(0.0);
+            input[0] = get_src1(0u+in_idx_offset, ic, global_id.z);
+            input[1] = get_src1(1u+in_idx_offset, ic, global_id.z);
+            input[2] = get_src1(2u+in_idx_offset, ic, global_id.z);
+            input[3] = get_src1(3u+in_idx_offset, ic, global_id.z);
             let kernel = get_src0(global_id.y, ic, ik);
             output = output + input * kernel;
         }
@@ -299,7 +306,10 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
         output = tanh(output);
     }
 
-    set_dst(global_id.x, global_id.y, global_id.z, output);
+    set_dst(4u*global_id.x+0u, global_id.y, global_id.z, output[0]);
+    set_dst(4u*global_id.x+1u, global_id.y, global_id.z, output[1]);
+    set_dst(4u*global_id.x+2u, global_id.y, global_id.z, output[2]);
+    set_dst(4u*global_id.x+3u, global_id.y, global_id.z, output[3]);
 }
 
 
@@ -1366,7 +1376,7 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 4*256);
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_ADD_AND_TRIM:
