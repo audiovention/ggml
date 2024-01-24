@@ -1221,12 +1221,27 @@ void ggml_wgpu_graph_compute(
 
 
     for (int i = 0; i < gf->n_nodes; ++i) {
-        GGML_WGPU_LOG_INFO("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+        // GGML_WGPU_LOG_INFO("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
         if (ctx->timestamp_queries) {
             wgpuCommandEncoderWriteTimestamp(command_encoder, ctx->timestamp_queries, i);
         }
 
         struct ggml_tensor * dst  = gf->nodes[i];
+
+        switch (dst->op) {
+            case GGML_OP_NONE:
+            case GGML_OP_RESHAPE:
+            case GGML_OP_VIEW:
+            case GGML_OP_TRANSPOSE:
+            case GGML_OP_PERMUTE:
+                {
+                    continue;
+                } break;
+            default:
+                {
+                }
+        }
+
         const enum ggml_type dstt  = dst  ? dst->type  : GGML_TYPE_COUNT;
         GGML_ASSERT(dstt == GGML_TYPE_F32);
         size_t offs_dst  = 0;
