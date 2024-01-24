@@ -85,6 +85,30 @@ var<storage,read_write> src5: array<f32>;
 @group(0) @binding(6)
 var<storage,read_write> dst: array<f32>;
 
+
+@group(0) @binding(0)
+var<storage,read_write> src0_v4: array<vec4f>;
+
+@group(0) @binding(1)
+var<storage,read_write> src1_v4: array<vec4f>;
+
+@group(0) @binding(2)
+var<storage,read_write> src2_v4: array<vec4f>;
+
+@group(0) @binding(3)
+var<storage,read_write> src3_v4: array<vec4f>;
+
+@group(0) @binding(4)
+var<storage,read_write> src4_v4: array<vec4f>;
+
+@group(0) @binding(5)
+var<storage,read_write> src5_v4: array<vec4f>;
+
+@group(0) @binding(6)
+var<storage,read_write> dst_v4: array<vec4f>;
+
+
+
 @group(0) @binding(7)
 var<uniform> tensor_dimension_params: TensorDimensionParams;
 
@@ -1393,7 +1417,7 @@ void ggml_wgpu_graph_compute(
 
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0]*dst->ne[1]*dst->ne[2], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, 1+0*dst->ne[1], 1+0*dst->ne[2])
+                    GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, 1, 1)
                 } break;
             case GGML_OP_ADD:
                 {
