@@ -439,11 +439,12 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
 
     var output : f32 = 0.0;
 
+    let base_offset = wg_id.x * d0 + input_len - real_input_len;
+
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-            let in_idx_offset = wg_id.x * d0 + input_len - real_input_len + isample;
             output = output + 
-                get_src0(in_idx_offset, global_id.y, ir) * get_src1(isample, global_id.z, ir);
+                get_src0(base_offset + isample, global_id.y, ir) * get_src1(isample, global_id.z, ir);
         }
     }
 
