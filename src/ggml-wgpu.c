@@ -797,6 +797,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
 
     // Configure context
     struct ggml_wgpu_context * ctx = malloc(sizeof(struct ggml_wgpu_context));
+    memset(ctx, 0, sizeof(struct ggml_wgpu_context));
 
     WGPUInstanceDescriptor desc = {0};
 
