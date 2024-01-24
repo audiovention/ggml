@@ -226,34 +226,16 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 @compute
 @workgroup_size(256)
 fn kernel_add_and_trim(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
-    let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
     if (global_id.x >= output_len) {
         return;
     }
-    if (global_id.y >= output_channels) {
-        return;
-    }
-    if (global_id.z >= num_batches) {
-        return;
-    }
     
-    let input_index0 = global_id.z * tensor_dimension_params.src[0].nb[2] +
-        global_id.y * tensor_dimension_params.src[0].nb[1] +
-        (global_id.x + u32(tensor_dimension_params.src[0].ne[0]) - output_len) * tensor_dimension_params.src[0].nb[0] +
-        tensor_dimension_params.src[0].offset;
-    let input_index1 = global_id.z * tensor_dimension_params.src[1].nb[2] +
-        global_id.y * tensor_dimension_params.src[1].nb[1] +
-        (global_id.x + u32(tensor_dimension_params.src[1].ne[0]) - output_len) * tensor_dimension_params.src[1].nb[0] +
-        tensor_dimension_params.src[1].offset;
-    let output_index = global_id.z * tensor_dimension_params.dst.nb[2] +
-        global_id.y * tensor_dimension_params.dst.nb[1] +
-        global_id.x * tensor_dimension_params.dst.nb[0] +
-        tensor_dimension_params.dst.offset;
-    
-    dst[output_index] = src0[input_index0] + src1[input_index1];
+    set_dst(global_id.x, global_id.y, global_id.z, 
+        get_src0(global_id.x + u32(tensor_dimension_params.src[0].ne[0]) - output_len, global_id.y, global_id.z) + 
+        get_src1(global_id.x + u32(tensor_dimension_params.src[1].ne[0]) - output_len, global_id.y, global_id.z)
+    );
 }
 
 
