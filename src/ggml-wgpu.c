@@ -969,10 +969,13 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
 
 void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_LOG_INFO("%s: deallocating\n", __func__);
-#if 0
+
+    for (int i = 0; i < ctx->n_buffers; ++i) {
+        if (ctx->buffers[i].wgpu) wgpuBufferRelease(ctx->buffers[i].wgpu);
+    }
+
 #define GGML_WGPU_DEL_KERNEL(name) \
-    [ctx->function_##name release]; \
-    [ctx->pipeline_##name release];
+    if (ctx->pipeline_##name) wgpuComputePipelineRelease(ctx->pipeline_##name);
 
     GGML_WGPU_DEL_KERNEL(silu);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern);
@@ -991,19 +994,21 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias);
 
 #undef GGML_WGPU_DEL_KERNEL
+    
 
-    for (int i = 0; i < ctx->n_buffers; ++i) {
-        [ctx->buffers[i].wgpu release];
-    }
-
-    [ctx->library release];
-    [ctx->queue release];
-    [ctx->device release];
-
-    dispatch_release(ctx->d_queue);
-
+    if (ctx->pipeline_layout) wgpuPipelineLayoutRelease(ctx->pipeline_layout);
+    if (ctx->bind_group_layout) wgpuBindGroupLayoutRelease(ctx->bind_group_layout);
+    if (ctx->shader_module) wgpuShaderModuleRelease(ctx->shader_module);
+    if (ctx->placeholder_buffer) wgpuBufferRelease(ctx->placeholder_buffer);
+    if (ctx->tensor_dimension_operation_params) wgpuBufferRelease(ctx->tensor_dimension_operation_params);
+    if (ctx->queue) wgpuQueueRelease(ctx->queue);
+    if (ctx->timestamp_queries_resolve_buffer) wgpuBufferRelease(ctx->timestamp_queries_resolve_buffer);
+    if (ctx->timestamp_queries_read_buffer) wgpuBufferRelease(ctx->timestamp_queries_read_buffer);
+    if (ctx->timestamp_queries) wgpuQuerySetRelease(ctx->timestamp_queries);
+    if (ctx->device) wgpuDeviceRelease(ctx->device);
+    if (ctx->adapter) wgpuAdapterRelease(ctx->adapter);
+    if (ctx->instance) wgpuInstanceRelease(ctx->instance);
     free(ctx);
-#endif
 }
 
 
