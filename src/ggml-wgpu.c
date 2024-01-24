@@ -232,32 +232,17 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     var output : f32 = 0.0;
 
     if (has_bias) {
-        output += src2[global_id.y * tensor_dimension_params.src[2].nb[1]/4u + tensor_dimension_params.src[2].offset/4u];
+        output += get_src2(0u, global_id.y, 0u);
     }
     if (has_inject_signal) {
-        output += src3[
-            tensor_dimension_params.src[3].offset/4u +
-            global_id.z * tensor_dimension_params.src[3].nb[2]/4u + 
-            global_id.y * tensor_dimension_params.src[3].nb[1]/4u + 
-            (u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x) * tensor_dimension_params.src[3].nb[0]/4u
-        ];
+        output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
     }
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
-        let base_kern_index = 
-            global_id.y   * tensor_dimension_params.src[0].nb[0]/4u + 
-            ik            * tensor_dimension_params.src[0].nb[2]/4u + 
-                            tensor_dimension_params.src[0].offset/4u;
         let in_idx_offset = ik * d0 + input_len - real_input_len + global_id.x;
-        let base_input_index = 
-            global_id.z   * tensor_dimension_params.src[1].nb[2]/4u +
-            in_idx_offset * tensor_dimension_params.src[1].nb[0]/4u + 
-                            tensor_dimension_params.src[1].offset/4u;
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            let input_index = base_input_index + ic * tensor_dimension_params.src[1].nb[1]/4u;
-            let kernel_index = base_kern_index + ic * tensor_dimension_params.src[0].nb[1]/4u;
-            let input = src1[input_index];
-            let kernel = src0[kernel_index];
+            let input = get_src1(in_idx_offset, ic, global_id.z);
+            let kernel = get_src0(global_id.y, ic, ik);
             output = output + input * kernel;
         }
     }
@@ -266,10 +251,7 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
         output = tanh(output);
     }
 
-    dst[global_id.z * tensor_dimension_params.dst.nb[2]/4u +
-        global_id.y * tensor_dimension_params.dst.nb[1]/4u +
-        global_id.x * tensor_dimension_params.dst.nb[0]/4u + 
-        tensor_dimension_params.dst.offset/4u] = output;
+    set_dst(global_id.x, global_id.y, global_id.z, output);
 }
 
 
