@@ -583,8 +583,12 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
     var output : f32 = 0.0;
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
-        for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
+        // TODO: handle output_len not being a multiple of 4
+        for (var isample = 4u*local_id.x; isample < output_len; isample = isample + 4u*256u) {
             output = output + get_src0(isample, wg_id.x, ir);
+            output = output + get_src0(isample+1u, wg_id.x, ir);
+            output = output + get_src0(isample+2u, wg_id.x, ir);
+            output = output + get_src0(isample+3u, wg_id.x, ir);
         }
     }
 
