@@ -643,7 +643,9 @@ struct ggml_wgpu_context {
     int n_buffers;
     struct ggml_wgpu_buffer buffers[GGML_WGPU_MAX_BUFFERS];
 
-    WGPUQuerySet timestampQueries;
+    WGPUQuerySet timestamp_queries;
+    WGPUBuffer timestamp_queries_resolve_buffer;
+    WGPUBuffer timestamp_queries_read_buffer;
 
     // custom kernels
 #define GGML_WGPU_DECL_KERNEL(name) \
@@ -765,7 +767,24 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         querySetDesc.nextInChain = NULL;
         querySetDesc.type = WGPUQueryType_Timestamp;
         querySetDesc.count = GGML_MAX_NODES+1;
-        ctx->timestampQueries = wgpuDeviceCreateQuerySet(ctx->device, &querySetDesc);
+        ctx->timestamp_queries = wgpuDeviceCreateQuerySet(ctx->device, &querySetDesc);
+        ASSERT_CHECK(ctx->timestamp_queries);
+
+        ctx->timestamp_queries_resolve_buffer = wgpuDeviceCreateBuffer(ctx->device, &(const WGPUBufferDescriptor){
+                                                                .label = "timestamp_queries_resolve_buffer",
+                                                                .usage = WGPUBufferUsage_QueryResolve | WGPUBufferUsage_CopySrc,
+                                                                .size = 8*querySetDesc.count,
+                                                                .mappedAtCreation = false,
+                                                            });
+        ASSERT_CHECK(ctx->timestamp_queries_resolve_buffer);
+
+        ctx->timestamp_queries_read_buffer = wgpuDeviceCreateBuffer(ctx->device, &(const WGPUBufferDescriptor){
+                                                                .label = "timestamp_queries_read_buffer",
+                                                                .usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst,
+                                                                .size = 8*querySetDesc.count,
+                                                                .mappedAtCreation = false,
+                                                            });
+        ASSERT_CHECK(ctx->timestamp_queries_read_buffer);
     } else {
         GGML_WGPU_LOG_INFO("Timestamp queries not supported\n");
     }
@@ -1147,6 +1166,9 @@ void ggml_wgpu_graph_compute(
 
     for (int i = 0; i < gf->n_nodes; ++i) {
         GGML_WGPU_LOG_INFO("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+        if (ctx->timestamp_queries) {
+            wgpuCommandEncoderWriteTimestamp(command_encoder, ctx->timestamp_queries, i);
+        }
 
         struct ggml_tensor * dst  = gf->nodes[i];
         const enum ggml_type dstt  = dst  ? dst->type  : GGML_TYPE_COUNT;
@@ -1364,6 +1386,13 @@ void ggml_wgpu_graph_compute(
         if (compute_pass_encoder) wgpuComputePassEncoderRelease(compute_pass_encoder);
     }
 
+    if (ctx->timestamp_queries) {
+        wgpuCommandEncoderWriteTimestamp(command_encoder, ctx->timestamp_queries, gf->n_nodes);
+        wgpuCommandEncoderResolveQuerySet(command_encoder, ctx->timestamp_queries, 0, gf->n_nodes + 1, ctx->timestamp_queries_resolve_buffer, 0);
+        wgpuCommandEncoderCopyBufferToBuffer(command_encoder, ctx->timestamp_queries_resolve_buffer, 0, 
+            ctx->timestamp_queries_read_buffer, 0, 8*(gf->n_nodes + 1));
+    }
+
     WGPUCommandBuffer command_buffer = wgpuCommandEncoderFinish(
                                         command_encoder, &(const WGPUCommandBufferDescriptor){
                                                             .label = "command_buffer",
@@ -1371,6 +1400,25 @@ void ggml_wgpu_graph_compute(
     ASSERT_CHECK(command_buffer);
 
     wgpuQueueSubmit(ctx->queue, 1, &command_buffer);
+
+    if (ctx->timestamp_queries) {
+        wgpuBufferMapAsync(ctx->timestamp_queries_read_buffer, WGPUMapMode_Read, 0, 8*(gf->n_nodes + 1),
+                        handle_buffer_map, NULL);
+        wgpuDevicePoll(ctx->device, true, NULL);
+
+        void * buf = wgpuBufferGetMappedRange(ctx->timestamp_queries_read_buffer, 0, 8*(gf->n_nodes + 1));
+        GGML_ASSERT(buf);
+
+        uint64_t * timestamps = (uint64_t *) buf;
+        for (int i = 0; i < gf->n_nodes; ++i) {
+            gf->nodes[i]->perf_runs++;
+            gf->nodes[i]->perf_cycles += timestamps[i + 1] - timestamps[i];
+            gf->nodes[i]->perf_time_us += (timestamps[i + 1] - timestamps[i]) / 1000;
+        }
+        
+
+        wgpuBufferUnmap(ctx->timestamp_queries_read_buffer);
+    }
 
 }
 
