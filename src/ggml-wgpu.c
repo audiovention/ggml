@@ -380,9 +380,13 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
+var<workgroup> workgroup_data: array<f32, 256>;
+
 @compute
-@workgroup_size(32)
-fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_id: vec3<u32>) {
+@workgroup_size(256)
+fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
     let s0 = u32(tensor_dimension_params.params[0][0]);
     let p0 = u32(tensor_dimension_params.params[0][1]);
     let d0 = u32(tensor_dimension_params.params[0][2]);
@@ -395,7 +399,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     let output_len = u32(tensor_dimension_params.src[1].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    if (global_id.x >= output_channels) {
+    if (wg_id.x >= output_channels) {
         return;
     }
     if (global_id.y >= input_channels) {
@@ -410,14 +414,24 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     var output : f32 = 0.0;
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
-        for (var isample = 0u; isample < output_len; isample = isample + 1u) {
+        for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
             let in_idx_offset = global_id.z * d0 + input_len - real_input_len + isample;
             output = output + 
-                get_src0(in_idx_offset, global_id.y, ir) * get_src1(isample, global_id.x, ir);
+                get_src0(in_idx_offset, global_id.y, ir) * get_src1(isample, wg_id.x, ir);
         }
     }
 
-    set_dst(global_id.x, global_id.y, global_id.z, output);
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        output = 0.0;
+        for (var i = 0u; i < 256u; i = i + 1u) {
+            output = output + workgroup_data[i];
+        }
+
+        set_dst(wg_id.x, global_id.y, global_id.z, output);
+    }
 }
 
 
@@ -554,25 +568,38 @@ fn kernel_add(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 
 @compute
-@workgroup_size(32)
-fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id: vec3<u32>) {
+@workgroup_size(256)
+fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
     let output_channels = u32(tensor_dimension_params.dst.ne[1]);
     let output_len = u32(tensor_dimension_params.src[0].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    if (global_id.x >= output_channels) {
+    if (wg_id.x >= output_channels) {
         return;
     }
 
     var output : f32 = 0.0;
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
-        for (var isample = 0u; isample < output_len; isample = isample + 1u) {
-            output = output + get_src0(isample, global_id.x, ir);
+        for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
+            output = output + get_src0(isample, wg_id.x, ir);
         }
     }
 
-    set_dst(0u, global_id.x, 0u, output);
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        output = 0.0;
+        for (var i = 0u; i < 256u; i = i + 1u) {
+            output = output + workgroup_data[i];
+        }
+
+        set_dst(0u, wg_id.x, 0u, output);
+    }
+
 }
 
 
@@ -1337,9 +1364,8 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 32);
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dispatch_x, dst->ne[1], dst->ne[2])
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[0], dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                 {
@@ -1367,11 +1393,10 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[1], 32);
                     GGML_ASSERT(dst->ne[0] == 1);
                     GGML_ASSERT(dst->ne[2] == 1);
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dispatch_x, 1, 1)
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dst->ne[1], 1, 1)
                 } break;
             default:
                 {
