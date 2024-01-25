@@ -305,6 +305,44 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 
 @compute
 @workgroup_size(256)
+fn kernel_conv_1d_small_kern_simpl(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let has_bias = bool(tensor_dimension_params.params[1][0]);
+    let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let input_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+
+    if (global_id.x >= output_len) {
+        return;
+    }
+
+    var output : f32 = 0.0;
+
+    if (has_bias) {
+        output += get_src2(0u, global_id.y, 0u);
+    }
+
+    if (has_inject_signal) {
+        output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
+    }
+
+    let in_idx_offset = input_len - output_len + global_id.x;
+    for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
+        let input = get_src1(in_idx_offset, ic, global_id.z);
+        let kernel = get_src0(global_id.y, ic, 0u);
+        output = output + input * kernel;
+    }
+
+    set_dst(global_id.x, global_id.y, global_id.z, output);
+}
+
+
+@compute
+@workgroup_size(256)
 fn kernel_add_and_trim(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
 
@@ -715,6 +753,7 @@ struct ggml_wgpu_context {
 
     GGML_WGPU_DECL_KERNEL(silu);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern);
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_simpl);
     GGML_WGPU_DECL_KERNEL(add_and_trim);
     GGML_WGPU_DECL_KERNEL(scale);
     GGML_WGPU_DECL_KERNEL(sub);
@@ -954,6 +993,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
 
         GGML_WGPU_ADD_KERNEL(silu);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_simpl);
         GGML_WGPU_ADD_KERNEL(add_and_trim);
         GGML_WGPU_ADD_KERNEL(scale);
         GGML_WGPU_ADD_KERNEL(sub);
@@ -986,6 +1026,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
 
     GGML_WGPU_DEL_KERNEL(silu);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern);
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_simpl);
     GGML_WGPU_DEL_KERNEL(add_and_trim);
     GGML_WGPU_DEL_KERNEL(scale);
     GGML_WGPU_DEL_KERNEL(sub);
@@ -1374,7 +1415,12 @@ void ggml_wgpu_graph_compute(
             case GGML_OP_CONV_1D_SMALL_KERN:
                 {
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
-                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dst->ne[1], dst->ne[2])
+                    if (1 == dst->src[0]->ne[2]) {
+                        GGML_ASSERT(0 == dst->op_params[3]);
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dst->ne[1], dst->ne[2])
+                    }
                 } break;
             case GGML_OP_ADD_AND_TRIM:
                 {
