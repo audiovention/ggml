@@ -605,12 +605,7 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
     let output_len = u32(tensor_dimension_params.src[0].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    if (wg_id.x >= output_channels) {
-        return;
-    }
-
     var output : f32 = 0.0;
-
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2];
