@@ -488,10 +488,13 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
         let idx_offset = ik * d0;
         if (global_id.x >= idx_offset && (global_id.x < (idx_offset+output_len))) {
+            let base_idx_src0 = global_id.y * tensor_dimension_params.src[0].nb[1] + ik * tensor_dimension_params.src[0].nb[2];
+            let base_idx_src1 = global_id.z * tensor_dimension_params.src[1].nb[2] + (global_id.x - idx_offset);
             for (var idx_oc = 0u; idx_oc < output_channels; idx_oc = idx_oc + 1u) {
-                output = output + 
-                    get_src0(idx_oc, global_id.y, ik) * 
-                    get_src1(global_id.x - idx_offset, idx_oc, global_id.z);
+                // output = output + 
+                //     get_src0(idx_oc, global_id.y, ik) * 
+                //     get_src1(global_id.x - idx_offset, idx_oc, global_id.z);
+                output = output + get_src0_lin(base_idx_src0 + idx_oc) * get_src1_lin(base_idx_src1 + idx_oc * tensor_dimension_params.src[1].nb[1]);
             }
         }
     }
