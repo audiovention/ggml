@@ -442,9 +442,12 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     let base_offset = wg_id.x * d0 + input_len - real_input_len;
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
+        let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2] + global_id.z * tensor_dimension_params.src[0].nb[1];
+        let base_idx_src1 = ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
         for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-            output = output + 
-                get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
+            // output = output + 
+            //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
+            output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
         }
     }
 
