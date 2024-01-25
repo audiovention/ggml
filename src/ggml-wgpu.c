@@ -425,15 +425,15 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     let output_len = u32(tensor_dimension_params.src[1].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    if (wg_id.x >= nk) {
-        return;
-    }
-    if (global_id.z >= input_channels) {
-        return;
-    }
-    if (global_id.y >= output_channels) {
-        return;
-    }
+    // if (wg_id.x >= nk) {
+    //     return;
+    // }
+    // if (global_id.z >= input_channels) {
+    //     return;
+    // }
+    // if (global_id.y >= output_channels) {
+    //     return;
+    // }
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
@@ -449,6 +449,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
             //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
             output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
         }
+        // workgroupBarrier();
     }
 
     workgroup_data[local_id.x] = output;
