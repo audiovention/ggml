@@ -244,11 +244,70 @@ fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
+@compute
+@workgroup_size(256)
+fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let apply_tanh = bool(tensor_dimension_params.params[0][3]);
+    let has_bias = bool(tensor_dimension_params.params[1][0]);
+    let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let input_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+    let num_batches = u32(tensor_dimension_params.dst.ne[2]);
+
+    if (global_id.x >= output_len) {
+        return;
+    }
+    if (global_id.y >= output_channels) {
+        return;
+    }
+    if (global_id.z >= num_batches) {
+        return;
+    }
+
+    let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
+
+    var output : f32 = 0.0;
+
+    if (has_bias) {
+        output += get_src2(0u, global_id.y, 0u);
+    }
+
+    if (has_inject_signal) {
+        output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
+    }
+
+    for (var ik = 0u; ik < nk; ik = ik + 1u) {
+        let in_idx_offset = ik * d0 + input_len - real_input_len + global_id.x;
+        for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
+            let input = get_src1(in_idx_offset, ic, global_id.z);
+            let kernel = get_src0(global_id.y, ic, ik);
+            output = output + input * kernel;
+        }
+    }
+
+    if (apply_tanh) {
+        output = tanh(output);
+    }
+
+    set_dst(global_id.x, global_id.y, global_id.z, output);
+}
+
+
 const kernel_conv_1d_small_kern_values_per_thread = 4u;
 
 @compute
 @workgroup_size(256)
-fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>, 
+fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3<u32>, 
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
     let s0 = u32(tensor_dimension_params.params[0][0]);
@@ -1445,7 +1504,7 @@ void ggml_wgpu_graph_compute(
                         GGML_ASSERT(0 == dst->op_params[3]);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
-                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256*4);
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dst->ne[1], dst->ne[2])
                     }
                 } break;
