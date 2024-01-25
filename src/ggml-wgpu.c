@@ -611,13 +611,16 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
 
     var output : f32 = 0.0;
 
+
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
+        let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2];
         // TODO: handle output_len not being a multiple of 4
         for (var isample = 4u*local_id.x; isample < output_len; isample = isample + 4u*256u) {
-            output = output + get_src0(isample, wg_id.x, ir);
-            output = output + get_src0(isample+1u, wg_id.x, ir);
-            output = output + get_src0(isample+2u, wg_id.x, ir);
-            output = output + get_src0(isample+3u, wg_id.x, ir);
+            let base_idx_src0 = base_idx_src0_base + isample;
+            output = output + get_src0_lin(base_idx_src0);
+            output = output + get_src0_lin(base_idx_src0+1u);
+            output = output + get_src0_lin(base_idx_src0+2u);
+            output = output + get_src0_lin(base_idx_src0+3u);
         }
     }
 
