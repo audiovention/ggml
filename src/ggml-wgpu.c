@@ -244,6 +244,8 @@ fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
+const kernel_conv_1d_small_kern_values_per_thread = 4u;
+
 @compute
 @workgroup_size(256)
 fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>, 
@@ -264,42 +266,63 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
-    if (global_id.x >= output_len) {
+    let start_idx = (global_id.x/d0) * kernel_conv_1d_small_kern_values_per_thread * d0 + global_id.x % d0;
+
+    if (start_idx >= output_len) {
         return;
     }
-    if (global_id.y >= output_channels) {
-        return;
-    }
-    if (global_id.z >= num_batches) {
-        return;
-    }
+    // if (global_id.y >= output_channels) {
+    //     return;
+    // }
+    // if (global_id.z >= num_batches) {
+    //     return;
+    // }
+
+    let values_this_thread = min((output_len - start_idx) / d0 + 1u, kernel_conv_1d_small_kern_values_per_thread);
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f32 = 0.0;
+    var output = array<f32, kernel_conv_1d_small_kern_values_per_thread>();
+    var idxs = array<u32, kernel_conv_1d_small_kern_values_per_thread>();
+    for (var i = 0u; i < kernel_conv_1d_small_kern_values_per_thread; i = i + 1u) {
+        idxs[i] = start_idx + i * d0;
+    }
 
     if (has_bias) {
-        output += get_src2(0u, global_id.y, 0u);
+        let ph = get_src2(0u, global_id.y, 0u);
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            output[i] = ph;
+        }
     }
 
     if (has_inject_signal) {
-        output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            output[i] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + idxs[i], global_id.y, global_id.z);
+        }
     }
 
-    for (var ik = 0u; ik < nk; ik = ik + 1u) {
-        let in_idx_offset = ik * d0 + input_len - real_input_len + global_id.x;
-        for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            let input = get_src1(in_idx_offset, ic, global_id.z);
+    let base_in_idx_offset = input_len - real_input_len;
+
+    for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
+        for (var ik = 0u; ik < nk; ik = ik + 1u) {
             let kernel = get_src0(global_id.y, ic, ik);
-            output = output + input * kernel;
+            let in_idx_offset = ik * d0 + base_in_idx_offset;
+            for (var i = 0u; i < values_this_thread; i = i + 1u) {
+                let input = get_src1(in_idx_offset + idxs[i], ic, global_id.z);
+                output[i] = output[i] + input * kernel;
+            }
         }
     }
 
     if (apply_tanh) {
-        output = tanh(output);
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            output[i] = tanh(output[i]);
+        }
     }
 
-    set_dst(global_id.x, global_id.y, global_id.z, output);
+    for (var i = 0u; i < values_this_thread; i = i + 1u) {
+        set_dst(idxs[i], global_id.y, global_id.z, output[i]);
+    }
 }
 
 
@@ -1315,9 +1338,12 @@ void ggml_wgpu_graph_compute(
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].size = id_dst ? ggml_nbytes(dst) : MIN_STORAGE_BUFFER_ALIGNMENT;
 
         GGML_ASSERT(ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[0] == 1);
+        // GGML_ASSERT(0 == (dst->nb[1]%16));
 
         for (int src_idx=0; src_idx < GGML_MAX_SRC; ++src_idx) {
             struct ggml_tensor * srci = gf->nodes[i]->src[src_idx];
+            // if (srci) GGML_ASSERT(0 == (srci->nb[1]%16));
+
             const enum ggml_type srcit = srci ? srci->type : GGML_TYPE_COUNT;
             GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_COUNT);
             size_t offs_srci = 0;
@@ -1414,11 +1440,12 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     if (1 == dst->src[0]->ne[2]) {
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                         GGML_ASSERT(0 == dst->op_params[3]);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256*4);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dst->ne[1], dst->ne[2])
                     }
                 } break;
