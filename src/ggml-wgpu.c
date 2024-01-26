@@ -764,6 +764,33 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
 
 
 
+@compute
+@workgroup_size(256)
+fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= num_el_dst()) {
+        return;
+    }
+
+    let beta1 = bitcast<f32>(tensor_dimension_params.params[0][0]);
+    let beta2 = bitcast<f32>(tensor_dimension_params.params[0][1]);
+    let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
+    let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
+    let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
+
+    var x = get_src0_lin(global_id.x);
+    var g = get_src1_lin(global_id.x);
+    var m = get_src2_lin(global_id.x);
+    var v = get_src3_lin(global_id.x);
+
+    m = m*beta1 +   g*(1.0 - beta1);
+    v = v*beta2 + g*g*(1.0 - beta2);
+    let mh = m*beta1h;
+    let vh = sqrt(v*beta2h) + eps;
+    x = x - mh/vh;
+
+    set_dst_lin(global_id.x, x);
+}
+
 
 
 );
@@ -854,6 +881,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(add_and_tanh_back);
     GGML_WGPU_DECL_KERNEL(add);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias);
+    GGML_WGPU_DECL_KERNEL(special_adam_step);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -1094,6 +1122,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(add_and_tanh_back);
         GGML_WGPU_ADD_KERNEL(add);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias);
+        GGML_WGPU_ADD_KERNEL(special_adam_step);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -1127,6 +1156,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(add_and_tanh_back);
     GGML_WGPU_DEL_KERNEL(add);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias);
+    GGML_WGPU_DEL_KERNEL(special_adam_step);
 
 #undef GGML_WGPU_DEL_KERNEL
     
@@ -1597,6 +1627,16 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(dst->ne[2] == 1);
                     GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dst->ne[1], 1, 1)
+                } break;
+            case GGML_OP_SPECIAL_ADAM_STEP:
+                {
+                    GGML_ASSERT(ggml_is_contiguous(dst));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[2]));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[3]));
+                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
+                    GGML_WGPU_ENCODE_KERNEL(special_adam_step, dispatch_x, 1, 1)
                 } break;
             default:
                 {
