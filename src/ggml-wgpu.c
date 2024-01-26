@@ -1719,18 +1719,6 @@ static void ggml_backend_wgpu_synchronize(ggml_backend_t backend) {
     UNUSED(backend);
 }
 
-static void ggml_backend_wgpu_cpy_tensor_from(ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst) {
-    ggml_backend_tensor_get(src, dst->data, 0, ggml_nbytes(src));
-
-    UNUSED(backend);
-}
-
-static void ggml_backend_wgpu_cpy_tensor_to(ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst) {
-    ggml_backend_tensor_set_async(dst, src->data, 0, ggml_nbytes(src));
-
-    UNUSED(backend);
-}
-
 static void ggml_backend_wgpu_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     struct ggml_wgpu_context * wgpu_ctx = (struct ggml_wgpu_context *)backend->context;
 
@@ -1751,8 +1739,8 @@ static struct ggml_backend_i wgpu_backend_i = {
     /* .set_tensor_async    = */ ggml_backend_wgpu_set_tensor_async,
     /* .get_tensor_async    = */ ggml_backend_wgpu_get_tensor_async,
     /* .synchronize         = */ ggml_backend_wgpu_synchronize,
-    /* .cpy_tensor_from     = */ ggml_backend_wgpu_cpy_tensor_from,
-    /* .cpy_tensor_to       = */ ggml_backend_wgpu_cpy_tensor_to,
+    /* .cpy_tensor_from     = */ NULL,
+    /* .cpy_tensor_to       = */ NULL,
     /* .graph_plan_create   = */ NULL, // the wgpu implementation does not require creating graph plans atm
     /* .graph_plan_free     = */ NULL,
     /* .graph_plan_compute  = */ NULL,
