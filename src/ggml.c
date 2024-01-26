@@ -4369,8 +4369,8 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "POOL_2D",
     "ADD_AND_TANH",
     "ADD_AND_TANH_BACK",
-    "UPSCALE",
     "SPECIAL_ADAM_STEP",
+    "UPSCALE",
 
     "FLASH_ATTN",
     "FLASH_FF",
@@ -4464,8 +4464,8 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "pool_2d(x)",
     "add_and_tanh(x)",
     "add_and_tanh_back(x)",
-    "upscale(x)",
     "special_adam_step(x)",
+    "upscale(x)",
 
     "flash_attn(x)",
     "flash_ff(x)",
@@ -5996,13 +5996,13 @@ struct ggml_tensor * ggml_special_adam_step(
     const float beta2 = 0.999f;
     const float eps   = 1e-8f;
 
-    const int iters_now = 0;
+    const int iters_now = 1;
 
     const float beta1h = alpha*sched/(1.0f - powf(beta1, iters_now));
     const float beta2h =        1.0f/(1.0f - powf(beta2, iters_now));
 
 
-    bool zero_out_grads = true;
+    bool zero_out_grads = false;
     float params[] = { beta1, beta2, beta1h, beta2h, eps, zero_out_grads ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
 
