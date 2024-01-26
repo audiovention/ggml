@@ -6002,8 +6002,7 @@ struct ggml_tensor * ggml_special_adam_step(
     const float beta2h =        1.0f/(1.0f - powf(beta2, iters_now));
 
 
-    bool zero_out_grads = false;
-    float params[] = { beta1, beta2, beta1h, beta2h, eps, zero_out_grads ? 1 : 0 };
+    float params[] = { beta1, beta2, beta1h, beta2h, eps};
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_SPECIAL_ADAM_STEP;
@@ -16358,20 +16357,18 @@ static void ggml_compute_forward_special_adam_step(
     const float beta1h = ((float *)dst->op_params)[2];
     const float beta2h = ((float *)dst->op_params)[3];
     const float eps = ((float *)dst->op_params)[4];
-    const float zero_out_grads = ((float *)dst->op_params)[5];
 
     // TODO: optimize
 
     for (int i03 = 0; i03 < ne03; i03++) {
         for (int i02 = ith; i02 < ne02; i02++) {
             for (int i01 = 0; i01 < ne01; i01++) {
-                    const float * p = (float *)((char *) src0->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
-                    float * g = (float *)((char *) src1->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
-                    float * m = (float *)((char *) src2->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
-                    float * v = (float *)((char *) src3->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
-                    float * out = (float *)((char *) dst->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
+                const float * p = (float *)((char *) src0->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
+                float * g = (float *)((char *) src1->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
+                float * m = (float *)((char *) src2->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
+                float * v = (float *)((char *) src3->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
+                float * out = (float *)((char *) dst->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
                 for (int i00 = 0; i00 < ne00; i00++) {
-
                     float x  = p[i00];
                     float g_ = g[i00];
                     m[i00] = m[i00]*beta1 +    g_*(1.0f - beta1);
@@ -16381,10 +16378,6 @@ static void ggml_compute_forward_special_adam_step(
                     vh = sqrtf(vh) + eps;
                     x = x - mh/vh;
                     out[i00] = x;
-
-                    if (zero_out_grads) {
-                        g[i00] = 0.0f;
-                    }
                 }
             }
         }
