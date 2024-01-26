@@ -21402,6 +21402,38 @@ static void ggml_opt_acc_grad(int np, struct ggml_tensor * const ps[], float * g
     }
 }
 
+
+void ggml_apply_adam_step_to_graph(struct ggml_context *ctx, struct ggml_cgraph* gb)
+{
+    const int initial_n_nodes = gb->n_nodes;
+    int node_add_idx = initial_n_nodes;
+    for (int i=0; i < initial_n_nodes; i++) {
+        struct ggml_tensor * node = gb->nodes[i];
+        if (node->is_param) {
+            struct ggml_tensor * new_node = ggml_special_adam_step(ctx, node, node->grad);
+            gb->nodes[node_add_idx++] = new_node;
+            gb->n_nodes++;
+        }
+    }
+}
+
+
+
+void ggml_apply_adam_params_to_graph(struct ggml_cgraph* gb, const float sched, const float alpha, const float beta1, const float beta2, const float eps, int iters_now)
+{
+    const float beta1h = alpha*sched/(1.0f - powf(beta1, iters_now));
+    const float beta2h =        1.0f/(1.0f - powf(beta2, iters_now));
+
+    float params[] = { beta1, beta2, beta1h, beta2h, eps};
+
+    for (int i=0; i < gb->n_nodes; i++) {
+        struct ggml_tensor * node = gb->nodes[i];
+        if (node->op == GGML_OP_SPECIAL_ADAM_STEP) {
+            ggml_set_op_params(node, params, sizeof(params));
+        }
+    }
+}
+
 //
 // ADAM
 //
@@ -21467,8 +21499,6 @@ static inline void ggml_single_adam_step_vec_f32(float* param, const float* g, f
     }
 }
 
-#include "ggml-wgpu.h"
-
 GGML_API enum ggml_opt_result ggml_opt_adam_step(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
@@ -21477,8 +21507,7 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
         ggml_opt_callback callback,
-        void * callback_data,
-        struct ggml_wgpu_context * wgpu_ctx) {
+        void * callback_data) {
 
     enum ggml_opt_result result = GGML_OPT_DID_NOT_CONVERGE;
     // constants
@@ -21518,16 +21547,7 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
         }
         // ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
-        if (wgpu_ctx) {
-            ggml_wgpu_set_tensor(wgpu_ctx, f->grad);
-            ggml_wgpu_graph_compute(wgpu_ctx, gb);
-            for (int p = 0; p < opt->np; ++p) {
-                ggml_wgpu_get_tensor(wgpu_ctx, opt->ps[p]->grad);
-            }
-            ggml_wgpu_get_tensor(wgpu_ctx, f);
-        } else {
-            ggml_graph_compute(gb, &opt->cplan);
-        }
+        ggml_graph_compute(gb, &opt->cplan);
         ggml_opt_acc_grad(opt->np, opt->ps, g, accum_norm);
         fx += ggml_get_f32_1d(f, 0);
     }
@@ -21623,9 +21643,6 @@ GGML_API enum ggml_opt_result ggml_opt_adam_step(
             GGML_ASSERT(ggml_is_contiguous(opt->ps[p]));
             const float p_decay = ((opt->ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * (*sched);
             ggml_single_adam_step_vec_f32(opt->ps[p]->data, &g[i], &m[i], &v[i], beta1, beta2, beta1h, beta2h, eps, p_decay, gnorm, ne);
-            if (wgpu_ctx) {
-                ggml_wgpu_set_tensor(wgpu_ctx, opt->ps[p]);
-            }
             i += ne;
         }
     }
@@ -21652,13 +21669,12 @@ static enum ggml_opt_result ggml_opt_adam(
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
         ggml_opt_callback callback,
-        void * callback_data,
-        struct ggml_wgpu_context * wgpu_ctx) {
+        void * callback_data) {
     GGML_ASSERT(ggml_is_scalar(f));
 
     // run the optimizer
     for (int t = 0; t < params.adam.n_iter; ++t) {
-        enum ggml_opt_result res = ggml_opt_adam_step(ctx, opt, &params, f, gf, gb, callback, callback_data, wgpu_ctx);
+        enum ggml_opt_result res = ggml_opt_adam_step(ctx, opt, &params, f, gf, gb, callback, callback_data);
         if (res != GGML_OPT_DID_NOT_CONVERGE) {
             return res;
         }
@@ -22272,7 +22288,7 @@ enum ggml_opt_result ggml_opt_resume(
     *gb = ggml_build_backward(ctx, gf, true);
     ggml_opt_initialize_opt_params(ctx, opt, opt->params, gf, gb);
 
-    return ggml_opt_resume_g(ctx, opt, f, gf, gb, NULL, NULL, NULL);
+    return ggml_opt_resume_g(ctx, opt, f, gf, gb, NULL, NULL);
 }
 
 enum ggml_opt_result ggml_opt_resume_g(
@@ -22282,8 +22298,7 @@ enum ggml_opt_result ggml_opt_resume_g(
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
         ggml_opt_callback callback,
-        void * callback_data,
-        struct ggml_wgpu_context * wgpu_ctx) {
+        void * callback_data) {
 
     // build forward + backward compute graphs
     enum ggml_opt_result result = GGML_OPT_OK;
@@ -22291,7 +22306,7 @@ enum ggml_opt_result ggml_opt_resume_g(
     switch (opt->params.type) {
         case GGML_OPT_ADAM:
             {
-                result = ggml_opt_adam(ctx, opt, opt->params, f, gf, gb, callback, callback_data, wgpu_ctx);
+                result = ggml_opt_adam(ctx, opt, opt->params, f, gf, gb, callback, callback_data);
             } break;
         case GGML_OPT_LBFGS:
             {

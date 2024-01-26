@@ -464,6 +464,14 @@ size_t ggml_allocr_alloc_graph_n(
         for (int i = 0; i < gf->n_nodes; i++) {
             struct ggml_tensor * node = gf->nodes[i];
 
+            if (node->op == GGML_OP_SPECIAL_ADAM_STEP) {
+                // This is a very special case of tensor that stores some internal state of the adam optimizer
+                // src[2] and [3] are the internal state of the adam optimizer
+                // No need to allocate src[0], src[1] and dst as they are already handled by the rest of the graph
+                ggml_allocr_alloc(alloc, node->src[2]);
+                ggml_allocr_alloc(alloc, node->src[3]);
+            }
+
             if (ggml_is_view(node)) {
                 struct ggml_tensor * view_src = node->view_src;
                 hash_get(ht, view_src)->n_views += 1;

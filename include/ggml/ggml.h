@@ -291,7 +291,6 @@ extern "C" {
 #else
     typedef uint16_t ggml_fp16_t;
 #endif
-    struct ggml_wgpu_context;
 
     // convert FP16 <-> FP32
     GGML_API float       ggml_fp16_to_fp32(ggml_fp16_t x);
@@ -1823,6 +1822,10 @@ extern "C" {
     // optimization
     //
 
+    GGML_API void ggml_apply_adam_step_to_graph(struct ggml_context *ctx, struct ggml_cgraph* gb);
+    GGML_API void ggml_apply_adam_params_to_graph(struct ggml_cgraph* gb, const float sched, const float alpha, 
+        const float beta1, const float beta2, const float eps, int iters_now);
+
     // optimization methods
     enum ggml_opt_type {
         GGML_OPT_ADAM,
@@ -1998,8 +2001,7 @@ extern "C" {
             struct ggml_cgraph * gf,
             struct ggml_cgraph * gb,
             ggml_opt_callback callback,
-            void * callback_data,
-            struct ggml_wgpu_context * wgpu_ctx);
+            void * callback_data);
 
     // continue optimizing the function defined by the tensor f
     GGML_API enum ggml_opt_result ggml_opt_resume(
@@ -2015,8 +2017,7 @@ extern "C" {
             struct ggml_cgraph * gf,
             struct ggml_cgraph * gb,
             ggml_opt_callback callback,
-            void * callback_data,
-            struct ggml_wgpu_context * wgpu_ctx);
+            void * callback_data);
 
     //
     // quantization
