@@ -33,6 +33,8 @@
 #define UNUSED(x) (void)(x)
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
+#define PLACEHOLDER_BUFFER_SIZE (4*1024*MIN_STORAGE_BUFFER_ALIGNMENT)
+
 #define ASSERT_CHECK(x) \
     if (!(x)) { \
         GGML_WGPU_LOG_ERROR("%s: error: assertion failed: %s\n", __func__, #x); \
@@ -1081,7 +1083,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
     ctx->placeholder_buffer = wgpuDeviceCreateBuffer(ctx->device, &(const WGPUBufferDescriptor){
                                                             .label = "placeholder_buffer",
                                                             .usage = WGPUBufferUsage_Storage,
-                                                            .size = MIN_STORAGE_BUFFER_ALIGNMENT,
+                                                            .size = PLACEHOLDER_BUFFER_SIZE, // making it slightly bigger to use as scratch space when needed
                                                             .mappedAtCreation = false,
                                                          });
     ASSERT_CHECK(ctx->placeholder_buffer);
@@ -1489,7 +1491,7 @@ void ggml_wgpu_graph_compute(
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].binding = GGML_WGPU_DST_BINDING_INDEX;
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].buffer = id_dst ? id_dst : ctx->placeholder_buffer;
         ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].offset = id_dst ? offs_dst : 0;
-        ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].size = id_dst ? ggml_nbytes(dst) : MIN_STORAGE_BUFFER_ALIGNMENT;
+        ctx->bind_group_entries[GGML_WGPU_DST_BINDING_INDEX].size = id_dst ? ggml_nbytes(dst) : PLACEHOLDER_BUFFER_SIZE;
 
         GGML_ASSERT(ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[0] == 1);
         // GGML_ASSERT(0 == (dst->nb[1]%16));
@@ -1516,7 +1518,7 @@ void ggml_wgpu_graph_compute(
             ctx->bind_group_entries[src_idx].binding = src_idx;
             ctx->bind_group_entries[src_idx].buffer = id_srci ? id_srci : ctx->placeholder_buffer;
             ctx->bind_group_entries[src_idx].offset = id_srci ? offs_srci : 0;
-            ctx->bind_group_entries[src_idx].size = id_srci ? ggml_nbytes(srci) : MIN_STORAGE_BUFFER_ALIGNMENT;
+            ctx->bind_group_entries[src_idx].size = id_srci ? ggml_nbytes(srci) : PLACEHOLDER_BUFFER_SIZE;
 
             GGML_ASSERT(ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[src_idx].nb[0] == 1);
         }
