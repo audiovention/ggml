@@ -231,6 +231,48 @@ fn set_dst_lin(x: u32, v: f32) {
              ] = v;
 }
 
+fn set_src0_lin(x: u32, v: f32) {
+    src0[ x 
+        //    * tensor_dimension_params.src[0].nb[0]
+            // + tensor_dimension_params.src[0].offset
+             ] = v;
+}
+
+fn set_src1_lin(x: u32, v: f32) {
+    src1[ x 
+        //    * tensor_dimension_params.src[1].nb[0]
+            // + tensor_dimension_params.src[1].offset
+             ] = v;
+}
+
+fn set_src2_lin(x: u32, v: f32) {
+    src2[ x 
+        //    * tensor_dimension_params.src[2].nb[0]
+            // + tensor_dimension_params.src[2].offset
+             ] = v;
+}
+
+fn set_src3_lin(x: u32, v: f32) {
+    src3[ x 
+        //    * tensor_dimension_params.src[3].nb[0]
+            // + tensor_dimension_params.src[3].offset
+             ] = v;
+}
+
+fn set_src4_lin(x: u32, v: f32) {
+    src4[ x 
+        //    * tensor_dimension_params.src[4].nb[0]
+            // + tensor_dimension_params.src[4].offset
+             ] = v;
+}
+
+fn set_src5_lin(x: u32, v: f32) {
+    src5[ x 
+        //    * tensor_dimension_params.src[5].nb[0]
+            // + tensor_dimension_params.src[5].offset
+             ] = v;
+}
+
 
 fn num_el_dst() -> u32 {
     return u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
@@ -788,6 +830,8 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
+    set_src2_lin(global_id.x, m);
+    set_src3_lin(global_id.x, v);
     set_dst_lin(global_id.x, x);
 }
 
