@@ -289,6 +289,61 @@ fn set_src5_lin(x: u32, v: f32) {
 }
 
 
+fn set_src0(x: u32, y: u32, z: u32, v: f32) {
+    src0[ x 
+        //    * tensor_dimension_params.src[0].nb[0]
+         + y * tensor_dimension_params.src[0].nb[1] +
+         z * tensor_dimension_params.src[0].nb[2]
+            // + tensor_dimension_params.src[0].offset
+             ] = v;
+}
+
+fn set_src1(x: u32, y: u32, z: u32, v: f32) {
+    src1[ x 
+        //    * tensor_dimension_params.src[1].nb[0]
+         + y * tensor_dimension_params.src[1].nb[1] +
+         z * tensor_dimension_params.src[1].nb[2]
+            // + tensor_dimension_params.src[1].offset
+             ] = v;
+}
+
+fn set_src2(x: u32, y: u32, z: u32, v: f32) {
+    src2[ x 
+        //    * tensor_dimension_params.src[2].nb[0]
+         + y * tensor_dimension_params.src[2].nb[1] +
+         z * tensor_dimension_params.src[2].nb[2]
+            // + tensor_dimension_params.src[2].offset
+             ] = v;
+}
+
+fn set_src3(x: u32, y: u32, z: u32, v: f32) {
+    src3[ x 
+        //    * tensor_dimension_params.src[3].nb[0]
+         + y * tensor_dimension_params.src[3].nb[1] +
+         z * tensor_dimension_params.src[3].nb[2]
+            // + tensor_dimension_params.src[3].offset
+             ] = v;
+}
+
+fn set_src4(x: u32, y: u32, z: u32, v: f32) {
+    src4[ x 
+        //    * tensor_dimension_params.src[4].nb[0]
+         + y * tensor_dimension_params.src[4].nb[1] +
+         z * tensor_dimension_params.src[4].nb[2]
+            // + tensor_dimension_params.src[4].offset
+             ] = v;
+}
+
+fn set_src5(x: u32, y: u32, z: u32, v: f32) {
+    src5[ x 
+        //    * tensor_dimension_params.src[5].nb[0]
+         + y * tensor_dimension_params.src[5].nb[1] +
+         z * tensor_dimension_params.src[5].nb[2]
+            // + tensor_dimension_params.src[5].offset
+             ] = v;
+}
+
+
 fn num_el_dst() -> u32 {
     return u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
 }
@@ -820,6 +875,53 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
 }
 
 
+@compute
+@workgroup_size(256)
+fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let output_len = u32(tensor_dimension_params.src[0].ne[0]);
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+
+    var output : f32 = 0.0;
+
+    let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + wg_id.y * tensor_dimension_params.src[0].nb[2];
+    for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
+        output = output + get_src0_lin(base_idx_src0_base + isample);
+    }
+
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        output = 0.0;
+        for (var i = 0u; i < 256u; i = i + 1u) {
+            output = output + workgroup_data[i];
+        }
+
+        set_src1_lin(wg_id.y + wg_id.x * num_batches, output);
+    }
+}
+
+
+@compute
+@workgroup_size(1)
+fn kernel_conv_1d_small_kern_back_bias_stage2(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+
+    var output : f32 = 0.0;
+
+    let base_idx_src1 = wg_id.x * num_batches;
+    for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
+        output = output + get_src1_lin(base_idx_src1 + isample);
+    }
+    set_dst(0u, wg_id.x, 0u, output);
+}
+
+
+
 
 @compute
 @workgroup_size(256)
@@ -941,6 +1043,8 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(add);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias);
     GGML_WGPU_DECL_KERNEL(special_adam_step);
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage1);
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage2);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -1182,6 +1286,8 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(add);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias);
         GGML_WGPU_ADD_KERNEL(special_adam_step);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage1);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage2);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -1216,6 +1322,8 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(add);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias);
     GGML_WGPU_DEL_KERNEL(special_adam_step);
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage1);
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage2);
 
 #undef GGML_WGPU_DEL_KERNEL
     
@@ -1688,7 +1796,12 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(dst->ne[0] == 1);
                     GGML_ASSERT(dst->ne[2] == 1);
                     GGML_ASSERT(dst->ne[3] == 1);
+#if 0
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dst->ne[1], 1, 1)
+#else
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage1, dst->ne[1], dst->src[0]->ne[2], 1)
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage2, dst->ne[1], 1, 1)
+#endif
                 } break;
             case GGML_OP_SPECIAL_ADAM_STEP:
                 {
