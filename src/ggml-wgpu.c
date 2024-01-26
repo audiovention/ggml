@@ -10,6 +10,19 @@
 #include <string.h>
 
 
+#ifdef GGML_PERF
+#define ggml_perf_time_ms()       ggml_time_ms()
+#define ggml_perf_time_us()       ggml_time_us()
+#define ggml_perf_cycles()        ggml_cycles()
+#define ggml_perf_cycles_per_ms() ggml_cycles_per_ms()
+#else
+#define ggml_perf_time_ms()       0
+#define ggml_perf_time_us()       0
+#define ggml_perf_cycles()        0
+#define ggml_perf_cycles_per_ms() 0
+#endif
+
+
 #define GGML_WGPU_DST_BINDING_INDEX (GGML_MAX_SRC)
 #define GGML_WGPU_DIM_PARAMS_BINDING_INDEX (GGML_WGPU_DST_BINDING_INDEX+1)
 #define GGML_WGPU_DIM_PARAMS_SIZE (GGML_MAX_SRC+1)
@@ -1427,6 +1440,9 @@ void ggml_wgpu_graph_compute(
         struct ggml_wgpu_context * ctx,
                struct ggml_cgraph * gf) {
 
+    const int64_t perf_start_cycles  = ggml_perf_cycles();
+    const int64_t perf_start_time_us = ggml_perf_time_us();
+
     WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(
             ctx->device, &(const WGPUCommandEncoderDescriptor){
                         .label = "ggml_command_encoder",
@@ -1727,6 +1743,23 @@ void ggml_wgpu_graph_compute(
         
 
         wgpuBufferUnmap(ctx->timestamp_queries_read_buffer);
+    }
+
+    // performance stats (graph)
+    {
+        int64_t perf_cycles_cur  = ggml_perf_cycles()  - perf_start_cycles;
+        int64_t perf_time_us_cur = ggml_perf_time_us() - perf_start_time_us;
+
+        gf->perf_runs++;
+        gf->perf_cycles  += perf_cycles_cur;
+        gf->perf_time_us += perf_time_us_cur;
+
+        GGML_WGPU_LOG_INFO("%s: perf (%d) - cpu = %.3f / %.3f ms, wall = %.3f / %.3f ms\n",
+                __func__, gf->perf_runs,
+                (double) perf_cycles_cur      / (double) ggml_cycles_per_ms(),
+                (double) gf->perf_cycles  / (double) ggml_cycles_per_ms() / (double) gf->perf_runs,
+                (double) perf_time_us_cur     / 1000.0,
+                (double) gf->perf_time_us / 1000.0 / gf->perf_runs);
     }
 
 }
