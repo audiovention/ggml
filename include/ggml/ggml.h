@@ -1438,6 +1438,7 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * filter,
             struct ggml_tensor  * gradient,
+            struct ggml_tensor  * accumulator,
             int                   s0,  // stride
             int                   p0,  // padding
             int                   d0); // dilation

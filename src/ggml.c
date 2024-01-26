@@ -8069,6 +8069,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_input(
     struct ggml_context * ctx,
     struct ggml_tensor  * filter,
     struct ggml_tensor  * gradient,
+    struct ggml_tensor  * accumulator,
     int                   s0,
     int                   p0,
     int                   d0) {
@@ -8092,15 +8093,22 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_input(
         gradient->ne[2],
         1,
     };
+    if (accumulator) {
+        GGML_ASSERT(accumulator->ne[0] == ne[0]);
+        GGML_ASSERT(accumulator->ne[1] == ne[1]);
+        GGML_ASSERT(accumulator->ne[2] == ne[2]);
+        GGML_ASSERT(accumulator->ne[3] == ne[3]);
+    }
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
 
-    int32_t params[] = { s0, p0, d0 };
+    int32_t params[] = { s0, p0, d0, accumulator ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op = GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = filter;
     result->src[1] = gradient;
+    result->src[2] = accumulator;
 
     return result;
 }
@@ -19230,12 +19238,14 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 }
 
                 if (src1->grad) {
-                    src1->grad = ggml_add_or_set(ctx, src1->grad, ggml_conv_1d_small_kern_back_input(ctx,
+                    const bool accumulate = !hash_contains(zero_table, src1->grad);
+                    src1->grad = ggml_conv_1d_small_kern_back_input(ctx,
                             src0,
                             interim_tensor,
+                            accumulate ? src1->grad : NULL,
                             s0,
                             p0,
-                            d0), zero_table);
+                            d0);
                 }
 
                 if (tensor->src[2] && tensor->src[2]->grad) {

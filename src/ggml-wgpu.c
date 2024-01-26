@@ -592,6 +592,7 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
     let s0 = u32(tensor_dimension_params.params[0][0]);
     let p0 = u32(tensor_dimension_params.params[0][1]);
     let d0 = u32(tensor_dimension_params.params[0][2]);
+    let accumulate = bool(tensor_dimension_params.params[0][3]);
     let nk = u32(tensor_dimension_params.src[0].ne[2]);
 
     let output_channels = u32(tensor_dimension_params.src[0].ne[0]);
@@ -605,6 +606,10 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
     var output : f32 = 0.0;
+
+    if (accumulate) {
+        output = get_src2(global_id.x, global_id.y, global_id.z);
+    }
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
         let idx_offset = ik * d0;
