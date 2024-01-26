@@ -711,6 +711,8 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value);
     GGML_API struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value);
 
+    GGML_API void ggml_set_op_params(struct ggml_tensor * tensor, const void * params, size_t params_size);
+
     GGML_API struct ggml_tensor * ggml_dup_tensor (struct ggml_context * ctx, const struct ggml_tensor * src);
     GGML_API struct ggml_tensor * ggml_view_tensor(struct ggml_context * ctx, struct ggml_tensor * src);
 

@@ -5354,7 +5354,7 @@ struct ggml_tensor * ggml_dup_tensor(struct ggml_context * ctx, const struct ggm
     return ggml_new_tensor(ctx, src->type, src->n_dims, src->ne);
 }
 
-static void ggml_set_op_params(struct ggml_tensor * tensor, const void * params, size_t params_size) {
+void ggml_set_op_params(struct ggml_tensor * tensor, const void * params, size_t params_size) {
     GGML_ASSERT(tensor != NULL); // silence -Warray-bounds warnings
     assert(params_size <= GGML_MAX_OP_PARAMS);
     memcpy(tensor->op_params, params, params_size);
@@ -16353,8 +16353,6 @@ static void ggml_compute_forward_special_adam_step(
 
     GGML_TENSOR_UNARY_OP_LOCALS
 
-    const float scale_factor = dst->op_params[0];
-
     const float beta1 = ((float *)dst->op_params)[0];
     const float beta2 = ((float *)dst->op_params)[1];
     const float beta1h = ((float *)dst->op_params)[2];
@@ -16366,7 +16364,7 @@ static void ggml_compute_forward_special_adam_step(
 
     for (int i03 = 0; i03 < ne03; i03++) {
         for (int i02 = ith; i02 < ne02; i02++) {
-            for (int i01 = 0; i01 < ne02; i01++) {
+            for (int i01 = 0; i01 < ne01; i01++) {
                     const float * p = (float *)((char *) src0->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
                     float * g = (float *)((char *) src1->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
                     float * m = (float *)((char *) src2->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
