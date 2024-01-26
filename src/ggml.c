@@ -15008,6 +15008,7 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
+        const struct ggml_tensor * src2,
               struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
@@ -15026,6 +15027,8 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
     const int32_t s0 = ((const int32_t*)(dst->op_params))[0];
     const int32_t p0 = ((const int32_t*)(dst->op_params))[1];
     const int32_t d0 = ((const int32_t*)(dst->op_params))[2];
+    const int32_t accumulate = ((const int32_t*)(dst->op_params))[3];
+    GGML_ASSERT((accumulate == (src2 != NULL)));
     GGML_ASSERT(s0 == 1);
     GGML_ASSERT(p0 == 0);
 
@@ -15066,11 +15069,10 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
-        for (int for_z_i1=0; for_z_i1 < ne1; for_z_i1++) {
-            float * dst_data = (float *)((char *) dst->data + ir*nb2 + for_z_i1*nb1);
-            for (int for_z_i2=0; for_z_i2 < ne0; for_z_i2++) {
-                dst_data[for_z_i2] = 0;
-            }
+        if (accumulate) {
+            ggml_vec_cpy_f32(ne0 * ne1, (float *)((char *) dst->data + ir*nb2), (float *)((char *) src2->data + ir*nb2));
+        } else {
+            ggml_vec_set_f32(ne0 * ne1, (float *)((char *) dst->data + ir*nb2), 0.0f);
         }
 
         for (int ik = 0; ik < nk; ik++) {
@@ -18228,7 +18230,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
             {
-                ggml_compute_forward_conv_1d_small_kern_back_input(params, tensor->src[0], tensor->src[1], tensor);
+                ggml_compute_forward_conv_1d_small_kern_back_input(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
             } break;
         case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
             {
