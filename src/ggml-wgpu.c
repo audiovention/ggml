@@ -1700,19 +1700,17 @@ static size_t ggml_backend_wgpu_get_alignment(ggml_backend_t backend) {
 static void ggml_backend_wgpu_set_tensor_async(ggml_backend_t backend, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
+    GGML_ASSERT(ggml_get_backend(tensor) == backend && "tensor not allocated on this backend");
 
     memcpy((char *)tensor->data + offset, data, size);
-
-    UNUSED(backend);
 }
 
 static void ggml_backend_wgpu_get_tensor_async(ggml_backend_t backend, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
+    GGML_ASSERT(ggml_get_backend(tensor) == backend && "tensor not allocated on this backend");
 
     memcpy(data, (const char *)tensor->data + offset, size);
-
-    UNUSED(backend);
 }
 
 static void ggml_backend_wgpu_synchronize(ggml_backend_t backend) {
