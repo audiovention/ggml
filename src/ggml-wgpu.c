@@ -700,6 +700,88 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
 
 @compute
 @workgroup_size(256)
+fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let nk = u32(tensor_dimension_params.dst.ne[2]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[0]);
+    let input_len = u32(tensor_dimension_params.src[0].ne[0]);
+    let output_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+
+    // if (wg_id.x >= nk) {
+    //     return;
+    // }
+    // if (global_id.z >= input_channels) {
+    //     return;
+    // }
+    // if (global_id.y >= output_channels) {
+    //     return;
+    // }
+
+    let idx_ic = global_id.z / num_batches;
+    let idx_ir = global_id.z % num_batches;
+
+    let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
+
+    var output : f32 = 0.0;
+
+    let base_offset = wg_id.x * d0 + input_len - real_input_len;
+
+    let base_idx_src0 = base_offset + idx_ir * tensor_dimension_params.src[0].nb[2] + idx_ic * tensor_dimension_params.src[0].nb[1];
+    let base_idx_src1 = idx_ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
+    for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
+        output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+    }
+
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        output = 0.0;
+        for (var i = 0u; i < 256u; i = i + 1u) {
+            output = output + workgroup_data[i];
+        }
+
+        let nb1 = num_batches;
+        let nb2 = nb1 * output_channels;
+        let nb3 = nb2 * input_channels;
+
+        set_src2_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * wg_id.x, output);
+    }
+}
+
+@compute
+@workgroup_size(1)
+fn kernel_conv_1d_small_kern_back_filter_stage2(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[0]);
+
+    var output : f32 = 0.0;
+
+    let nb1 = num_batches;
+    let nb2 = nb1 * output_channels;
+    let nb3 = nb2 * input_channels;
+
+    let base_idx_src1 = nb1 * global_id.y + nb2 * global_id.z +  nb3 * wg_id.x;
+    for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
+        output = output + get_src2_lin(base_idx_src1 + isample);
+    }
+    set_dst(global_id.y, global_id.z, wg_id.x, output);
+}
+
+
+@compute
+@workgroup_size(256)
 fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let s0 = u32(tensor_dimension_params.params[0][0]);
     let p0 = u32(tensor_dimension_params.params[0][1]);
@@ -1045,6 +1127,8 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(special_adam_step);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage1);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage2);
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage1);
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage2);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -1288,6 +1372,8 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(special_adam_step);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage1);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage2);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_filter_stage1);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_filter_stage2);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -1324,6 +1410,8 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(special_adam_step);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage1);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage2);
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage1);
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage2);
 
 #undef GGML_WGPU_DEL_KERNEL
     
@@ -1761,7 +1849,13 @@ void ggml_wgpu_graph_compute(
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
                     GGML_ASSERT(dst->ne[3] == 1);
+#if 1
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
+#else
+                    GGML_ASSERT((ggml_nbytes(dst)*dst->src[0]->ne[2]) <= PLACEHOLDER_BUFFER_SIZE);
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter_stage1, dst->ne[2], dst->ne[0], dst->ne[1]*dst->src[0]->ne[2])
+                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter_stage2, dst->ne[2], dst->ne[0], dst->ne[1])
+#endif
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                 {
