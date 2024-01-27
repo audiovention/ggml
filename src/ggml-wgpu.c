@@ -700,6 +700,40 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
 
 @compute
 @workgroup_size(256)
+fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let input_len = u32(tensor_dimension_params.src[0].ne[0]);
+    let output_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+
+    var output : f32 = 0.0;
+    let base_offset = input_len - output_len + global_id.y * tensor_dimension_params.src[0].nb[1];
+
+    for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
+        let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2];
+        let base_idx_src1 = ir * tensor_dimension_params.src[1].nb[2] + wg_id.x * tensor_dimension_params.src[1].nb[1];
+        for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
+            output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+        }
+    }
+
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        output = 0.0;
+        for (var i = 0u; i < 256u; i = i + 1u) {
+            output = output + workgroup_data[i];
+        }
+
+        set_dst(wg_id.x, global_id.y, 0u, output);
+    }
+}
+
+
+@compute
+@workgroup_size(256)
 fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
@@ -1120,6 +1154,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage2);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage1);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage2);
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_nk1);
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -1365,6 +1400,7 @@ struct ggml_wgpu_context * ggml_wgpu_init() {
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage2);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_filter_stage1);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_filter_stage2);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_filter_nk1);
 
 #undef GGML_WGPU_ADD_KERNEL
     }
@@ -1403,6 +1439,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage2);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage1);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage2);
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_nk1);
 
 #undef GGML_WGPU_DEL_KERNEL
     
@@ -1844,7 +1881,11 @@ void ggml_wgpu_graph_compute(
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
 #else
                     if ((dst->ne[2] > 1) || (dst->ne[0]*dst->ne[1] > 32)) {
-                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
+                        if (dst->ne[2] > 1) {
+                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
+                        } else {
+                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter_nk1, dst->ne[0], dst->ne[1], 1)
+                        }
                     } else {
                         GGML_ASSERT((ggml_nbytes(dst)*dst->src[0]->ne[2]) <= PLACEHOLDER_BUFFER_SIZE);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter_stage1, dst->ne[2], dst->ne[0], dst->ne[1]*dst->src[0]->ne[2])
