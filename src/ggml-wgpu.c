@@ -357,7 +357,7 @@ fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 
 @compute
-@workgroup_size(16, 16)
+@workgroup_size(256)
 fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>, 
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
@@ -1827,8 +1827,8 @@ void ggml_wgpu_graph_compute(
                         GGML_ASSERT(0 == dst->op_params[3]);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
-                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 16);
-                        const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 16);
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                        const int32_t dispatch_y = dst->ne[1];
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
                     }
                 } break;
