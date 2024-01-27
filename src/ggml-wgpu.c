@@ -398,10 +398,12 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
         output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
     }
 
+    let base_src1_offset = input_len - real_input_len + global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
+
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
-        let in_idx_offset = ik * d0 + input_len - real_input_len + global_id.x;
+        let in_idx_offset = ik * d0 + base_src1_offset;
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            let input = get_src1(in_idx_offset, ic, global_id.z);
+            let input = get_src1_lin(in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
             let kernel = get_src0(global_id.y, ic, ik);
             output = output + input * kernel;
         }
