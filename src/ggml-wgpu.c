@@ -357,7 +357,7 @@ fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 
 @compute
-@workgroup_size(256)
+@workgroup_size(16, 16)
 fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>, 
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
@@ -1217,7 +1217,7 @@ static void ggml_wgpu_log(enum ggml_log_level level, const char* format, ...){
 
 
 
-struct ggml_wgpu_context * ggml_wgpu_init() {
+struct ggml_wgpu_context * ggml_wgpu_init(void) {
     GGML_WGPU_LOG_INFO("%s: allocating\n", __func__);
 
     wgpuSetLogCallback(wgpu_log_callback, NULL);
@@ -1827,8 +1827,9 @@ void ggml_wgpu_graph_compute(
                         GGML_ASSERT(0 == dst->op_params[3]);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
-                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
-                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dst->ne[1], dst->ne[2])
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 16);
+                        const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 16);
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
                     }
                 } break;
             case GGML_OP_ADD_AND_TRIM:
@@ -2114,7 +2115,7 @@ static struct ggml_backend_i wgpu_backend_i = {
 ggml_backend_t ggml_backend_wgpu_init(void) {
     struct ggml_wgpu_context * ctx = malloc(sizeof(struct ggml_wgpu_context));
 
-    ctx = ggml_wgpu_init(GGML_DEFAULT_N_THREADS);
+    ctx = ggml_wgpu_init();
 
     ggml_backend_t wgpu_backend = malloc(sizeof(struct ggml_backend));
 

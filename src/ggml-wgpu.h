@@ -45,7 +45,7 @@ struct ggml_wgpu_context;
 void ggml_wgpu_log_set_callback(ggml_log_callback log_callback, void * user_data);
 
 // number of command buffers to use
-struct ggml_wgpu_context * ggml_wgpu_init();
+struct ggml_wgpu_context * ggml_wgpu_init(void);
 void ggml_wgpu_free(struct ggml_wgpu_context * ctx);
 
 void * ggml_wgpu_host_malloc(size_t n);
