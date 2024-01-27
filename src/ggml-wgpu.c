@@ -33,7 +33,7 @@
 #define UNUSED(x) (void)(x)
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
-#define PLACEHOLDER_BUFFER_SIZE (4*1024*MIN_STORAGE_BUFFER_ALIGNMENT)
+#define PLACEHOLDER_BUFFER_SIZE (8*(4*1024*MIN_STORAGE_BUFFER_ALIGNMENT))
 
 #define ASSERT_CHECK(x) \
     if (!(x)) { \
@@ -1799,6 +1799,7 @@ void ggml_wgpu_graph_compute(
 #if 0
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dst->ne[1], 1, 1)
 #else
+                    GGML_ASSERT((dst->ne[1]*dst->src[0]->ne[2] *ggml_element_size(dst)) <= PLACEHOLDER_BUFFER_SIZE);
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage1, dst->ne[1], dst->src[0]->ne[2], 1)
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage2, dst->ne[1], 1, 1)
 #endif
