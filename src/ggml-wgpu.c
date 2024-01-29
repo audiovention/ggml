@@ -420,6 +420,14 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 const kernel_conv_1d_small_kern_values_per_thread = 4u;
 const kernel_conv_1d_small_kern_channels_per_thread = 16u;
 
+fn get_dilated_start_idx(x: u32, d0: u32) -> u32 {
+    return (x/d0) * kernel_conv_1d_small_kern_values_per_thread * d0 + x % d0;
+}
+
+fn get_dilated_idx(start_idx: u32, idx: u32, d0: u32) -> u32 {
+    return start_idx + idx * d0;
+}
+
 @compute
 @workgroup_size(256)
 fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3<u32>, 
@@ -440,7 +448,7 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
-    let start_idx = (global_id.x/d0) * kernel_conv_1d_small_kern_values_per_thread * d0 + global_id.x % d0;
+    let start_idx = get_dilated_start_idx(global_id.x, d0);
     let oc_start = global_id.y * kernel_conv_1d_small_kern_channels_per_thread;
     let oc_end = min(oc_start + kernel_conv_1d_small_kern_channels_per_thread, output_channels);
 
@@ -456,10 +464,6 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
     var output = array<array<f32, kernel_conv_1d_small_kern_values_per_thread>, kernel_conv_1d_small_kern_channels_per_thread>();
-    var idxs = array<u32, kernel_conv_1d_small_kern_values_per_thread>();
-    for (var i = 0u; i < kernel_conv_1d_small_kern_values_per_thread; i = i + 1u) {
-        idxs[i] = start_idx + i * d0;
-    }
 
     if (has_bias) {
         for (var oc=oc_start; oc < oc_end; oc = oc + 1u) {
@@ -473,7 +477,7 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
     if (has_inject_signal) {
         for (var oc=oc_start; oc < oc_end; oc = oc + 1u) {
             for (var i = 0u; i < values_this_thread; i = i + 1u) {
-                output[oc][i] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + idxs[i], oc, global_id.z);
+                output[oc][i] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + get_dilated_idx(start_idx, i, d0), oc, global_id.z);
             }
         }
     }
@@ -486,7 +490,7 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
                 let kernel = get_src0(oc, ic, ik);
                 let in_idx_offset = ik * d0 + base_in_idx_offset;
                 for (var i = 0u; i < values_this_thread; i = i + 1u) {
-                    let input = get_src1(in_idx_offset + idxs[i], ic, global_id.z);
+                    let input = get_src1(in_idx_offset + get_dilated_idx(start_idx, i, d0), ic, global_id.z);
                     output[oc][i] = output[oc][i] + input * kernel;
                 }
             }
@@ -503,7 +507,7 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
 
     for (var oc=oc_start; oc < oc_end; oc = oc + 1u) {
         for (var i = 0u; i < values_this_thread; i = i + 1u) {
-            set_dst(idxs[i], oc, global_id.z, output[oc][i]);
+            set_dst(get_dilated_idx(start_idx, i, d0), oc, global_id.z, output[oc][i]);
         }
     }
 }
