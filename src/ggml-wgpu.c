@@ -429,8 +429,8 @@ const kernel_conv_1d_small_kern_total_kernel_size = kernel_conv_1d_small_kern_ou
 const total_kernel_invocs_warp = kernel_conv_1d_small_kern_output_channels_per_warp * kernel_conv_1d_small_kern_num_threads_x;
 const iters_to_load_kernel = (kernel_conv_1d_small_kern_total_kernel_size + total_kernel_invocs_warp - 1u) / total_kernel_invocs_warp;
 
-var<workgroup> workgroup_data_kernel: array<array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_nk>, kernel_conv_1d_small_kern_output_channels_per_warp>;
-var<workgroup> workgroup_data_input:  array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_num_threads_x>;
+// var<workgroup> workgroup_data_kernel: array<array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_nk>, kernel_conv_1d_small_kern_output_channels_per_warp>;
+// var<workgroup> workgroup_data_input:  array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_num_threads_x>;
 
 
 fn get_dilated_start_idx(x: u32, d0: u32) -> u32 {
@@ -489,7 +489,6 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
     let input_values_this_thread = values_this_thread + kernel_conv_1d_small_kern_nk - 1u;
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
-    let o_offs = nk - 1u;
 
     var output = array<f32, kernel_conv_1d_small_kern_output_values_per_thread>();
 
@@ -506,38 +505,15 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
         }
     }
 
-    for (var i=0u; i < iters_to_load_kernel; i=i+1u) {
-        let kernel_idx = local_index + i * total_kernel_invocs_warp;
-        if (kernel_idx < kernel_conv_1d_small_kern_total_kernel_size) {
-            let kernel_idx_3d = index_3d_from_linear(kernel_idx, kernel_conv_1d_small_kern_output_channels_per_warp, kernel_conv_1d_small_kern_input_channels, kernel_conv_1d_small_kern_nk);
-            let kernel_idx_oc = kernel_idx_3d.x;
-            let kernel_idx_ic = kernel_idx_3d.y;
-            let kernel_idx_nk = kernel_idx_3d.z;
-            workgroup_data_kernel[kernel_idx_oc][kernel_idx_nk][kernel_idx_ic] = get_src0_lin(kernel_idx);
-        }
-    }
-    workgroupBarrier();
-
-
     let base_in_idx_offset = input_len - real_input_len;
 
     for (var i=0u; i<input_values_this_thread; i=i+1u) {
-        // Load input into smem
-        for (var icmult = 0u; icmult < input_channels/kernel_conv_1d_small_kern_output_channels_per_warp; icmult = icmult + 1u) {
-            let ic = icmult * kernel_conv_1d_small_kern_output_channels_per_warp + local_id.y;
-            if (ic < input_channels) {
-                workgroup_data_input[local_id.x][ic] = get_src1(base_in_idx_offset + get_dilated_idx(start_idx, i, d0), ic, global_id.z);
-            }
-        }
-        workgroupBarrier();
-
-        // Compute output
-        for (var ik = 0u; ik < nk; ik = ik + 1u) {
-            let iout = i32(i + ik) - 2;
-            if ( iout >= 0 && iout < i32(values_this_thread)) {
-                for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-                    let kernel = workgroup_data_kernel[global_id.y][ik][ic];
-                    let input = workgroup_data_input[local_id.x][ic];
+        for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
+            let input = get_src1(base_in_idx_offset + get_dilated_idx(start_idx, i, d0), ic, global_id.z);
+            for (var ik = 0u; ik < nk; ik = ik + 1u) {
+                let iout = i32(i + ik) - 2;
+                if ( iout >= 0 && iout < i32(values_this_thread)) {
+                    let kernel = get_src0(global_id.y, ic, ik);
                     output[iout] = output[iout] + input * kernel;
                 }
             }
@@ -1888,8 +1864,12 @@ void ggml_wgpu_graph_compute(
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
                         if (0 && 16 == dst->src[0]->ne[0] && 16 == dst->src[0]->ne[1] && 3 == dst->src[0]->ne[2]) {
-                            const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
-                            const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 1);
+                            const int32_t d0 = dst->op_params[2];
+                            const int32_t num_threads_x = 16;
+                            const int32_t vals_per_thread = 16;
+                            const int32_t num_for_rounding = MAX(num_threads_x, d0);
+                            const int32_t dispatch_x = num_for_rounding/num_threads_x * CEIL_DIV(dst->ne[0], (num_for_rounding * vals_per_thread));
+                            const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 16);
                             GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti, dispatch_x, dispatch_y, dst->ne[2])
                         } else {
                             const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
