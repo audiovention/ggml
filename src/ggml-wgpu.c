@@ -417,22 +417,47 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 }
 
 
-const kernel_conv_1d_small_kern_values_per_thread = 4u;
-const kernel_conv_1d_small_kern_channels_per_thread = 16u;
+
+const kernel_conv_1d_small_kern_output_values_per_thread = 16u;
+const kernel_conv_1d_small_kern_output_channels_per_warp = 16u;
+const kernel_conv_1d_small_kern_num_threads_x = 16u;
+const kernel_conv_1d_small_kern_input_channels = 16u;
+const kernel_conv_1d_small_kern_nk = 3u;
+const kernel_conv_1d_small_kern_input_values_per_thread = kernel_conv_1d_small_kern_output_values_per_thread + kernel_conv_1d_small_kern_nk - 1u;
+const kernel_conv_1d_small_kern_total_kernel_size = kernel_conv_1d_small_kern_output_channels_per_warp * kernel_conv_1d_small_kern_input_channels * kernel_conv_1d_small_kern_nk;
+// const kernel_conv_1d_small_kern_total_input_size = kernel_conv_1d_small_kern_input_channels * kernel_conv_1d_small_kern_input_values_per_thread * kernel_conv_1d_small_kern_num_threads_x;
+const total_kernel_invocs_warp = kernel_conv_1d_small_kern_output_channels_per_warp * kernel_conv_1d_small_kern_num_threads_x;
+const iters_to_load_kernel = (kernel_conv_1d_small_kern_total_kernel_size + total_kernel_invocs_warp - 1u) / total_kernel_invocs_warp;
+
+var<workgroup> workgroup_data_kernel: array<array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_nk>, kernel_conv_1d_small_kern_output_channels_per_warp>;
+var<workgroup> workgroup_data_input:  array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_num_threads_x>;
+
 
 fn get_dilated_start_idx(x: u32, d0: u32) -> u32 {
-    return (x/d0) * kernel_conv_1d_small_kern_values_per_thread * d0 + x % d0;
+    return (x/d0) * kernel_conv_1d_small_kern_output_values_per_thread * d0 + x % d0;
 }
 
 fn get_dilated_idx(start_idx: u32, idx: u32, d0: u32) -> u32 {
     return start_idx + idx * d0;
 }
 
+fn index_linear_from_3d(x: u32, y: u32, z: u32, x_max:u32, y_max: u32, z_max: u32) -> u32 {
+    return (z * y_max + y) * x_max + x;
+}
+
+fn index_3d_from_linear(idx: u32, x_max:u32, y_max: u32, z_max: u32) -> vec3<u32> {
+    let z = idx / (x_max * y_max);
+    let y = (idx - z * x_max * y_max) / x_max;
+    let x = idx - z * x_max * y_max - y * x_max;
+    return vec3<u32>(x, y, z);
+}
+
 @compute
-@workgroup_size(256)
+@workgroup_size(kernel_conv_1d_small_kern_num_threads_x, kernel_conv_1d_small_kern_output_channels_per_warp)
 fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3<u32>, 
     @builtin(workgroup_id) wg_id: vec3<u32>,
-    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    @builtin(local_invocation_id) local_id: vec3<u32>,
+    @builtin(local_invocation_index) local_index: u32) {
     let s0 = u32(tensor_dimension_params.params[0][0]);
     let p0 = u32(tensor_dimension_params.params[0][1]);
     let d0 = u32(tensor_dimension_params.params[0][2]);
@@ -449,66 +474,84 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
     let start_idx = get_dilated_start_idx(global_id.x, d0);
-    let oc_start = global_id.y * kernel_conv_1d_small_kern_channels_per_thread;
-    let oc_end = min(oc_start + kernel_conv_1d_small_kern_channels_per_thread, output_channels);
 
     if (start_idx >= output_len) {
+        return;
+    }
+    if (global_id.y >= output_channels) {
         return;
     }
     // if (global_id.z >= num_batches) {
     //     return;
     // }
 
-    let values_this_thread = min((output_len - start_idx) / d0 + 1u, kernel_conv_1d_small_kern_values_per_thread);
+    let values_this_thread = min((output_len - start_idx) / d0 + 1u, kernel_conv_1d_small_kern_output_values_per_thread);
+    let input_values_this_thread = values_this_thread + kernel_conv_1d_small_kern_nk - 1u;
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
+    let o_offs = nk - 1u;
 
-    var output = array<array<f32, kernel_conv_1d_small_kern_values_per_thread>, kernel_conv_1d_small_kern_channels_per_thread>();
+    var output = array<f32, kernel_conv_1d_small_kern_output_values_per_thread>();
 
     if (has_bias) {
-        for (var oc=oc_start; oc < oc_end; oc = oc + 1u) {
-            let ph = get_src2(0u, oc, 0u);
-            for (var i = 0u; i < values_this_thread; i = i + 1u) {
-                output[oc][i] = ph;
-            }
+        let ph = get_src2(0u, global_id.y, 0u);
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            output[i] = ph;
         }
     }
 
     if (has_inject_signal) {
-        for (var oc=oc_start; oc < oc_end; oc = oc + 1u) {
-            for (var i = 0u; i < values_this_thread; i = i + 1u) {
-                output[oc][i] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + get_dilated_idx(start_idx, i, d0), oc, global_id.z);
-            }
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            output[i] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + get_dilated_idx(start_idx, i, d0), global_id.y, global_id.z);
         }
     }
 
+    for (var i=0u; i < iters_to_load_kernel; i=i+1u) {
+        let kernel_idx = local_index + i * total_kernel_invocs_warp;
+        if (kernel_idx < kernel_conv_1d_small_kern_total_kernel_size) {
+            let kernel_idx_3d = index_3d_from_linear(kernel_idx, kernel_conv_1d_small_kern_output_channels_per_warp, kernel_conv_1d_small_kern_input_channels, kernel_conv_1d_small_kern_nk);
+            let kernel_idx_oc = kernel_idx_3d.x;
+            let kernel_idx_ic = kernel_idx_3d.y;
+            let kernel_idx_nk = kernel_idx_3d.z;
+            workgroup_data_kernel[kernel_idx_oc][kernel_idx_nk][kernel_idx_ic] = get_src0_lin(kernel_idx);
+        }
+    }
+    workgroupBarrier();
+
+
     let base_in_idx_offset = input_len - real_input_len;
 
-    for (var oc=oc_start; oc < oc_end; oc = oc + 1u) {
-        for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            for (var ik = 0u; ik < nk; ik = ik + 1u) {
-                let kernel = get_src0(oc, ic, ik);
-                let in_idx_offset = ik * d0 + base_in_idx_offset;
-                for (var i = 0u; i < values_this_thread; i = i + 1u) {
-                    let input = get_src1(in_idx_offset + get_dilated_idx(start_idx, i, d0), ic, global_id.z);
-                    output[oc][i] = output[oc][i] + input * kernel;
+    for (var i=0u; i<input_values_this_thread; i=i+1u) {
+        // Load input into smem
+        for (var icmult = 0u; icmult < input_channels/kernel_conv_1d_small_kern_output_channels_per_warp; icmult = icmult + 1u) {
+            let ic = icmult * kernel_conv_1d_small_kern_output_channels_per_warp + local_id.y;
+            if (ic < input_channels) {
+                workgroup_data_input[local_id.x][ic] = get_src1(base_in_idx_offset + get_dilated_idx(start_idx, i, d0), ic, global_id.z);
+            }
+        }
+        workgroupBarrier();
+
+        // Compute output
+        for (var ik = 0u; ik < nk; ik = ik + 1u) {
+            let iout = i32(i + ik) - 2;
+            if ( iout >= 0 && iout < i32(values_this_thread)) {
+                for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
+                    let kernel = workgroup_data_kernel[global_id.y][ik][ic];
+                    let input = workgroup_data_input[local_id.x][ic];
+                    output[iout] = output[iout] + input * kernel;
                 }
             }
         }
     }
 
     if (apply_tanh) {
-        for (var oc=oc_start; oc < oc_end; oc = oc + 1u) {
-            for (var i = 0u; i < values_this_thread; i = i + 1u) {
-                output[oc][i] = tanh(output[oc][i]);
-            }
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            output[i] = tanh(output[i]);
         }
     }
 
-    for (var oc=oc_start; oc < oc_end; oc = oc + 1u) {
-        for (var i = 0u; i < values_this_thread; i = i + 1u) {
-            set_dst(get_dilated_idx(start_idx, i, d0), oc, global_id.z, output[oc][i]);
-        }
+    for (var i = 0u; i < values_this_thread; i = i + 1u) {
+        set_dst(get_dilated_idx(start_idx, i, d0), global_id.y, global_id.z, output[i]);
     }
 }
 
@@ -1844,12 +1887,15 @@ void ggml_wgpu_graph_compute(
                         GGML_ASSERT(0 == dst->op_params[3]);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
-                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
-                        const int32_t dispatch_y = dst->ne[1];
-                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
-                        // const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256/4);
-                        // const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 16);
-                        // GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti, dispatch_x, dispatch_y, dst->ne[2])
+                        if (0 && 16 == dst->src[0]->ne[0] && 16 == dst->src[0]->ne[1] && 3 == dst->src[0]->ne[2]) {
+                            const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                            const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 1);
+                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti, dispatch_x, dispatch_y, dst->ne[2])
+                        } else {
+                            const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                            const int32_t dispatch_y = dst->ne[1];
+                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
+                        }
                     }
                 } break;
             case GGML_OP_ADD_AND_TRIM:
