@@ -513,7 +513,7 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
             for (var ik = 0u; ik < nk; ik = ik + 1u) {
                 let iout = i32(i + ik) - 2;
                 if ( iout >= 0 && iout < i32(values_this_thread)) {
-                    let kernel = get_src0(global_id.y, ic, ik);
+                    let kernel = get_src0(global_id.y, ic, nk-ik- 1u);
                     output[iout] = output[iout] + input * kernel;
                 }
             }
