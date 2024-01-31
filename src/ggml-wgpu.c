@@ -2,7 +2,9 @@
 #include "ggml.h"
 
 #include <webgpu/webgpu.h>
+#ifdef WEBGPU_BACKEND_WGPU
 #include <webgpu/wgpu.h>
+#endif
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -56,10 +58,42 @@ static void handle_request_device(WGPURequestDeviceStatus status,
   UNUSED(message);
   *(WGPUDevice *)userdata = device;
 }
+
+static volatile bool S_WGPU_BUFFER_MAPPED = false;
+void sleep_ms(int milliseconds)
+{
+    #ifdef WIN32
+        Sleep(milliseconds);
+    #elif _POSIX_C_SOURCE >= 199309L
+        struct timespec ts;
+        ts.tv_sec = milliseconds / 1000;
+        ts.tv_nsec = (milliseconds % 1000) * 1000000;
+        nanosleep(&ts, NULL);
+    #else
+        usleep(milliseconds * 1000);
+    #endif
+}
+static void wait_for_buffer_map(WGPUDevice device, WGPUQueue queue) {
+    while (!S_WGPU_BUFFER_MAPPED) {
+#ifdef WEBGPU_BACKEND_WGPU
+        // Non-standardized behavior: submit empty queue to flush callbacks
+        // (wgpu-native also has a wgpuDevicePoll but its API is more complex)
+        // wgpuQueueSubmit(queue, 0, NULL);
+        wgpuDevicePoll(device, true, NULL);
+#else
+        // Non-standard Dawn way
+        wgpuDeviceTick(device);
+        sleep_ms(1);
+#endif
+    }
+    S_WGPU_BUFFER_MAPPED = false;
+}
 static void handle_buffer_map(WGPUBufferMapAsyncStatus status, void *userdata) {
   UNUSED(userdata);
   if(status != WGPUBufferMapAsyncStatus_Success) {
     printf(LOG_PREFIX " buffer_map status=%#.8x\n", status);
+  } else {
+    S_WGPU_BUFFER_MAPPED = true;
   }
 }
 
@@ -103,26 +137,26 @@ var<storage,read_write> src5: array<f32>;
 var<storage,read_write> dst: array<f32>;
 
 
-@group(0) @binding(0)
-var<storage,read_write> src0_v4: array<vec4f>;
+// @group(0) @binding(0)
+// var<storage,read_write> src0_v4: array<vec4f>;
 
-@group(0) @binding(1)
-var<storage,read_write> src1_v4: array<vec4f>;
+// @group(0) @binding(1)
+// var<storage,read_write> src1_v4: array<vec4f>;
 
-@group(0) @binding(2)
-var<storage,read_write> src2_v4: array<vec4f>;
+// @group(0) @binding(2)
+// var<storage,read_write> src2_v4: array<vec4f>;
 
-@group(0) @binding(3)
-var<storage,read_write> src3_v4: array<vec4f>;
+// @group(0) @binding(3)
+// var<storage,read_write> src3_v4: array<vec4f>;
 
-@group(0) @binding(4)
-var<storage,read_write> src4_v4: array<vec4f>;
+// @group(0) @binding(4)
+// var<storage,read_write> src4_v4: array<vec4f>;
 
-@group(0) @binding(5)
-var<storage,read_write> src5_v4: array<vec4f>;
+// @group(0) @binding(5)
+// var<storage,read_write> src5_v4: array<vec4f>;
 
-@group(0) @binding(6)
-var<storage,read_write> dst_v4: array<vec4f>;
+// @group(0) @binding(6)
+// var<storage,read_write> dst_v4: array<vec4f>;
 
 
 
@@ -1204,6 +1238,7 @@ void ggml_wgpu_log_set_callback(ggml_log_callback log_callback, void * user_data
     ggml_wgpu_log_user_data = user_data;
 }
 
+#ifdef WEBGPU_BACKEND_WGPU
 static void wgpu_log_callback(WGPULogLevel level, char const *message,
                          void *userdata) {
   UNUSED(userdata);
@@ -1229,6 +1264,7 @@ static void wgpu_log_callback(WGPULogLevel level, char const *message,
   }
   fprintf(stderr, "[wgpu] [%s] %s\n", level_str, message);
 }
+#endif
 
 static void ggml_wgpu_log(enum ggml_log_level level, const char* format, ...){
     if (ggml_wgpu_log_callback != NULL) {
@@ -1249,13 +1285,19 @@ static void ggml_wgpu_log(enum ggml_log_level level, const char* format, ...){
     }
 }
 
+static void new_er_log(WGPUErrorType type, char const* message, void*)
+{
+    printf("[new_er_log] Error type %u: %s\n", type, message);
+}
 
 
 struct ggml_wgpu_context * ggml_wgpu_init(void) {
     GGML_WGPU_LOG_INFO("%s: allocating\n", __func__);
 
+#ifdef WEBGPU_BACKEND_WGPU
     wgpuSetLogCallback(wgpu_log_callback, NULL);
     wgpuSetLogLevel(WGPULogLevel_Info);
+#endif
 
 
     // Configure context
@@ -1283,6 +1325,8 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
     wgpuAdapterRequestDevice(ctx->adapter, &deviceDesc, handle_request_device,
                             (void *)&(ctx->device));
     ASSERT_CHECK(ctx->device);
+
+    wgpuDeviceSetUncapturedErrorCallback(ctx->device, new_er_log, NULL);
 
 
 #if GGML_PERF
@@ -1691,7 +1735,8 @@ void ggml_wgpu_get_tensor(
 
     wgpuBufferMapAsync(ph, WGPUMapMode_Read, 0, nbytes,
                      handle_buffer_map, NULL);
-    wgpuDevicePoll(ctx->device, true, NULL);
+    wait_for_buffer_map(ctx->device, ctx->queue);
+    // wgpuDevicePoll(ctx->device, true, NULL);
 
     void * buf = wgpuBufferGetMappedRange(ph, 0, nbytes);
     GGML_ASSERT(buf);
@@ -2026,7 +2071,8 @@ void ggml_wgpu_graph_compute(
     if (ctx->timestamp_queries) {
         wgpuBufferMapAsync(ctx->timestamp_queries_read_buffer, WGPUMapMode_Read, 0, 8*(gf->n_nodes + 1),
                         handle_buffer_map, NULL);
-        wgpuDevicePoll(ctx->device, true, NULL);
+        wait_for_buffer_map(ctx->device, ctx->queue);
+        // wgpuDevicePoll(ctx->device, true, NULL);
 
         void * buf = wgpuBufferGetMappedRange(ctx->timestamp_queries_read_buffer, 0, 8*(gf->n_nodes + 1));
         GGML_ASSERT(buf);
