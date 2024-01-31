@@ -21153,8 +21153,13 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
 
         const double bw_gbps = (double) numel_bytes_this_node / (1024.0*1024.0*1024.0) / ((double) MAX(1, node->perf_time_us) / 1000000.0 / node->perf_runs);
 
+        // if (node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER || node->ne[2]==1 ) continue;
+        // if (node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) continue;
+        // if ((node->op != GGML_OP_CONV_1D_SMALL_KERN && node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) || node->src[0]->ne[2]==1 || node->ne[2]==1 ) continue;
+        if ((node->op != GGML_OP_CONV_1D_SMALL_KERN ) || node->src[0]->ne[2]==1 || node->src[0]->ne[0]!=16 || node->src[0]->ne[1]!=16 ) continue;
+        const int32_t d0 = node->op_params[2];
 
-        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms / %7.3f GB/s\n",
+        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms / %7.3f GB/s d0:%d\n",
                 i,
                 node->ne[0], node->ne[1], node->ne[2],
                 ggml_op_name(node->op), node->is_param ? "x" : node->grad ? "g" : " ", node->perf_runs,
@@ -21162,7 +21167,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
                 (double) node->perf_cycles  / (double) ggml_cycles_per_ms() / (double) node->perf_runs,
                 (double) node->perf_time_us / 1000.0,
                 (double) node->perf_time_us / 1000.0 / node->perf_runs,
-                bw_gbps);
+                bw_gbps, d0);
     }
 
     GGML_PRINT("n_leafs = %d\n", cgraph->n_leafs);
