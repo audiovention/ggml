@@ -273,6 +273,14 @@ fn get_src5_lin(x: u32) -> f32 {
                     ];
 }
 
+fn get_dst_lin(x: u32) -> f32 {
+    return dst[ x 
+        //    * tensor_dimension_params.dst.nb[0]
+            // + tensor_dimension_params.dst.offset
+             ];
+}
+
+
 fn set_dst_lin(x: u32, v: f32) {
     dst[ x 
         //    * tensor_dimension_params.dst.nb[0]
@@ -627,6 +635,15 @@ fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
     set_dst_lin(global_id.x, get_src0_lin(global_id.x) * get_src1_lin(0u));
+}
+
+@compute
+@workgroup_size(256)
+fn kernel_scale_inplace(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= num_el_dst()) {
+        return;
+    }
+    set_dst_lin(global_id.x, get_dst_lin(global_id.x) * get_src1_lin(0u));
 }
 
 
@@ -1129,6 +1146,36 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
 }
 
 
+@compute
+@workgroup_size(256)
+fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= num_el_dst()) {
+        return;
+    }
+
+    let beta1 = bitcast<f32>(tensor_dimension_params.params[0][0]);
+    let beta2 = bitcast<f32>(tensor_dimension_params.params[0][1]);
+    let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
+    let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
+    let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
+
+    var x = get_dst_lin(global_id.x);
+    var g = get_src1_lin(global_id.x);
+    var m = get_src2_lin(global_id.x);
+    var v = get_src3_lin(global_id.x);
+
+    m = m*beta1 +   g*(1.0 - beta1);
+    v = v*beta2 + g*g*(1.0 - beta2);
+    let mh = m*beta1h;
+    let vh = sqrt(v*beta2h) + eps;
+    x = x - mh/vh;
+
+    set_src2_lin(global_id.x, m);
+    set_src3_lin(global_id.x, v);
+    set_dst_lin(global_id.x, x);
+}
+
+
 
 );
 #undef MULTILINE
@@ -1208,6 +1255,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti);
     GGML_WGPU_DECL_KERNEL(add_and_trim);
     GGML_WGPU_DECL_KERNEL(scale);
+    GGML_WGPU_DECL_KERNEL(scale_inplace);
     GGML_WGPU_DECL_KERNEL(sub);
     GGML_WGPU_DECL_KERNEL(sqr);
     GGML_WGPU_DECL_KERNEL(sum);
@@ -1220,6 +1268,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(add);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias);
     GGML_WGPU_DECL_KERNEL(special_adam_step);
+    GGML_WGPU_DECL_KERNEL(special_adam_step_inplace);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage1);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage2);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage1);
@@ -1474,6 +1523,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_opti);
         GGML_WGPU_ADD_KERNEL(add_and_trim);
         GGML_WGPU_ADD_KERNEL(scale);
+        GGML_WGPU_ADD_KERNEL(scale_inplace);
         GGML_WGPU_ADD_KERNEL(sub);
         GGML_WGPU_ADD_KERNEL(sqr);
         GGML_WGPU_ADD_KERNEL(sum);
@@ -1486,6 +1536,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(add);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias);
         GGML_WGPU_ADD_KERNEL(special_adam_step);
+        GGML_WGPU_ADD_KERNEL(special_adam_step_inplace);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage1);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage2);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_filter_stage1);
@@ -1514,6 +1565,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti);
     GGML_WGPU_DEL_KERNEL(add_and_trim);
     GGML_WGPU_DEL_KERNEL(scale);
+    GGML_WGPU_DEL_KERNEL(scale_inplace);
     GGML_WGPU_DEL_KERNEL(sub);
     GGML_WGPU_DEL_KERNEL(sqr);
     GGML_WGPU_DEL_KERNEL(sum);
@@ -1526,6 +1578,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(add);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias);
     GGML_WGPU_DEL_KERNEL(special_adam_step);
+    GGML_WGPU_DEL_KERNEL(special_adam_step_inplace);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage1);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage2);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage1);
@@ -1817,7 +1870,10 @@ void ggml_wgpu_graph_compute(
         // GGML_ASSERT(0 == (dst->nb[1]%16));
 
         for (int src_idx=0; src_idx < GGML_MAX_SRC; ++src_idx) {
-            struct ggml_tensor * srci = gf->nodes[i]->src[src_idx];
+            struct ggml_tensor * srci = dst->src[src_idx];
+            if (srci && dst->data == srci->data) {
+                printf("srci->data == dst->data, OP: %u, srcIdx: %u\n", dst->op, src_idx);
+            }
             // if (srci) GGML_ASSERT(0 == (srci->nb[1]%16));
 
             const enum ggml_type srcit = srci ? srci->type : GGML_TYPE_COUNT;
@@ -1845,7 +1901,7 @@ void ggml_wgpu_graph_compute(
         }
 
         for (int op_par_idx=0; op_par_idx < (GGML_MAX_OP_PARAMS/sizeof(int32_t)); ++op_par_idx) {
-            ctx->tensor_dimension_operation_params_host[i].op_params[op_par_idx] = gf->nodes[i]->op_params[op_par_idx];
+            ctx->tensor_dimension_operation_params_host[i].op_params[op_par_idx] = dst->op_params[op_par_idx];
         }
 
         ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].offset = i * GGML_WGPU_OPERATOR_PARAMS_SIZE_TOTAL;
