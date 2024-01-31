@@ -1869,10 +1869,15 @@ void ggml_wgpu_graph_compute(
         GGML_ASSERT(ctx->tensor_dimension_operation_params_host[i].tensor_dimension_params[GGML_WGPU_DST_BINDING_INDEX].nb[0] == 1);
         // GGML_ASSERT(0 == (dst->nb[1]%16));
 
+        int is_op_inplace_which_src = -1;
+
         for (int src_idx=0; src_idx < GGML_MAX_SRC; ++src_idx) {
             struct ggml_tensor * srci = dst->src[src_idx];
             if (srci && dst->data == srci->data) {
-                printf("srci->data == dst->data, OP: %u, srcIdx: %u\n", dst->op, src_idx);
+                // CASE of aliasing of src0 and dst (in-place operation) - we need to use the same buffer for both, as WGSL does not allow aliasing of writeable buffers
+                GGML_ASSERT(src_idx == 0 && is_op_inplace_which_src == -1 && (dst->op == GGML_OP_SCALE || dst->op == GGML_OP_SPECIAL_ADAM_STEP));
+                is_op_inplace_which_src = src_idx;
+                srci = NULL;
             }
             // if (srci) GGML_ASSERT(0 == (srci->nb[1]%16));
 
@@ -2004,7 +2009,11 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
-                    GGML_WGPU_ENCODE_KERNEL(scale, dispatch_x, 1, 1)
+                    if (is_op_inplace_which_src == 0) {
+                        GGML_WGPU_ENCODE_KERNEL(scale_inplace, dispatch_x, 1, 1)
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(scale, dispatch_x, 1, 1)
+                    }
                 } break;
             case GGML_OP_SUB:
                 {
@@ -2106,7 +2115,11 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst->src[2]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[3]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
-                    GGML_WGPU_ENCODE_KERNEL(special_adam_step, dispatch_x, 1, 1)
+                    if (is_op_inplace_which_src == 0) {
+                        GGML_WGPU_ENCODE_KERNEL(special_adam_step_inplace, dispatch_x, 1, 1)
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(special_adam_step, dispatch_x, 1, 1)
+                    }
                 } break;
             default:
                 {
