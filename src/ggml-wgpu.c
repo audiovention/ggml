@@ -2085,7 +2085,7 @@ void ggml_wgpu_graph_compute(
                         GGML_ASSERT(0 == dst->op_params[3]);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
-                        if (d0 >=16 && 16 == dst->src[0]->ne[0] && 16 == dst->src[0]->ne[1] && 3 == dst->src[0]->ne[2]) {
+                        if (0 && d0 >=16 && 16 == dst->src[0]->ne[0] && 16 == dst->src[0]->ne[1] && 3 == dst->src[0]->ne[2]) {
                             const int32_t vals_to_round = MAX(d0, num_threads_x);
                             const int32_t dispatch_x = vals_to_round/num_threads_x * CEIL_DIV(dst->ne[0], (vals_to_round * vals_per_thread));
                             const int32_t dispatch_y = 1;//CEIL_DIV(dst->ne[1], 16);
