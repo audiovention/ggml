@@ -471,8 +471,8 @@ const kernel_conv_1d_small_kern_total_kernel_size = kernel_conv_1d_small_kern_ou
 const total_kernel_invocs_warp = kernel_conv_1d_small_kern_output_channels_per_warp * kernel_conv_1d_small_kern_num_threads_x;
 const iters_to_load_kernel = (kernel_conv_1d_small_kern_total_kernel_size + total_kernel_invocs_warp - 1u) / total_kernel_invocs_warp;
 
-// var<workgroup> workgroup_data_kernel: array<array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_nk>, kernel_conv_1d_small_kern_output_channels_per_warp>;
-// var<workgroup> workgroup_data_input:  array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_num_threads_x>;
+var<workgroup> workgroup_data_kernel: array<array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_nk>, kernel_conv_1d_small_kern_output_channels_per_warp>;
+var<workgroup> workgroup_data_input:  array<array<f32, kernel_conv_1d_small_kern_num_threads_x>, kernel_conv_1d_small_kern_input_channels>;
 
 
 fn get_dilated_start_idx(x: u32, d0: u32) -> u32 {
@@ -570,6 +570,102 @@ fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3
 
     for (var i = 0u; i < values_this_thread; i = i + 1u) {
         set_dst(get_dilated_idx(start_idx, i, d0), global_id.y, global_id.z, output[i]);
+    }
+}
+
+
+@compute
+@workgroup_size(kernel_conv_1d_small_kern_num_threads_x, kernel_conv_1d_small_kern_output_channels_per_warp)
+fn kernel_conv_1d_small_kern_opti_large_dil(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>,
+    @builtin(local_invocation_index) local_index: u32) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let apply_tanh = bool(tensor_dimension_params.params[0][3]);
+    let has_bias = bool(tensor_dimension_params.params[1][0]);
+    let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let input_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+    let num_batches = u32(tensor_dimension_params.dst.ne[2]);
+
+    let start_idx = get_dilated_start_idx(wg_id.x*kernel_conv_1d_small_kern_num_threads_x, d0);
+
+    if (start_idx >= output_len) {
+        return;
+    }
+    if (global_id.y >= output_channels) {
+        return;
+    }
+    // if (global_id.z >= num_batches) {
+    //     return;
+    // }
+
+    for (var ik=0u; ik<kernel_conv_1d_small_kern_nk; ik=ik+1u) {
+        workgroup_data_kernel[local_id.y][nk-ik- 1u][local_id.x] = get_src0(local_id.x, local_id.y, ik);
+    }
+    workgroupBarrier();
+
+    let values_this_thread = min((output_len - start_idx) / d0 + 1u, kernel_conv_1d_small_kern_output_values_per_thread);
+    let input_values_this_thread = values_this_thread + kernel_conv_1d_small_kern_nk - 1u;
+
+    let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
+
+    var output = array<f32, kernel_conv_1d_small_kern_output_values_per_thread>();
+
+    if (has_bias) {
+        let ph = get_src2(0u, global_id.y, 0u);
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            output[i] = ph;
+        }
+    }
+
+    if (has_inject_signal) {
+        let offs1 = local_id.x + u32(tensor_dimension_params.src[3].ne[0]) - output_len + start_idx + global_id.y * tensor_dimension_params.src[3].nb[1] +
+            global_id.z * tensor_dimension_params.src[3].nb[2];
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            // output[i] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + start_idx + local_id.x + i*d0, global_id.y, global_id.z);
+            output[i] += get_src3_lin(i*d0+offs1);
+        }
+    }
+
+    let base_in_idx_offset = input_len - real_input_len;
+    let base_in_idx = base_in_idx_offset + start_idx + local_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
+
+    for (var i=0u; i<input_values_this_thread; i=i+1u) {
+        workgroup_data_input[local_id.y][local_id.x] = get_src1_lin(base_in_idx + i*d0 + local_id.y * tensor_dimension_params.src[1].nb[1]);
+        workgroupBarrier();
+        for (var ic = 0u; ic < kernel_conv_1d_small_kern_input_channels; ic = ic + 1u) {
+            // let input = get_src1_lin(base_in_idx + i*d0 + ic * tensor_dimension_params.src[1].nb[1]);
+            let input = workgroup_data_input[ic][local_id.x];
+            for (var ik = 0u; ik < kernel_conv_1d_small_kern_nk; ik = ik + 1u) {
+                let iout = i32(i + ik) - 2;
+                if ( iout >= 0 && iout < i32(values_this_thread)) {
+                    let kernel = workgroup_data_kernel[ic][ik][global_id.y];
+                    // let kernel = get_src0(global_id.y, ic, nk-ik- 1u);
+                    output[iout] = output[iout] + input * kernel;
+                }
+            }
+        }
+    }
+
+    if (apply_tanh) {
+        for (var i = 0u; i < values_this_thread; i = i + 1u) {
+            output[i] = tanh(output[i]);
+        }
+    }
+
+    let offs1 = local_id.x + start_idx + global_id.y * tensor_dimension_params.dst.nb[1] +
+            global_id.z * tensor_dimension_params.dst.nb[2];
+    for (var i = 0u; i < values_this_thread; i = i + 1u) {
+        set_dst_lin(i*d0+offs1, output[i]);
+        // set_dst(start_idx + local_id.x + i*d0, global_id.y, global_id.z, output[i]);
     }
 }
 
@@ -1253,6 +1349,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_simpl);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti);
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti_large_dil);
     GGML_WGPU_DECL_KERNEL(add_and_trim);
     GGML_WGPU_DECL_KERNEL(scale);
     GGML_WGPU_DECL_KERNEL(scale_inplace);
@@ -1521,6 +1618,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_simpl);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_opti);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_opti_large_dil);
         GGML_WGPU_ADD_KERNEL(add_and_trim);
         GGML_WGPU_ADD_KERNEL(scale);
         GGML_WGPU_ADD_KERNEL(scale_inplace);
@@ -1563,6 +1661,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_simpl);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti);
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti_large_dil);
     GGML_WGPU_DEL_KERNEL(add_and_trim);
     GGML_WGPU_DEL_KERNEL(scale);
     GGML_WGPU_DEL_KERNEL(scale_inplace);
@@ -1986,11 +2085,15 @@ void ggml_wgpu_graph_compute(
                         GGML_ASSERT(0 == dst->op_params[3]);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
-                        if (0 && 16 == dst->src[0]->ne[0] && 16 == dst->src[0]->ne[1] && 3 == dst->src[0]->ne[2]) {
+                        if (d0 >=16 && 16 == dst->src[0]->ne[0] && 16 == dst->src[0]->ne[1] && 3 == dst->src[0]->ne[2]) {
                             const int32_t vals_to_round = MAX(d0, num_threads_x);
                             const int32_t dispatch_x = vals_to_round/num_threads_x * CEIL_DIV(dst->ne[0], (vals_to_round * vals_per_thread));
                             const int32_t dispatch_y = 1;//CEIL_DIV(dst->ne[1], 16);
-                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti, dispatch_x, dispatch_y, dst->ne[2])
+                            if (d0 >=16) {
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti_large_dil, dispatch_x, dispatch_y, dst->ne[2])
+                            } else {
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti, dispatch_x, dispatch_y, dst->ne[2])
+                            }
                         } else {
                             const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                             const int32_t dispatch_y = dst->ne[1];
