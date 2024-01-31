@@ -847,7 +847,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
         let nb2 = nb1 * output_channels;
         let nb3 = nb2 * input_channels;
 
-        set_src2_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik, output);
+        set_src5_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik, output);
     }
 }
 
@@ -868,7 +868,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage2(@builtin(global_invocation_id) g
 
     let base_idx_src1 = nb1 * global_id.y + nb2 * global_id.z +  nb3 * wg_id.x;
     for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
-        output = output + get_src2_lin(base_idx_src1 + isample);
+        output = output + get_src5_lin(base_idx_src1 + isample);
     }
     set_dst(global_id.y, global_id.z, wg_id.x, output);
 }
@@ -1075,7 +1075,7 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
             output = output + workgroup_data[i];
         }
 
-        set_src1_lin(wg_id.y + wg_id.x * num_batches, output);
+        set_src5_lin(wg_id.y + wg_id.x * num_batches, output);
     }
 }
 
@@ -1091,7 +1091,7 @@ fn kernel_conv_1d_small_kern_back_bias_stage2(@builtin(global_invocation_id) glo
 
     let base_idx_src1 = wg_id.x * num_batches;
     for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
-        output = output + get_src1_lin(base_idx_src1 + isample);
+        output = output + get_src5_lin(base_idx_src1 + isample);
     }
     set_dst(0u, wg_id.x, 0u, output);
 }
@@ -1288,6 +1288,7 @@ static void ggml_wgpu_log(enum ggml_log_level level, const char* format, ...){
 static void new_er_log(WGPUErrorType type, char const* message, void*)
 {
     printf("[new_er_log] Error type %u: %s\n", type, message);
+    GGML_ASSERT(false);
 }
 
 
