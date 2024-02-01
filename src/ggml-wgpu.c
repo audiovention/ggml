@@ -2045,7 +2045,7 @@ void ggml_wgpu_graph_compute(
         for (int extra_uniform_idx=0; extra_uniform_idx < GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS; ++extra_uniform_idx) {
             ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].binding = GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx;
             ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].buffer = ctx->placeholder_uniform_buffer[extra_uniform_idx];
-            ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].offset = extra_uniform_idx*GGML_WGPU_EXTRA_UNIFORM_SIZE;
+            ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].offset = i*GGML_WGPU_EXTRA_UNIFORM_SIZE;
             ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].size = GGML_WGPU_EXTRA_UNIFORM_SIZE;
         }
 
@@ -2118,7 +2118,12 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN:
                 {
-                    // wgpuCommandEncoderCopyBufferToBuffer
+                    wgpuCommandEncoderCopyBufferToBuffer(command_encoder, ctx->bind_group_entries[0].buffer, ctx->bind_group_entries[0].offset,
+                                                         ctx->placeholder_uniform_buffer[0], i*GGML_WGPU_EXTRA_UNIFORM_SIZE, ctx->bind_group_entries[0].size);
+                    if (dst->src[2]) {
+                        wgpuCommandEncoderCopyBufferToBuffer(command_encoder, ctx->bind_group_entries[2].buffer, ctx->bind_group_entries[2].offset,
+                                                            ctx->placeholder_uniform_buffer[1], i*GGML_WGPU_EXTRA_UNIFORM_SIZE, ctx->bind_group_entries[2].size);
+                    }
                     const int32_t d0 = dst->op_params[2];
                     const int32_t num_threads_x = 16;
                     const int32_t vals_per_thread = 16;
