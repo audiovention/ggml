@@ -63,6 +63,7 @@ static void handle_request_device(WGPURequestDeviceStatus status,
 }
 
 static volatile bool S_WGPU_BUFFER_MAPPED = false;
+#ifdef WEBGPU_BACKEND_DAWN
 void sleep_ms(int milliseconds)
 {
     #ifdef WIN32
@@ -76,6 +77,7 @@ void sleep_ms(int milliseconds)
         usleep(milliseconds * 1000);
     #endif
 }
+#endif
 static void wait_for_buffer_map(WGPUDevice device, WGPUQueue queue) {
     while (!S_WGPU_BUFFER_MAPPED) {
 #ifdef WEBGPU_BACKEND_WGPU
