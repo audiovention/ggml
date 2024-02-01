@@ -443,7 +443,8 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     var output : f32 = 0.0;
 
     if (has_bias) {
-        output += get_src2(0u, global_id.y, 0u);
+        let bias = extra_uniform1[global_id.y/4u][global_id.y%4u];
+        output += bias;
     }
 
     if (has_inject_signal) {
@@ -454,9 +455,12 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
         let in_idx_offset = ik * d0 + base_src1_offset;
+        let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
             let input = get_src1_lin(in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
-            let kernel = get_src0(global_id.y, ic, ik);
+            let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
+            // let kernel = get_src0(global_id.y, ic, ik);
+            let kernel = extra_uniform0[kernel_idx/4u][kernel_idx%4u];
             output = output + input * kernel;
         }
     }
