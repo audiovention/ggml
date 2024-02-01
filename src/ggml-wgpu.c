@@ -27,8 +27,11 @@
 
 #define GGML_WGPU_DST_BINDING_INDEX (GGML_MAX_SRC)
 #define GGML_WGPU_DIM_PARAMS_BINDING_INDEX (GGML_WGPU_DST_BINDING_INDEX+1)
+#define GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS (2)
+#define GGML_WGPU_EXTRA_UNIFORM_SIZE (4*4*1024)
+#define GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX (GGML_WGPU_DIM_PARAMS_BINDING_INDEX+1)
+#define GGML_WGPU_BINDINGS_SIZE (GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX+GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS)
 #define GGML_WGPU_DIM_PARAMS_SIZE (GGML_MAX_SRC+1)
-#define GGML_WGPU_BINDINGS_SIZE (GGML_WGPU_DIM_PARAMS_BINDING_INDEX+1)
 #define GGML_WGPU_OP_PARAMS_SIZE (12) // should be "GGML_MAX_OP_PARAMS / sizeof(int32_t)" but we round it up to 12 to make sure it is aligned in accordance with the wgsl struct requirements..
 
 #define MIN_STORAGE_BUFFER_ALIGNMENT 256
@@ -162,6 +165,13 @@ var<storage,read_write> dst: array<f32>;
 
 @group(0) @binding(7)
 var<uniform> tensor_dimension_params: TensorDimensionParams;
+
+
+@group(0) @binding(8)
+var<uniform> extra_uniform0: array<vec4f, 1024>;
+
+@group(0) @binding(9)
+var<uniform> extra_uniform1: array<vec4f, 1024>;
 
 
 var<workgroup> workgroup_data: array<f32, 256>;
@@ -600,9 +610,9 @@ fn kernel_conv_1d_small_kern_opti_large_dil(@builtin(global_invocation_id) globa
     if (start_idx >= output_len) {
         return;
     }
-    if (global_id.y >= output_channels) {
-        return;
-    }
+    // if (global_id.y >= output_channels) {
+    //     return;
+    // }
     // if (global_id.z >= num_batches) {
     //     return;
     // }
@@ -1330,6 +1340,7 @@ struct ggml_wgpu_context {
 
     WGPUBuffer tensor_dimension_operation_params;
     WGPUBuffer placeholder_buffer[GGML_MAX_SRC];
+    WGPUBuffer placeholder_uniform_buffer[GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS];
     struct ggml_wgpu_operator_params tensor_dimension_operation_params_host[GGML_MAX_NODES];
 
     WGPUBindGroupEntry bind_group_entries[GGML_WGPU_BINDINGS_SIZE];
@@ -1537,6 +1548,18 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         ASSERT_CHECK(ctx->placeholder_buffer[i]);
     }
 
+    for (int i=0; i<GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS; i++) {
+        char placeholder_buffer_name[36];
+        sprintf(placeholder_buffer_name, "placeholder_uniform_buffer_%d", i);
+        ctx->placeholder_uniform_buffer[i] = wgpuDeviceCreateBuffer(ctx->device, &(const WGPUBufferDescriptor){
+                                                                    .label = placeholder_buffer_name,
+                                                                    .usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst,
+                                                                    .size = GGML_WGPU_EXTRA_UNIFORM_SIZE * GGML_MAX_NODES,
+                                                                    .mappedAtCreation = false,
+                                                                });
+        ASSERT_CHECK(ctx->placeholder_uniform_buffer[i]);
+    }
+
     ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].binding = GGML_WGPU_DIM_PARAMS_BINDING_INDEX;
     ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].buffer = ctx->tensor_dimension_operation_params;
     ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].offset = 0;
@@ -1578,6 +1601,14 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         bindGroupLayoutEntries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].buffer.type = WGPUBufferBindingType_Uniform;
         bindGroupLayoutEntries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].buffer.hasDynamicOffset = false;
         bindGroupLayoutEntries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].buffer.minBindingSize = sizeof(struct ggml_wgpu_operator_params);
+
+        for (int i = 0; i < GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS; ++i) {
+            bindGroupLayoutEntries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + i].binding = GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + i;
+            bindGroupLayoutEntries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + i].visibility = WGPUShaderStage_Compute;
+            bindGroupLayoutEntries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + i].buffer.type = WGPUBufferBindingType_Uniform;
+            bindGroupLayoutEntries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + i].buffer.hasDynamicOffset = false;
+            bindGroupLayoutEntries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + i].buffer.minBindingSize = GGML_WGPU_EXTRA_UNIFORM_SIZE;
+        }
     }
 
 
@@ -1690,6 +1721,9 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     if (ctx->pipeline_layout) wgpuPipelineLayoutRelease(ctx->pipeline_layout);
     if (ctx->bind_group_layout) wgpuBindGroupLayoutRelease(ctx->bind_group_layout);
     if (ctx->shader_module) wgpuShaderModuleRelease(ctx->shader_module);
+    for (int i=0; i<GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS; i++) {
+        if (ctx->placeholder_uniform_buffer[i]) wgpuBufferRelease(ctx->placeholder_uniform_buffer[i]);
+    }
     for (int i=0; i<GGML_MAX_SRC; i++) {
         if (ctx->placeholder_buffer[i]) wgpuBufferRelease(ctx->placeholder_buffer[i]);
     }
@@ -2006,6 +2040,13 @@ void ggml_wgpu_graph_compute(
 
         for (int op_par_idx=0; op_par_idx < (GGML_MAX_OP_PARAMS/sizeof(int32_t)); ++op_par_idx) {
             ctx->tensor_dimension_operation_params_host[i].op_params[op_par_idx] = dst->op_params[op_par_idx];
+        }
+
+        for (int extra_uniform_idx=0; extra_uniform_idx < GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS; ++extra_uniform_idx) {
+            ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].binding = GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx;
+            ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].buffer = ctx->placeholder_uniform_buffer[extra_uniform_idx];
+            ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].offset = extra_uniform_idx*GGML_WGPU_EXTRA_UNIFORM_SIZE;
+            ctx->bind_group_entries[GGML_WGPU_FIRST_EXTRA_UNIFORM_INDEX + extra_uniform_idx].size = GGML_WGPU_EXTRA_UNIFORM_SIZE;
         }
 
         ctx->bind_group_entries[GGML_WGPU_DIM_PARAMS_BINDING_INDEX].offset = i * GGML_WGPU_OPERATOR_PARAMS_SIZE_TOTAL;
