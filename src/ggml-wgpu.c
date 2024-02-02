@@ -142,26 +142,26 @@ var<storage,read_write> src5: array<f32>;
 var<storage,read_write> dst: array<f32>;
 
 
-// @group(0) @binding(0)
-// var<storage,read_write> src0_v4: array<vec4f>;
+@group(0) @binding(0)
+var<storage,read_write> src0_v4: array<vec4f>;
 
-// @group(0) @binding(1)
-// var<storage,read_write> src1_v4: array<vec4f>;
+@group(0) @binding(1)
+var<storage,read_write> src1_v4: array<vec4f>;
 
-// @group(0) @binding(2)
-// var<storage,read_write> src2_v4: array<vec4f>;
+@group(0) @binding(2)
+var<storage,read_write> src2_v4: array<vec4f>;
 
-// @group(0) @binding(3)
-// var<storage,read_write> src3_v4: array<vec4f>;
+@group(0) @binding(3)
+var<storage,read_write> src3_v4: array<vec4f>;
 
-// @group(0) @binding(4)
-// var<storage,read_write> src4_v4: array<vec4f>;
+@group(0) @binding(4)
+var<storage,read_write> src4_v4: array<vec4f>;
 
-// @group(0) @binding(5)
-// var<storage,read_write> src5_v4: array<vec4f>;
+@group(0) @binding(5)
+var<storage,read_write> src5_v4: array<vec4f>;
 
-// @group(0) @binding(6)
-// var<storage,read_write> dst_v4: array<vec4f>;
+@group(0) @binding(6)
+var<storage,read_write> dst_v4: array<vec4f>;
 
 
 
@@ -515,10 +515,12 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
     }
 
     if (has_inject_signal) {
-        output.x += get_src3(mult_idx,      global_id.y, global_id.z);
-        output.y += get_src3(mult_idx + 1u, global_id.y, global_id.z);
-        output.z += get_src3(mult_idx + 2u, global_id.y, global_id.z);
-        output.w += get_src3(mult_idx + 3u, global_id.y, global_id.z);
+        let src3_idx = global_id.x + global_id.y * tensor_dimension_params.src[3].nb[1]/4u + global_id.z * tensor_dimension_params.src[3].nb[2]/4u;
+        output += src3_v4[src3_idx];
+        // output.x += get_src3(mult_idx,      global_id.y, global_id.z);
+        // output.y += get_src3(mult_idx + 1u, global_id.y, global_id.z);
+        // output.z += get_src3(mult_idx + 2u, global_id.y, global_id.z);
+        // output.w += get_src3(mult_idx + 3u, global_id.y, global_id.z);
     }
 
     let base_src1_offset = mult_idx + global_id.z * tensor_dimension_params.src[1].nb[2];
@@ -527,12 +529,13 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
         let in_idx_offset = ik * d0 + base_src1_offset;
         // let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            let input_idx = in_idx_offset + ic * tensor_dimension_params.src[1].nb[1];
-            var input : vec4f;
-            input.x = get_src1_lin(input_idx);
-            input.y = get_src1_lin(input_idx+1u);
-            input.z = get_src1_lin(input_idx+2u);
-            input.w = get_src1_lin(input_idx+3u);
+            // let input_idx = in_idx_offset + ic * tensor_dimension_params.src[1].nb[1];
+            let input_idx = (in_idx_offset + ic * tensor_dimension_params.src[1].nb[1])/4u;
+            var input = src1_v4[input_idx];
+            // input.x = get_src1_lin(input_idx);
+            // input.y = get_src1_lin(input_idx+1u);
+            // input.z = get_src1_lin(input_idx+2u);
+            // input.w = get_src1_lin(input_idx+3u);
             let kernel = get_src0(global_id.y, ic, ik);
             // let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
             // let kernel = extra_uniform0[kernel_idx/4u][kernel_idx%4u];
@@ -544,10 +547,13 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
         output = tanh(output);
     }
 
-    set_dst(mult_idx, global_id.y, global_id.z,    output.x);
-    set_dst(mult_idx+1u, global_id.y, global_id.z, output.y);
-    set_dst(mult_idx+2u, global_id.y, global_id.z, output.z);
-    set_dst(mult_idx+3u, global_id.y, global_id.z, output.w);
+    let dst_idx = global_id.x + global_id.y * tensor_dimension_params.dst.nb[1]/4u + global_id.z * tensor_dimension_params.dst.nb[2]/4u;
+    dst_v4[dst_idx] = output;
+
+    // set_dst(mult_idx, global_id.y, global_id.z,    output.x);
+    // set_dst(mult_idx+1u, global_id.y, global_id.z, output.y);
+    // set_dst(mult_idx+2u, global_id.y, global_id.z, output.z);
+    // set_dst(mult_idx+3u, global_id.y, global_id.z, output.w);
 }
 
 
@@ -2242,11 +2248,20 @@ void ggml_wgpu_graph_compute(
                                 GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti, dispatch_x, dispatch_y, dst->ne[2])
                             }
                         } else {
-                            const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
-                            // const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 2);
-                            const int32_t dispatch_y = dst->ne[1];
-                            // GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
-                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dst->ne[2])
+                            if (d0>=4) {
+                                const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
+                                const int32_t dispatch_y = dst->ne[1];
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dst->ne[2])
+                            } else {
+                                const int32_t dispatch_x = CEIL_DIV(output_len, 256);
+                                const int32_t dispatch_y = dst->ne[1];
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
+                            }
+                            // const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
+                            // // const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 2);
+                            // const int32_t dispatch_y = dst->ne[1];
+                            // // GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
+                            // GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dst->ne[2])
                         }
                     }
                 } break;
