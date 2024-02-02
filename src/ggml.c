@@ -21188,6 +21188,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
         // if (node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) continue;
         // if ((node->op != GGML_OP_CONV_1D_SMALL_KERN && node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) || node->src[0]->ne[2]==1 || node->ne[2]==1 ) continue;
         if ((node->op != GGML_OP_CONV_1D_SMALL_KERN ))continue;// || node->src[0]->ne[2]==1 || node->src[0]->ne[0]!=16 || node->src[0]->ne[1]!=16 ) continue;
+        if ((node->op != GGML_OP_CONV_1D_SMALL_KERN ) || node->src[0]->ne[2]==1) continue;
         const int32_t d0 = node->op_params[2];
         const int64_t nk = node->src[0]->ne[2];
         const int64_t output_len = node->ne[0];
