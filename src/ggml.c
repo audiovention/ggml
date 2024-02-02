@@ -21175,10 +21175,10 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
 
         perf_total_per_op_us[node->op] += MAX(1, node->perf_time_us);
 
-        size_t numel_bytes_this_node = ggml_nelements(node) * ggml_element_size(node);
+        size_t numel_bytes_this_node = ggml_nbytes(node);
         for (int isrc=0; isrc<GGML_MAX_SRC; isrc++) {
             if (node->src[isrc]) {
-                numel_bytes_this_node += ggml_nelements(node->src[isrc]) * ggml_element_size(node->src[isrc]);
+                numel_bytes_this_node += ggml_nbytes(node->src[isrc]);
             }
         }
 
