@@ -399,7 +399,9 @@ fn set_src5(x: u32, y: u32, z: u32, v: f32) {
 
 
 fn num_el_dst() -> u32 {
-    return u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
+    let ne0 = tensor_dimension_params.dst.nb[1] / tensor_dimension_params.dst.nb[0];
+    return ne0 * u32(tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
+    // return u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
 }
 
 @compute
@@ -445,7 +447,8 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     var output : f32 = 0.0;
 
     if (has_bias) {
-        let bias = extra_uniform1[global_id.y/4u][global_id.y%4u];
+        // let bias = extra_uniform1[global_id.y/4u][global_id.y%4u];
+        let bias = get_src2(0u, global_id.y, 0u);
         output += bias;
     }
 
@@ -461,8 +464,8 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
             let input = get_src1_lin(in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
             let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
-            // let kernel = get_src0(global_id.y, ic, ik);
-            let kernel = extra_uniform0[kernel_idx/4u][kernel_idx%4u];
+            let kernel = get_src0(global_id.y, ic, ik);
+            // let kernel = extra_uniform0[kernel_idx/4u][kernel_idx%4u];
             output = output + input * kernel;
         }
     }
@@ -765,7 +768,12 @@ fn kernel_sub(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (global_id.x >= num_el_dst()) {
         return;
     }
-    set_dst_lin(global_id.x, get_src0_lin(global_id.x) - get_src1_lin(global_id.x));
+    if ((global_id.x % tensor_dimension_params.dst.nb[1])<u32(tensor_dimension_params.dst.ne[0])) {
+        set_dst_lin(global_id.x, get_src0_lin(global_id.x) - get_src1_lin(global_id.x));
+    } else {
+        set_dst_lin(global_id.x, 0.0);
+    }
+    // set_dst_lin(global_id.x, get_src0_lin(global_id.x) - get_src1_lin(global_id.x));
 }
 
 
@@ -785,7 +793,8 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
 fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>, 
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
-    let num_el_src0 = u32(tensor_dimension_params.src[0].ne[0] * tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
+    let ne00 = tensor_dimension_params.src[0].nb[1] / tensor_dimension_params.src[0].nb[0];
+    let num_el_src0 = ne00 * u32(tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
 
     var sum : f32 = 0.0;
     
@@ -2164,7 +2173,7 @@ void ggml_wgpu_graph_compute(
                 {
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
+                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                     if (is_op_inplace_which_src == 0) {
                         GGML_WGPU_ENCODE_KERNEL(scale_inplace, dispatch_x, 1, 1)
                     } else {
@@ -2176,14 +2185,14 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
+                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                     GGML_WGPU_ENCODE_KERNEL(sub, dispatch_x, 1, 1)
                 } break;
             case GGML_OP_SQR:
                 {
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
+                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                     GGML_WGPU_ENCODE_KERNEL(sqr, dispatch_x, 1, 1)
                 } break;
             case GGML_OP_SUM:
@@ -2240,7 +2249,7 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
 
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0]*dst->ne[1]*dst->ne[2], 256);
+                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                     GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, 1, 1)
                 } break;
@@ -2270,7 +2279,7 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[2]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[3]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements(dst), 256);
+                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                     if (is_op_inplace_which_src == 0) {
                         GGML_WGPU_ENCODE_KERNEL(special_adam_step_inplace, dispatch_x, 1, 1)
                     } else {
