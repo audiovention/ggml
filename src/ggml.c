@@ -4710,7 +4710,7 @@ static inline int ggml_up(int n, int m) {
     return (n + m - 1) & ~(m - 1);
 }
 
-#define PAD_TENSOR_FIRST_DIM 0
+#define PAD_TENSOR_FIRST_DIM 1
 
 int64_t ggml_nelements(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
@@ -15138,7 +15138,7 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
 
     for (int ir = ir0; ir < ir1; ir++) {
         if (accumulate) {
-            ggml_vec_cpy_f32(ne0 * ne1, (float *)((char *) dst->data + ir*nb2), (float *)((char *) src2->data + ir*nb2));
+            ggml_vec_cpy_f32(nb2 / nb0, (float *)((char *) dst->data + ir*nb2), (float *)((char *) src2->data + ir*nb2));
         } else {
             ggml_vec_set_f32(nb2 / nb0, (float *)((char *) dst->data + ir*nb2), 0.0f);
         }
