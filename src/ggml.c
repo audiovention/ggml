@@ -4710,7 +4710,7 @@ static inline int ggml_up(int n, int m) {
     return (n + m - 1) & ~(m - 1);
 }
 
-#define PAD_TENSOR_FIRST_DIM 1
+#define PAD_TENSOR_FIRST_DIM 0
 
 int64_t ggml_nelements(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
@@ -15140,7 +15140,7 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
         if (accumulate) {
             ggml_vec_cpy_f32(ne0 * ne1, (float *)((char *) dst->data + ir*nb2), (float *)((char *) src2->data + ir*nb2));
         } else {
-            ggml_vec_set_f32(ne0 * ne1, (float *)((char *) dst->data + ir*nb2), 0.0f);
+            ggml_vec_set_f32(nb2 / nb0, (float *)((char *) dst->data + ir*nb2), 0.0f);
         }
 
         for (int ik = 0; ik < nk; ik++) {
@@ -15151,9 +15151,9 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
 
             cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     output_len, input_channels, output_channels,
-                    1.0f,   src_data,  output_len,
-                            kern_data, output_channels,
-                    1.0f,   dst_data,  input_len);
+                    1.0f,   src_data,  nb11/nb10,
+                            kern_data, nb01/nb00,
+                    1.0f,   dst_data,  nb1/nb0);
         }
     }
 }
@@ -15232,9 +15232,9 @@ static void ggml_compute_forward_conv_1d_small_kern_back_filter(
 
             cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     output_channels, input_channels, output_len,
-                    1.0f,   A_src_data_gradient,  output_len,
-                            B_src_data_signal, input_len,
-                    ((ir == 0) ? 0.0f : 1.0f),   kern_data,  output_channels);
+                    1.0f,   A_src_data_gradient,  nb11/nb10,
+                            B_src_data_signal, nb01/nb00,
+                    ((ir == 0) ? 0.0f : 1.0f),   kern_data,  nb1/nb0);
         }
     }
 }
