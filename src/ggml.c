@@ -21189,8 +21189,15 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
         // if ((node->op != GGML_OP_CONV_1D_SMALL_KERN && node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) || node->src[0]->ne[2]==1 || node->ne[2]==1 ) continue;
         if ((node->op != GGML_OP_CONV_1D_SMALL_KERN ))continue;// || node->src[0]->ne[2]==1 || node->src[0]->ne[0]!=16 || node->src[0]->ne[1]!=16 ) continue;
         const int32_t d0 = node->op_params[2];
+        const int64_t nk = node->src[0]->ne[2];
+        const int64_t output_len = node->ne[0];
+        const int64_t input_len = node->src[1]->ne[0];
+        const int64_t real_input_len = ggml_calc_conv_input_size(output_len, nk, 1, 0, d0);
+        const int64_t inject_len = node->src[3] ? node->src[3]->ne[0] : output_len;
+        const int64_t input_offset = input_len - real_input_len;
+        const int64_t inject_offset = inject_len - output_len;
 
-        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms / %7.3f GB/s d0:%d nk: %d ic: %d\n",
+        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms / %7.3f GB/s d0: %3d nk: %1d ic: %2d offs_in: %4d offs_inj: %4d\n",
                 i,
                 node->ne[0], node->ne[1], node->ne[2],
                 ggml_op_name(node->op), node->is_param ? "x" : node->grad ? "g" : " ", node->perf_runs,
@@ -21198,7 +21205,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
                 (double) node->perf_cycles  / (double) ggml_cycles_per_ms() / (double) node->perf_runs,
                 (double) node->perf_time_us / 1000.0,
                 (double) node->perf_time_us / 1000.0 / node->perf_runs,
-                bw_gbps, d0, node->src[0]->ne[2], node->src[1]->ne[1]);
+                bw_gbps, d0, nk, node->src[1]->ne[1], input_offset, inject_offset);
     }
 
     GGML_PRINT("n_leafs = %d\n", cgraph->n_leafs);
