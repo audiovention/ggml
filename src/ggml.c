@@ -4704,10 +4704,28 @@ void ggml_print_objects(const struct ggml_context * ctx) {
     GGML_PRINT("%s: --- end ---\n", __func__);
 }
 
+static inline int ggml_up(int n, int m) {
+    // assert m is a power of 2
+    GGML_ASSERT((m & (m - 1)) == 0);
+    return (n + m - 1) & ~(m - 1);
+}
+
+#define PAD_TENSOR_FIRST_DIM 1
+
 int64_t ggml_nelements(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return tensor->ne[0]*tensor->ne[1]*tensor->ne[2]*tensor->ne[3];
+}
+
+int64_t ggml_nelements_padded(const struct ggml_tensor * tensor) {
+    static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
+#if PAD_TENSOR_FIRST_DIM
+    int64_t ne0 = ggml_up(tensor->ne[0], 4);
+#else
+    int64_t ne0 = tensor->ne[0];
+#endif
+    return ne0*tensor->ne[1]*tensor->ne[2]*tensor->ne[3];
 }
 
 int64_t ggml_nrows(const struct ggml_tensor * tensor) {
@@ -4716,13 +4734,31 @@ int64_t ggml_nrows(const struct ggml_tensor * tensor) {
     return tensor->ne[1]*tensor->ne[2]*tensor->ne[3];
 }
 
+static inline size_t ggml_get_nb1(int64_t ne0, size_t nb0, enum ggml_type type) {
+    const int blck_size = ggml_blck_size(type);
+    if (blck_size > 1) {
+        return nb0 * ne0 / blck_size;
+    }
+#if PAD_TENSOR_FIRST_DIM
+    return ggml_up(ne0, 4) * nb0;
+#else
+    return ne0 * nb0;
+#endif
+}
+
 size_t ggml_nbytes(const struct ggml_tensor * tensor) {
     size_t nbytes;
     size_t blck_size = ggml_blck_size(tensor->type);
     if (blck_size == 1) {
         nbytes = ggml_type_size(tensor->type);
         for (int i = 0; i < GGML_MAX_DIMS; ++i) {
-            nbytes += (tensor->ne[i] - 1)*tensor->nb[i];
+            int64_t ne = tensor->ne[i];
+#if PAD_TENSOR_FIRST_DIM
+            if (i == 0) {
+                ne = ggml_up(ne, 4);
+            }
+#endif
+            nbytes += (ne - 1)*tensor->nb[i];
         }
     }
     else {
@@ -4849,7 +4885,7 @@ bool ggml_is_contiguous(const struct ggml_tensor * tensor) {
 
     return
         tensor->nb[0] == ggml_type_size(tensor->type) &&
-        tensor->nb[1] == (tensor->nb[0]*tensor->ne[0])/ggml_blck_size(tensor->type) &&
+        tensor->nb[1] == ggml_get_nb1(tensor->ne[0], tensor->nb[0], tensor->type) &&
         tensor->nb[2] == tensor->nb[1]*tensor->ne[1] &&
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
@@ -4913,11 +4949,6 @@ static inline int ggml_up32(int n) {
 //    return (n + 63) & ~63;
 //}
 
-static inline int ggml_up(int n, int m) {
-    // assert m is a power of 2
-    GGML_ASSERT((m & (m - 1)) == 0);
-    return (n + m - 1) & ~(m - 1);
-}
 
 // assert that pointer is aligned to GGML_MEM_ALIGN
 #define ggml_assert_aligned(ptr) \
@@ -5201,7 +5232,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         view_src   = view_src->view_src;
     }
 
-    size_t data_size = ggml_type_size(type)*(ne[0]/ggml_blck_size(type));
+    size_t data_size = ggml_get_nb1(ne[0], ggml_type_size(type), type);
     for (int i = 1; i < n_dims; i++) {
         data_size *= ne[i];
     }
@@ -5271,7 +5302,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
     }
 
     result->nb[0] = ggml_type_size(type);
-    result->nb[1] = result->nb[0]*(result->ne[0]/ggml_blck_size(type));
+    result->nb[1] = ggml_get_nb1(result->ne[0], result->nb[0], type);
     for (int i = 2; i < GGML_MAX_DIMS; i++) {
         result->nb[i] = result->nb[i - 1]*result->ne[i - 1];
     }
@@ -15026,13 +15057,13 @@ static void ggml_compute_forward_conv_1d_small_kern(
 
             cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
                     output_len, output_channels, input_channels,
-                    1.0f,   src_data,  input_len,
-                            kern_data, output_channels,
-                    ((ik==0 && !initialize_output) ? 0.0f : 1.0f),   dst_data,  output_len);
+                    1.0f,   src_data,  nb11/nb10,
+                            kern_data, nb01/nb00,
+                    ((ik==0 && !initialize_output) ? 0.0f : 1.0f),   dst_data,  nb1/nb0);
         }
 
         if (apply_tanh) {
-            ggml_vec_tanh_f32(output_len * output_channels, dst_data, dst_data);
+            ggml_vec_tanh_f32(nb2 / nb0, dst_data, dst_data);
         }
     }
 }

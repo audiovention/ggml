@@ -631,6 +631,7 @@ extern "C" {
     GGML_API void    ggml_print_objects(const struct ggml_context * ctx);
 
     GGML_API int64_t ggml_nelements   (const struct ggml_tensor * tensor);
+    GGML_API int64_t ggml_nelements_padded(const struct ggml_tensor * tensor);
     GGML_API int64_t ggml_nrows       (const struct ggml_tensor * tensor);
     GGML_API size_t  ggml_nbytes      (const struct ggml_tensor * tensor);
     GGML_API size_t  ggml_nbytes_pad  (const struct ggml_tensor * tensor); // same as ggml_nbytes() but padded to GGML_MEM_ALIGN
