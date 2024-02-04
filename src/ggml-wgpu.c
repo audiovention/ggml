@@ -1186,20 +1186,6 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 @compute
 @workgroup_size(256)
-fn kernel_add_and_tanh_back1(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
-        return;
-    }
-    
-    let x = get_src0(global_id.x, global_id.y, global_id.z);
-    let y = get_src1(global_id.x, global_id.y, global_id.z);
-    let z = (1.0 - x*x)*y;
-    
-    set_dst(global_id.x, global_id.y, global_id.z, z);
-}
-
-@compute
-@workgroup_size(256)
 fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let mult_idx = global_id.x * 4u;
 
