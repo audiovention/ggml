@@ -1201,15 +1201,17 @@ fn kernel_add_and_tanh_back1(@builtin(global_invocation_id) global_id: vec3<u32>
 @compute
 @workgroup_size(256)
 fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= num_el_dst()) {
+    let mult_idx = global_id.x * 4u;
+
+    if (mult_idx >= num_el_dst()) {
         return;
     }
 
-    let x = get_src0_lin(global_id.x);
-    let y = get_src1_lin(global_id.x);
+    let x = src0_v4[global_id.x];
+    let y = src1_v4[global_id.x];
     let z = (1.0 - x*x)*y;
 
-    set_dst_lin(global_id.x, z);
+    dst_v4[global_id.x] = z;
 }
 
 
@@ -2351,7 +2353,7 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
 
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
+                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 4*256);
                     GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, 1, 1)
                 } break;
