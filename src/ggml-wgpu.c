@@ -565,16 +565,18 @@ fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) glo
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
     let d0 = u32(tensor_dimension_params.params[0][2]);
+    let d0d4 = d0 / 4u;
     let apply_tanh = bool(tensor_dimension_params.params[0][3]);
     let has_bias = bool(tensor_dimension_params.params[1][0]);
     let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
 
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
+    let output_len_d4 = (output_len + 3u) / 4u;
 
     let kern_output_vec_values_per_thread = 16u;
-    let start_idx = ((4u * global_id.x)/d0) * kern_output_vec_values_per_thread * d0 + (4u * global_id.x) % d0;
+    let start_idx_d4 = (global_id.x/d0d4) * kern_output_vec_values_per_thread * d0d4 + (global_id.x) % d0d4;
 
-    if (start_idx >= output_len) {
+    if (start_idx_d4 >= output_len_d4) {
         return;
     }
 
@@ -585,7 +587,7 @@ fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) glo
         }
     }
 
-    let values_vec_this_thread = min((output_len - start_idx) / d0 + 1u, kern_output_vec_values_per_thread);
+    let values_vec_this_thread = min((output_len_d4 - start_idx_d4) / d0d4 + 1u, kern_output_vec_values_per_thread);
     let input_values_vec_this_thread = values_vec_this_thread + nk_8x8x3 - 1u;
 
 
@@ -596,34 +598,40 @@ fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) glo
         bias = get_src2(0u, local_id.y, 0u);
     }
 
-    let input_base_idx = start_idx + global_id.z * tensor_dimension_params.src[1].nb[2] + local_id.y * tensor_dimension_params.src[1].nb[1];
+    let input_base_idx = start_idx_d4 + (local_id.y * tensor_dimension_params.src[1].nb[1] + global_id.z * tensor_dimension_params.src[1].nb[2]) / 4u;
+    let src3_base_idx  = start_idx_d4 + (local_id.y * tensor_dimension_params.src[3].nb[1] + global_id.z * tensor_dimension_params.src[3].nb[2]) / 4u;
+    let dst_base_idx   = start_idx_d4 + (local_id.y * tensor_dimension_params.dst.nb[1]    + global_id.z * tensor_dimension_params.dst.nb[2]   ) / 4u;
 
     for (var i = 0u; i < input_values_vec_this_thread; i = i + 1u) {
-        workgroup_data_input_8x8x3[local_id.x][local_id.y] = src1_v4[(input_base_idx + i * d0)/4u];
+        workgroup_data_input_8x8x3[local_id.x][local_id.y] = src1_v4[input_base_idx + i * d0d4];
         workgroupBarrier();
 
-        for (var ik = 0u; ik < nk_8x8x3; ik = ik + 1u) {
-            let kern_idx = (i + ik) % nk_8x8x3;
-            for (var ic = 0u; ic < channels_8x8x3; ic = ic + 1u) {
-                let ic_adj = (ic + local_id.x) % channels_8x8x3;
-                output[ik] = output[ik] + workgroup_data_input_8x8x3[local_id.x][ic_adj] * kernel[kern_idx][ic_adj];
+        var src3_here = vec4f();
+        let dst_offs_vec_idx = (max(i, nk_8x8x3 - 1u) + 1u - nk_8x8x3) * d0d4;
+        if (has_inject_signal && i >= (nk_8x8x3 - 1u)) {
+            src3_here = src3_v4[src3_base_idx + dst_offs_vec_idx];
+        }
+
+        for (var ic = 0u; ic < channels_8x8x3; ic = ic + 1u) {
+            let ic_adj = (ic + local_id.y) % channels_8x8x3;
+            let in_here = workgroup_data_input_8x8x3[local_id.x][ic_adj];
+            for (var ik = 0u; ik < nk_8x8x3; ik = ik + 1u) {
+                let kern_idx = (i + ik) % nk_8x8x3;
+                output[ik] = output[ik] + in_here * kernel[kern_idx][ic_adj];
             }
         }
 
         let reg_idx = nk_8x8x3 - 1u - (i % nk_8x8x3);
 
-        if (i >= nk_8x8x3) {
+        if (i >= (nk_8x8x3 - 1u)) {
             output[reg_idx] = output[reg_idx] + bias;
-            let dst_base_x_idx = start_idx + (i - nk_8x8x3) * d0;
             if (has_inject_signal) {
-                let src3_idx = dst_base_x_idx + global_id.y * tensor_dimension_params.src[3].nb[1] + global_id.z * tensor_dimension_params.src[3].nb[2];
-                output[reg_idx] += src3_v4[src3_idx / 4u];
+                output[reg_idx] += src3_here;
             }
             if (apply_tanh) {
                 output[reg_idx] = tanh(output[reg_idx]);
             }
-            let dst_idx = dst_base_x_idx + local_id.y * tensor_dimension_params.dst.nb[1] + global_id.z * tensor_dimension_params.dst.nb[2];
-            dst_v4[dst_idx / 4u] = output[reg_idx];
+            dst_v4[dst_base_idx + dst_offs_vec_idx] = output[reg_idx];
         }
 
         output[reg_idx] = vec4f();
@@ -1239,13 +1247,19 @@ fn kernel_conv_1d_small_kern_back_input_large_dil(@builtin(global_invocation_id)
         if (mult_idx >= idx_offset && (mult_idx < (idx_offset+output_len))) {
             let base_idx_src0 = global_id.y * tensor_dimension_params.src[0].nb[1] + ik * tensor_dimension_params.src[0].nb[2];
             let base_idx_src1 = global_id.z * tensor_dimension_params.src[1].nb[2] + (mult_idx - idx_offset);
+            let mult1 = vec4f(
+                f32((mult_idx - idx_offset) < output_len),
+                f32((mult_idx - idx_offset + 1u) < output_len),
+                f32((mult_idx - idx_offset + 2u) < output_len),
+                f32((mult_idx - idx_offset + 3u) < output_len)
+            );
             for (var idx_oc = 0u; idx_oc < output_channels; idx_oc = idx_oc + 1u) {
                 // output = output + 
                 //     get_src0(idx_oc, global_id.y, ik) * 
                 //     get_src1(mult_idx - idx_offset, idx_oc, global_id.z);
                 let val_src0 = get_src0_lin(base_idx_src0 + idx_oc);
                 let idx_src1 = (base_idx_src1 + idx_oc * tensor_dimension_params.src[1].nb[1]) / 4u;
-                output = output + val_src0 * src1_v4[idx_src1];
+                output = output + val_src0 * mult1 * src1_v4[idx_src1];
             }
         }
     }
@@ -2460,7 +2474,7 @@ void ggml_wgpu_graph_compute(
                 {
                     const int32_t d0 = dst->op_params[2];
                     GGML_ASSERT(dst->ne[3] == 1);
-                    if (0 && d0 >= 4) {
+                    if (d0 >= 4) {
                         const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 4*256);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_input_large_dil, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
