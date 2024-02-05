@@ -572,7 +572,7 @@ fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) glo
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
 
     let kern_output_vec_values_per_thread = 16u;
-    let start_idx = 4u * ((global_id.x/d0) * (4u * kern_output_vec_values_per_thread) * d0 + global_id.x % d0);
+    let start_idx = ((4u * global_id.x)/d0) * kern_output_vec_values_per_thread * d0 + (4u * global_id.x) % d0;
 
     if (start_idx >= output_len) {
         return;
@@ -585,8 +585,7 @@ fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) glo
         }
     }
 
-    let values_this_thread = min((output_len - start_idx) / d0 + 1u, 4u * kern_output_vec_values_per_thread);
-    let values_vec_this_thread = (values_this_thread + 3u) / 4u;
+    let values_vec_this_thread = min((output_len - start_idx) / d0 + 1u, kern_output_vec_values_per_thread);
     let input_values_vec_this_thread = values_vec_this_thread + nk_8x8x3 - 1u;
 
 
@@ -606,7 +605,8 @@ fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) glo
         for (var ik = 0u; ik < nk_8x8x3; ik = ik + 1u) {
             let kern_idx = (i + ik) % nk_8x8x3;
             for (var ic = 0u; ic < channels_8x8x3; ic = ic + 1u) {
-                output[ik] = output[ik] + workgroup_data_input_8x8x3[local_id.x][ic] * kernel[kern_idx][ic];
+                let ic_adj = (ic + local_id.x) % channels_8x8x3;
+                output[ik] = output[ik] + workgroup_data_input_8x8x3[local_id.x][ic_adj] * kernel[kern_idx][ic_adj];
             }
         }
 
@@ -614,10 +614,10 @@ fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) glo
 
         if (i >= nk_8x8x3) {
             output[reg_idx] = output[reg_idx] + bias;
-            let dst_base_x_idx = start_idx + (i + 1u - nk_8x8x3) * d0;
+            let dst_base_x_idx = start_idx + (i - nk_8x8x3) * d0;
             if (has_inject_signal) {
                 let src3_idx = dst_base_x_idx + global_id.y * tensor_dimension_params.src[3].nb[1] + global_id.z * tensor_dimension_params.src[3].nb[2];
-                output[reg_idx] += src3_v4[src3_idx];
+                output[reg_idx] += src3_v4[src3_idx / 4u];
             }
             if (apply_tanh) {
                 output[reg_idx] = tanh(output[reg_idx]);
