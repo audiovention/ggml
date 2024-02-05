@@ -1093,16 +1093,16 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
         }
     }
 
-    workgroup_data[local_id.x] = output.x + output.y + output.z + output.w;
+    workgroup_data_v4f[local_id.x] = output;
     workgroupBarrier();
 
     if (0u == local_id.x) {
-        var output_single = 0.0;
+        output = vec4f();
         for (var i = 0u; i < 256u; i = i + 1u) {
-            output_single = output_single + workgroup_data[i];
+            output = output + workgroup_data_v4f[i];
         }
 
-        set_dst(wg_id.x, global_id.y, 0u, output_single);
+        set_dst(wg_id.x, global_id.y, 0u, output.x+output.y+output.z+output.w);
     }
 }
 
