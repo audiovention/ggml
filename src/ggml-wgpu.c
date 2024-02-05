@@ -2174,7 +2174,7 @@ void ggml_wgpu_read_back_buffer(
     wait_for_buffer_map(ctx->device, ctx->queue);
     // wgpuDevicePoll(ctx->device, true, NULL);
 
-    void * buf = wgpuBufferGetConstMappedRange(ph, 0, original_size);
+    const void * buf = wgpuBufferGetConstMappedRange(ph, 0, original_size);
     GGML_ASSERT(buf);
 
     memcpy(buffer->data, buf, original_size);
@@ -2234,7 +2234,7 @@ void ggml_wgpu_get_tensor(
     wait_for_buffer_map(ctx->device, ctx->queue);
     // wgpuDevicePoll(ctx->device, true, NULL);
 
-    void * buf = wgpuBufferGetConstMappedRange(ph, 0, nbytes);
+    const void * buf = wgpuBufferGetConstMappedRange(ph, 0, nbytes);
     GGML_ASSERT(buf);
 
     memcpy(t->data, buf, nbytes);
@@ -2636,7 +2636,7 @@ void ggml_wgpu_graph_compute(
         wait_for_buffer_map(ctx->device, ctx->queue);
         // wgpuDevicePoll(ctx->device, true, NULL);
 
-        void * buf = wgpuBufferGetConstMappedRange(ctx->timestamp_queries_read_buffer, 0, 8*(gf->n_nodes + 1));
+        const void * buf = wgpuBufferGetConstMappedRange(ctx->timestamp_queries_read_buffer, 0, 8*(gf->n_nodes + 1));
         GGML_ASSERT(buf);
 
         uint64_t * timestamps = (uint64_t *) buf;
