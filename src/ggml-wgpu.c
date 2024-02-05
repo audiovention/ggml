@@ -177,6 +177,7 @@ var<uniform> extra_uniform1: array<vec4f, 1024>;
 
 
 var<workgroup> workgroup_data: array<f32, 256>;
+var<workgroup> workgroup_data_v4f: array<vec4f, 256>;
 
 
 fn get_src0(x: u32, y: u32, z: u32) -> f32 {
@@ -1401,23 +1402,30 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
     let output_len = u32(tensor_dimension_params.src[0].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output : f32 = 0.0;
+    var output = vec4f();
 
-    let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + wg_id.y * tensor_dimension_params.src[0].nb[2];
-    for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-        output = output + get_src0_lin(base_idx_src0_base + isample);
+    let base_idx_src0_base = (wg_id.x * tensor_dimension_params.src[0].nb[1] + wg_id.y * tensor_dimension_params.src[0].nb[2]) / 4u;
+    for (var isample = local_id.x; isample < ((output_len+3u)/4u); isample = isample + 256u) {
+        let mult1 = vec4f(
+            f32((4u * isample) < output_len),
+            f32((4u * isample + 1u) < output_len),
+            f32((4u * isample + 2u) < output_len),
+            f32((4u * isample + 3u) < output_len)
+        );
+
+        output = output + mult1 * src0_v4[base_idx_src0_base + isample];
     }
 
-    workgroup_data[local_id.x] = output;
+    workgroup_data_v4f[local_id.x] = output;
     workgroupBarrier();
 
     if (0u == local_id.x) {
-        output = 0.0;
+        output = vec4f();
         for (var i = 0u; i < 256u; i = i + 1u) {
-            output = output + workgroup_data[i];
+            output = output + workgroup_data_v4f[i];
         }
 
-        set_src5_lin(wg_id.y + wg_id.x * num_batches, output);
+        set_src5_lin(wg_id.y + wg_id.x * num_batches, output.x+output.y+output.z+output.w);
     }
 }
 
@@ -2512,7 +2520,7 @@ void ggml_wgpu_graph_compute(
 #if 0
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dst->ne[1], 1, 1)
 #else
-                    GGML_ASSERT((dst->ne[1]*dst->src[0]->ne[2] *ggml_element_size(dst)) <= PLACEHOLDER_BUFFER_SIZE);
+                    GGML_ASSERT((4*dst->ne[1]*dst->src[0]->ne[2] *ggml_element_size(dst)) <= PLACEHOLDER_BUFFER_SIZE);
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage1, dst->ne[1], dst->src[0]->ne[2], 1)
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage2, dst->ne[1], 1, 1)
 #endif
