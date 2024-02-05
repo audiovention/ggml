@@ -65,6 +65,12 @@ bool ggml_wgpu_add_buffer(
                            size_t   size,
                            size_t   max_size);
 
+// Read back a buffer from the device to the host memory, that was previous added with ggml_wgpu_add_buffer and the corresponding name
+// The "data" pointer used in the ggml_wgpu_add_buffer call must still be valid
+void ggml_wgpu_read_back_buffer(
+        struct ggml_wgpu_context * ctx,
+                       const char * name);
+
 // set data from host memory into the device
 void ggml_wgpu_set_tensor(struct ggml_wgpu_context * ctx, struct ggml_tensor * t);
 

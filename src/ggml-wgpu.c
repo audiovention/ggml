@@ -2120,6 +2120,69 @@ bool ggml_wgpu_add_buffer(
     return true;
 }
 
+
+void ggml_wgpu_read_back_buffer(
+        struct ggml_wgpu_context * ctx,
+                       const char * name) {
+    struct ggml_wgpu_buffer * buffer = NULL;
+    for (int i = 0; i < ctx->n_buffers; ++i) {
+        if (strcmp(ctx->buffers[i].name, name) == 0) {
+            GGML_ASSERT(buffer == NULL); // this function does not yet support reading split buffers
+            buffer = &ctx->buffers[i];
+        }
+    }
+
+    GGML_ASSERT(buffer);
+
+    const size_t original_size = buffer->size;
+
+    size_t size_aligned = original_size;
+    if ((size_aligned % MIN_STORAGE_BUFFER_ALIGNMENT) != 0) {
+        size_aligned += (MIN_STORAGE_BUFFER_ALIGNMENT - (size_aligned % MIN_STORAGE_BUFFER_ALIGNMENT));
+    }
+
+    WGPUBuffer id_src = buffer->wgpu;
+    GGML_ASSERT(id_src);
+
+    WGPUBuffer ph = wgpuDeviceCreateBuffer(ctx->device, &(const WGPUBufferDescriptor){
+                                                            .label = "ph",
+                                                            .usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst,
+                                                            .size = size_aligned,
+                                                            .mappedAtCreation = false,
+                                                         });
+
+    WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(
+            ctx->device, &(const WGPUCommandEncoderDescriptor){
+                        .label = "ggml_command_encoder_read_back_buffer",
+                    });
+    GGML_ASSERT(command_encoder);
+
+
+    wgpuCommandEncoderCopyBufferToBuffer(command_encoder, id_src, 0,
+                                        ph, 0, original_size);
+
+    WGPUCommandBuffer command_buffer = wgpuCommandEncoderFinish(
+        command_encoder, &(const WGPUCommandBufferDescriptor){
+                            .label = "command_buffer_read_back_buffer",
+                        });
+    GGML_ASSERT(command_buffer);
+
+    wgpuQueueSubmit(ctx->queue, 1, &command_buffer);
+
+    wgpuBufferMapAsync(ph, WGPUMapMode_Read, 0, original_size,
+                     handle_buffer_map, NULL);
+    wait_for_buffer_map(ctx->device, ctx->queue);
+    // wgpuDevicePoll(ctx->device, true, NULL);
+
+    void * buf = wgpuBufferGetConstMappedRange(ph, 0, original_size);
+    GGML_ASSERT(buf);
+
+    memcpy(buffer->data, buf, original_size);
+    wgpuBufferUnmap(ph);
+    
+}
+
+
 void ggml_wgpu_set_tensor(
         struct ggml_wgpu_context * ctx,
         struct ggml_tensor * t) {
