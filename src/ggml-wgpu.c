@@ -1130,30 +1130,44 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f32 = 0.0;
+    var output = vec4f();
 
     let base_offset = idx_ik * d0 + input_len - real_input_len;
 
     let base_idx_src0 = base_offset + idx_ir * tensor_dimension_params.src[0].nb[2] + idx_ic * tensor_dimension_params.src[0].nb[1];
-    let base_idx_src1 = idx_ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
-    for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-        output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+    let base_idx_src1 = (idx_ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1]) / 4u;
+    for (var isample = local_id.x; isample < ((output_len + 3u) / 4u); isample = isample + 256u) {
+        let mult1 = vec4f(
+            f32((4u * isample) < output_len),
+            f32((4u * isample + 1u) < output_len),
+            f32((4u * isample + 2u) < output_len),
+            f32((4u * isample + 3u) < output_len)
+        );
+        let src0_idx_here = base_idx_src0 + 4u * isample;
+        let src0_here = vec4f(
+            get_src0_lin(src0_idx_here),
+            get_src0_lin(src0_idx_here + 1u),
+            get_src0_lin(src0_idx_here + 2u),
+            get_src0_lin(src0_idx_here + 3u)
+        );
+
+        output = output + mult1 * src0_here * src1_v4[base_idx_src1 + isample];
     }
 
-    workgroup_data[local_id.x] = output;
+    workgroup_data_v4f[local_id.x] = output;
     workgroupBarrier();
 
     if (0u == local_id.x) {
-        output = 0.0;
+        output = vec4f();
         for (var i = 0u; i < 256u; i = i + 1u) {
-            output = output + workgroup_data[i];
+            output = output + workgroup_data_v4f[i];
         }
 
         let nb1 = num_batches;
         let nb2 = nb1 * output_channels;
         let nb3 = nb2 * input_channels;
 
-        set_src5_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik, output);
+        set_src5_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik, output.x+output.y+output.z+output.w);
     }
 }
 
