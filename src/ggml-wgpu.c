@@ -2179,7 +2179,11 @@ void ggml_wgpu_read_back_buffer(
 
     memcpy(buffer->data, buf, original_size);
     wgpuBufferUnmap(ph);
-    
+
+    wgpuCommandBufferRelease(command_buffer);
+    wgpuCommandEncoderRelease(command_encoder);
+    wgpuBufferDestroy(ph);
+    wgpuBufferRelease(ph);
 }
 
 
@@ -2239,6 +2243,11 @@ void ggml_wgpu_get_tensor(
 
     memcpy(t->data, buf, nbytes);
     wgpuBufferUnmap(ph);
+
+    wgpuCommandBufferRelease(command_buffer);
+    wgpuCommandEncoderRelease(command_encoder);
+    wgpuBufferDestroy(ph);
+    wgpuBufferRelease(ph);
 }
 
 void ggml_wgpu_graph_compute(
@@ -2629,6 +2638,9 @@ void ggml_wgpu_graph_compute(
     GGML_ASSERT(command_buffer);
 
     wgpuQueueSubmit(ctx->queue, 1, &command_buffer);
+
+    wgpuCommandBufferRelease(command_buffer);
+    wgpuCommandEncoderRelease(command_encoder);
 
     if (ctx->timestamp_queries) {
         wgpuBufferMapAsync(ctx->timestamp_queries_read_buffer, WGPUMapMode_Read, 0, 8*(gf->n_nodes + 1),
