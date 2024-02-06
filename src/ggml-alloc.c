@@ -470,6 +470,10 @@ size_t ggml_allocr_alloc_graph_n(
                 // No need to allocate src[0], src[1] and dst as they are already handled by the rest of the graph
                 ggml_allocr_alloc(alloc, node->src[2]);
                 ggml_allocr_alloc(alloc, node->src[3]);
+                if (!ggml_allocr_is_measure(alloc)) {
+                    ggml_set_zero(node->src[2]);
+                    ggml_set_zero(node->src[3]);
+                }
             }
 
             if (ggml_is_view(node)) {

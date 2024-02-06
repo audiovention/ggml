@@ -16395,7 +16395,7 @@ static void ggml_compute_forward_special_adam_step(
         for (int i02 = ith; i02 < ne02; i02++) {
             for (int i01 = 0; i01 < ne01; i01++) {
                 const float * p = (float *)((char *) src0->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
-                float * g = (float *)((char *) src1->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
+                const float * g = (float *)((char *) src1->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
                 float * m = (float *)((char *) src2->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
                 float * v = (float *)((char *) src3->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
                 float * out = (float *)((char *) dst->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
