@@ -234,6 +234,10 @@ inline static void * ggml_aligned_malloc(size_t size) {
     GGML_TENSOR_LOCALS(int64_t, ne,  dst,  ne) \
     GGML_TENSOR_LOCALS(size_t,  nb,  dst,  nb)
 
+#if defined(GGML_USE_MYBLAS)
+#include "myblas.h"
+#endif
+
 #if defined(GGML_USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
 #if defined(GGML_USE_CLBLAST) // allow usage of CLBlast alongside Accelerate functions
@@ -19706,6 +19710,10 @@ static void ggml_build_forward_impl(struct ggml_cgraph * cgraph, struct ggml_ten
 
 void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
     ggml_build_forward_impl(cgraph, tensor, true);
+}
+
+void ggml_build_forward_no_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
+    ggml_build_forward_impl(cgraph, tensor, false);
 }
 
 struct ggml_cgraph ggml_build_forward(struct ggml_tensor * tensor) {

@@ -162,7 +162,7 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
         }
     }
 
-    GGML_ASSERT(((addr-alloc->data)%(alloc->alignment))==0);
+    GGML_ASSERT(((((char *)addr) - ((char*)(alloc->data)))%(alloc->alignment))==0);
     tensor->data = addr;
     AT_PRINTF("%s: allocated data at %p\n", __func__, tensor->data);
     tensor->buffer = alloc->buffer;
