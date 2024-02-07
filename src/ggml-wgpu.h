@@ -71,6 +71,10 @@ void ggml_wgpu_read_back_buffer(
         struct ggml_wgpu_context * ctx,
                        const char * name);
 
+void ggml_wgpu_write_buffer(
+        struct ggml_wgpu_context * ctx,
+                       const char * name);
+
 // set data from host memory into the device
 void ggml_wgpu_set_tensor(struct ggml_wgpu_context * ctx, struct ggml_tensor * t);
 

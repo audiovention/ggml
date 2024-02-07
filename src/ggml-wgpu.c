@@ -2204,6 +2204,22 @@ void ggml_wgpu_read_back_buffer(
 }
 
 
+void ggml_wgpu_write_buffer(
+        struct ggml_wgpu_context * ctx,
+                       const char * name) {
+    struct ggml_wgpu_buffer * buffer = NULL;
+    for (int i = 0; i < ctx->n_buffers; ++i) {
+        if (strcmp(ctx->buffers[i].name, name) == 0) {
+            GGML_ASSERT(buffer == NULL); // this function does not yet support reading split buffers
+            buffer = &ctx->buffers[i];
+        }
+    }
+
+    GGML_ASSERT(buffer);
+
+    wgpuQueueWriteBuffer(ctx->queue, buffer->wgpu, 0, buffer->data, buffer->size);
+}
+
 void ggml_wgpu_set_tensor(
         struct ggml_wgpu_context * ctx,
         struct ggml_tensor * t) {
