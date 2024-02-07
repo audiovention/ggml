@@ -1704,7 +1704,8 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
     WGPURequestAdapterOptions reqAdOptions = {0};
     reqAdOptions.powerPreference = WGPUPowerPreference_HighPerformance;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-    reqAdOptions.backendType = WGPUBackendType_D3D12;
+    // reqAdOptions.backendType = WGPUBackendType_D3D12;
+    reqAdOptions.backendType = WGPUBackendType_Vulkan;
 #elif __APPLE__
     reqAdOptions.backendType = WGPUBackendType_Metal;
 #elif __linux__
