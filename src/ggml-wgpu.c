@@ -102,8 +102,9 @@ static void handle_buffer_map(WGPUBufferMapAsyncStatus status, void *userdata) {
   }
 }
 
+#ifndef _MSC_VER
 #define MULTILINE(...) #__VA_ARGS__
-static const char* shader_src = MULTILINE(
+static const char* src_ggml_shader_wgsl = MULTILINE(
 
 struct TensorDimensionParam {
         ne : vec4i,
@@ -1512,6 +1513,9 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
 
 );
 #undef MULTILINE
+#else
+#include "shader_win.h"
+#endif
 
 #undef MIN
 #undef MAX
@@ -1589,7 +1593,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti_large_dil);
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
+    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
     GGML_WGPU_DECL_KERNEL(add_and_trim);
     GGML_WGPU_DECL_KERNEL(scale);
     GGML_WGPU_DECL_KERNEL(scale_inplace);
@@ -1672,7 +1676,7 @@ static void ggml_wgpu_log(enum ggml_log_level level, const char* format, ...){
     }
 }
 
-static void new_er_log(WGPUErrorType type, char const* message, void*)
+static void new_er_log(WGPUErrorType type, char const* message, void* userdata)
 {
     printf("[new_er_log] Error type %u: %s\n", type, message);
     GGML_ASSERT(false);
@@ -1697,7 +1701,16 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
     ctx->instance = wgpuCreateInstance(&desc);
     ASSERT_CHECK(ctx->instance);
 
-    wgpuInstanceRequestAdapter(ctx->instance, NULL, handle_request_adapter,
+    WGPURequestAdapterOptions reqAdOptions = {0};
+    reqAdOptions.powerPreference = WGPUPowerPreference_HighPerformance;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    reqAdOptions.backendType = WGPUBackendType_D3D12;
+#elif __APPLE__
+    reqAdOptions.backendType = WGPUBackendType_Metal;
+#elif __linux__
+    reqAdOptions.backendType = WGPUBackendType_Vulkan;
+#endif
+    wgpuInstanceRequestAdapter(ctx->instance, &reqAdOptions, handle_request_adapter,
                                 (void *)&(ctx->adapter));
     ASSERT_CHECK(ctx->adapter);
 
@@ -1810,7 +1823,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
                               (const WGPUChainedStruct){
                                   .sType = WGPUSType_ShaderModuleWGSLDescriptor,
                               },
-                          .code = shader_src,
+                          .code = src_ggml_shader_wgsl,
                       },
               });
 
@@ -1881,7 +1894,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_opti);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_opti_large_dil);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offsets);
-        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
+        // GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
         GGML_WGPU_ADD_KERNEL(add_and_trim);
         GGML_WGPU_ADD_KERNEL(scale);
         GGML_WGPU_ADD_KERNEL(scale_inplace);
@@ -1927,7 +1940,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti_large_dil);
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
+    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
     GGML_WGPU_DEL_KERNEL(add_and_trim);
     GGML_WGPU_DEL_KERNEL(scale);
     GGML_WGPU_DEL_KERNEL(scale_inplace);
@@ -1977,12 +1990,15 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
 
 void * ggml_wgpu_host_malloc(size_t n) {
     void * data = NULL;
+#if _MSC_VER
+    GGML_ASSERT(false); // not implemented
+#else
     const int result = posix_memalign((void **) &data, MIN_STORAGE_BUFFER_ALIGNMENT, n);
     if (result != 0) {
         GGML_WGPU_LOG_ERROR("%s: error: posix_memalign failed\n", __func__);
         return NULL;
     }
-
+#endif
     return data;
 }
 
@@ -2463,7 +2479,7 @@ void ggml_wgpu_graph_compute(
                             if (d0>=4) {
                                 if (0 && dst->ne[1] == 8) {
                                     const int32_t dispatch_x = CEIL_DIV(output_len, 4*32*16);
-                                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets_8x8x3, dispatch_x, 1, dst->ne[2])
+                                    // GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets_8x8x3, dispatch_x, 1, dst->ne[2])
                                 } else {
                                     const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
                                     const int32_t dispatch_y = dst->ne[1];
