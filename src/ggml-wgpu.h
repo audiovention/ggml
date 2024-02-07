@@ -28,12 +28,12 @@
 // max memory buffers that can be mapped to the device
 #define GGML_WGPU_MAX_BUFFERS 16
 
-struct ggml_tensor;
-struct ggml_cgraph;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct ggml_tensor;
+struct ggml_cgraph;
 
 //
 // internal API
