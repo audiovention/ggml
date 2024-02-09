@@ -2696,6 +2696,9 @@ void ggml_wgpu_graph_compute(
         wgpuBufferUnmap(ctx->timestamp_queries_read_buffer);
     }
 
+#ifdef WEBGPU_BACKEND_WGPU
+    wgpuDevicePoll(ctx->device, true, NULL);
+#endif
     // performance stats (graph)
     {
         int64_t perf_cycles_cur  = ggml_perf_cycles()  - perf_start_cycles;
