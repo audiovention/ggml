@@ -1984,35 +1984,35 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         { \
             char * shader_src = malloc(sizeof(src_ggml_shader_common_0) + sizeof(src_ggml_shader_common_1) + sizeof(src_ggml_shader_common_2) + sizeof(src_ggml_shader_kernel_##name) + 1); \
             memset(shader_src, 0, sizeof(src_ggml_shader_common_0) + sizeof(src_ggml_shader_common_1) + sizeof(src_ggml_shader_common_2) + sizeof(src_ggml_shader_kernel_##name) + 1); \
-            strcat(shader_src, src_ggml_shader_common_0); \
-            strcat(shader_src, src_ggml_shader_common_1); \
-            strcat(shader_src, src_ggml_shader_common_2); \
-            strcat(shader_src, src_ggml_shader_kernel_##name); \
-            ctx->shader_module_##name = wgpuDeviceCreateShaderModule( \
-            ctx->device, &(const WGPUShaderModuleDescriptor){ \
-                        .label = "ggml_shader_module_" #name, \
-                        .nextInChain = \
-                            (const WGPUChainedStruct *)&( \
-                                const WGPUShaderModuleWGSLDescriptor){ \
-                                .chain = \
-                                    (const WGPUChainedStruct){ \
+            strcat(shader_src, src_ggml_shader_common_0);               \
+            strcat(shader_src, src_ggml_shader_common_1);               \
+            strcat(shader_src, src_ggml_shader_common_2);               \
+            strcat(shader_src, src_ggml_shader_kernel_##name);          \
+            ctx->shader_module_##name = wgpuDeviceCreateShaderModule(   \
+            ctx->device, &(const WGPUShaderModuleDescriptor){           \
+                        .label = "ggml_shader_module_" #name,           \
+                        .nextInChain =                                  \
+                            (const WGPUChainedStruct *)&(               \
+                                const WGPUShaderModuleWGSLDescriptor){  \
+                                .chain =                                \
+                                    (const WGPUChainedStruct){          \
                                         .sType = WGPUSType_ShaderModuleWGSLDescriptor, \
-                                    }, \
-                                .code = shader_src, \
-                            }, \
-                    }); \
-            ASSERT_CHECK(ctx->shader_module_##name); \
+                                    },                                  \
+                                .code = shader_src,                     \
+                            },                                          \
+                    });                                                 \
+            ASSERT_CHECK(ctx->shader_module_##name);                    \
             ctx->pipeline_##name = wgpuDeviceCreateComputePipeline(     \
                 ctx->device, &(const WGPUComputePipelineDescriptor){    \
                             .label = "compute_pipeline_" #name,         \
                             .layout = ctx->pipeline_layout,             \
                             .compute =                                  \
                                 (const WGPUProgrammableStageDescriptor){\
-                                    .module = ctx->shader_module_##name,       \
+                                    .module = ctx->shader_module_##name,\
                                     .entryPoint = "kernel_" #name,      \
                                 },                                      \
                         });                                             \
-            ASSERT_CHECK(ctx->pipeline_##name);                       \ 
+            ASSERT_CHECK(ctx->pipeline_##name);                         \
             free(shader_src); \
         }
 
