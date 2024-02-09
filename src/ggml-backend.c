@@ -238,8 +238,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i_from_ptr = {
 
 
 static ggml_backend_buffer_t ggml_backend_cpu_alloc_buffer(ggml_backend_t backend, size_t size) {
-    size += TENSOR_ALIGNMENT;   // malloc may return an address that is not aligned
-    void * data = malloc(size); // TODO: maybe use GGML_ALIGNED_MALLOC?
+    void * data = malloc(size + TENSOR_ALIGNMENT); // malloc may return an address that is not aligned, TODO: maybe use GGML_ALIGNED_MALLOC?
 
     return ggml_backend_buffer_init(backend, cpu_backend_buffer_i, data, size);
 }
