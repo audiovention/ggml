@@ -102,9 +102,10 @@ static void handle_buffer_map(WGPUBufferMapAsyncStatus status, void *userdata) {
   }
 }
 
-#ifndef _MSC_VER
+
 #define MULTILINE(...) #__VA_ARGS__
-static const char* src_ggml_shader_wgsl = MULTILINE(
+
+static const char src_ggml_shader_common_0[] = MULTILINE(
 
 struct TensorDimensionParam {
         ne : vec4i,
@@ -177,10 +178,6 @@ var<uniform> extra_uniform0: array<vec4f, 1024>;
 var<uniform> extra_uniform1: array<vec4f, 1024>;
 
 
-var<workgroup> workgroup_data: array<f32, 256>;
-var<workgroup> workgroup_data_v4f: array<vec4f, 256>;
-
-
 fn get_src0(x: u32, y: u32, z: u32) -> f32 {
     return src0[x 
                 //   * tensor_dimension_params.src[0].nb[0]
@@ -243,6 +240,10 @@ fn set_dst(x: u32, y: u32, z: u32, v: f32) {
             // + tensor_dimension_params.dst.offset
              ] = v;
 }
+
+);
+
+static const char src_ggml_shader_common_1[] = MULTILINE(
 
 
 fn get_src0_lin(x: u32) -> f32 {
@@ -344,6 +345,10 @@ fn set_src5_lin(x: u32, v: f32) {
              ] = v;
 }
 
+);
+
+static const char src_ggml_shader_common_2[] = MULTILINE(
+
 
 fn set_src0(x: u32, y: u32, z: u32, v: f32) {
     src0[ x 
@@ -406,6 +411,10 @@ fn num_el_dst() -> u32 {
     // return u32(tensor_dimension_params.dst.ne[0] * tensor_dimension_params.dst.ne[1] * tensor_dimension_params.dst.ne[2] * tensor_dimension_params.dst.ne[3]);
 }
 
+);
+
+static const char src_ggml_shader_kernel_silu[] = MULTILINE(
+
 @compute
 @workgroup_size(1)
 fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -413,6 +422,9 @@ fn kernel_silu(@builtin(global_invocation_id) global_id: vec3<u32>) {
     set_dst_lin(global_id.x, x / (1.0 + exp(-x)));
 }
 
+);
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -480,6 +492,9 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     set_dst(global_id.x, global_id.y, global_id.z, output);
 }
 
+);
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_no_offsets[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -557,6 +572,8 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
     // set_dst(mult_idx+2u, global_id.y, global_id.z, output.z);
     // set_dst(mult_idx+3u, global_id.y, global_id.z, output.w);
 }
+
+);
 
 // const nk_8x8x3 = 3u;
 // const channels_8x8x3 = 8u;
@@ -850,6 +867,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 //     }
 // }
 
+static const char src_ggml_shader_kernel_conv_1d_small_kern_simpl[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -888,6 +906,10 @@ fn kernel_conv_1d_small_kern_simpl(@builtin(global_invocation_id) global_id: vec
     set_dst(global_id.x, global_id.y, global_id.z, output);
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_add_and_trim[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -904,6 +926,10 @@ fn kernel_add_and_trim(@builtin(global_invocation_id) global_id: vec3<u32>) {
     );
 }
 
+);
+
+static const char src_ggml_shader_kernel_scale[] = MULTILINE(
+
 
 @compute
 @workgroup_size(256)
@@ -914,6 +940,11 @@ fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
     set_dst_lin(global_id.x, get_src0_lin(global_id.x) * get_src1_lin(0u));
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_scale_inplace[] = MULTILINE(
+
 @compute
 @workgroup_size(256)
 fn kernel_scale_inplace(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -922,6 +953,10 @@ fn kernel_scale_inplace(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     set_dst_lin(global_id.x, get_dst_lin(global_id.x) * get_src1_lin(0u));
 }
+
+);
+
+static const char src_ggml_shader_kernel_sub[] = MULTILINE(
 
 
 @compute
@@ -938,6 +973,10 @@ fn kernel_sub(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // set_dst_lin(global_id.x, get_src0_lin(global_id.x) - get_src1_lin(global_id.x));
 }
 
+);
+
+static const char src_ggml_shader_kernel_sqr[] = MULTILINE(
+
 
 @compute
 @workgroup_size(256)
@@ -949,6 +988,12 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
     set_dst_lin(global_id.x, x * x);
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_sum[] = MULTILINE(
+
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -976,6 +1021,11 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
     }
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_repeat[] = MULTILINE(
+
 
 @compute
 @workgroup_size(256)
@@ -990,6 +1040,11 @@ fn kernel_repeat(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     set_dst(global_id.x, global_id.y, global_id.z, get_src0(idx0, idx1, idx2));
 }
+
+);
+
+
+static const char src_ggml_shader_kernel_mul[] = MULTILINE(
 
 
 @compute
@@ -1008,6 +1063,12 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 
+);
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter[] = MULTILINE(
+
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1066,6 +1127,12 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     }
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_nk1[] = MULTILINE(
+
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1100,6 +1167,13 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
     }
 }
 
+);
+
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_stage1[] = MULTILINE(
+
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1151,6 +1225,11 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
     }
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_stage2[] = MULTILINE(
+
 @compute
 @workgroup_size(1)
 fn kernel_conv_1d_small_kern_back_filter_stage2(@builtin(global_invocation_id) global_id: vec3<u32>, 
@@ -1172,6 +1251,11 @@ fn kernel_conv_1d_small_kern_back_filter_stage2(@builtin(global_invocation_id) g
     }
     set_dst(global_id.y, global_id.z, wg_id.x, output);
 }
+
+);
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_input[] = MULTILINE(
 
 
 @compute
@@ -1214,6 +1298,10 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
     set_dst(global_id.x, global_id.y, global_id.z, output);
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_input_large_dil[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -1272,6 +1360,10 @@ fn kernel_conv_1d_small_kern_back_input_large_dil(@builtin(global_invocation_id)
     dst_v4[dst_idx] = output;
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_acc[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -1323,6 +1415,10 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
     set_dst(global_id.x, global_id.y, global_id.z, output);
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_add_and_tanh_back[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -1340,6 +1436,10 @@ fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>)
     dst_v4[global_id.x] = z;
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_add[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -1356,6 +1456,12 @@ fn kernel_add(@builtin(global_invocation_id) global_id: vec3<u32>) {
         get_src0(global_id.x, global_id.y, global_id.z) + get_src1(idx0, idx1, idx2));
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias[] = MULTILINE(
+
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1395,6 +1501,12 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
 }
 
 
+);
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias_stage1[] = MULTILINE(
+
+var<workgroup> workgroup_data_v4f: array<vec4f, 256>;
+
 @compute
 @workgroup_size(256)
 fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) global_id: vec3<u32>, 
@@ -1430,6 +1542,11 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
     }
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias_stage2[] = MULTILINE(
+
 
 @compute
 @workgroup_size(1)
@@ -1447,7 +1564,10 @@ fn kernel_conv_1d_small_kern_back_bias_stage2(@builtin(global_invocation_id) glo
     set_dst(0u, wg_id.x, 0u, output);
 }
 
+);
 
+
+static const char src_ggml_shader_kernel_special_adam_step[] = MULTILINE(
 
 
 @compute
@@ -1479,6 +1599,10 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
     set_dst_lin(global_id.x, x);
 }
 
+);
+
+
+static const char src_ggml_shader_kernel_special_adam_step_inplace[] = MULTILINE(
 
 @compute
 @workgroup_size(256)
@@ -1509,13 +1633,11 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
     set_dst_lin(global_id.x, x);
 }
 
-
-
 );
+
 #undef MULTILINE
-#else
-#include "shader_win.h"
-#endif
+
+
 
 #undef MIN
 #undef MAX
@@ -1565,7 +1687,6 @@ struct ggml_wgpu_context {
     WGPUDevice device;
     WGPUSupportedLimits limits;
     WGPUQueue queue;
-    WGPUShaderModule shader_module;
     WGPUBindGroupLayout bind_group_layout;
     WGPUPipelineLayout pipeline_layout;
 
@@ -1585,37 +1706,38 @@ struct ggml_wgpu_context {
 
     // custom kernels
 #define GGML_WGPU_DECL_KERNEL(name) \
-    WGPUComputePipeline pipeline_##name
+    WGPUShaderModule shader_module_##name; \
+    WGPUComputePipeline pipeline_##name;
 
-    GGML_WGPU_DECL_KERNEL(silu);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_simpl);
-    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti);
-    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti_large_dil);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets);
-    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
-    GGML_WGPU_DECL_KERNEL(add_and_trim);
-    GGML_WGPU_DECL_KERNEL(scale);
-    GGML_WGPU_DECL_KERNEL(scale_inplace);
-    GGML_WGPU_DECL_KERNEL(sub);
-    GGML_WGPU_DECL_KERNEL(sqr);
-    GGML_WGPU_DECL_KERNEL(sum);
-    GGML_WGPU_DECL_KERNEL(repeat);
-    GGML_WGPU_DECL_KERNEL(mul);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_input);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_input_large_dil);
-    GGML_WGPU_DECL_KERNEL(acc);
-    GGML_WGPU_DECL_KERNEL(add_and_tanh_back);
-    GGML_WGPU_DECL_KERNEL(add);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias);
-    GGML_WGPU_DECL_KERNEL(special_adam_step);
-    GGML_WGPU_DECL_KERNEL(special_adam_step_inplace);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage1);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage2);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage1);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage2);
-    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_nk1);
+    GGML_WGPU_DECL_KERNEL(silu)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_simpl)
+    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti)
+    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti_large_dil)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets)
+    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3)
+    GGML_WGPU_DECL_KERNEL(add_and_trim)
+    GGML_WGPU_DECL_KERNEL(scale)
+    GGML_WGPU_DECL_KERNEL(scale_inplace)
+    GGML_WGPU_DECL_KERNEL(sub)
+    GGML_WGPU_DECL_KERNEL(sqr)
+    GGML_WGPU_DECL_KERNEL(sum)
+    GGML_WGPU_DECL_KERNEL(repeat)
+    GGML_WGPU_DECL_KERNEL(mul)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_input)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_input_large_dil)
+    GGML_WGPU_DECL_KERNEL(acc)
+    GGML_WGPU_DECL_KERNEL(add_and_tanh_back)
+    GGML_WGPU_DECL_KERNEL(add)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias)
+    GGML_WGPU_DECL_KERNEL(special_adam_step)
+    GGML_WGPU_DECL_KERNEL(special_adam_step_inplace)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage1)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage2)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage1)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_stage2)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter_nk1)
 
 #undef GGML_WGPU_DECL_KERNEL
 };
@@ -1813,23 +1935,6 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
 
     ctx->n_buffers = 0;
 
-    // load library
-    ctx->shader_module = wgpuDeviceCreateShaderModule(
-      ctx->device, &(const WGPUShaderModuleDescriptor){
-                  .label = "ggml_shader_module",
-                  .nextInChain =
-                      (const WGPUChainedStruct *)&(
-                          const WGPUShaderModuleWGSLDescriptor){
-                          .chain =
-                              (const WGPUChainedStruct){
-                                  .sType = WGPUSType_ShaderModuleWGSLDescriptor,
-                              },
-                          .code = src_ggml_shader_wgsl,
-                      },
-              });
-
-    ASSERT_CHECK(ctx->shader_module);
-
     WGPUBindGroupLayoutEntry bindGroupLayoutEntries[GGML_WGPU_BINDINGS_SIZE] = {0};
     {
         for (int i = 0; i < GGML_WGPU_DIM_PARAMS_BINDING_INDEX; ++i) {
@@ -1876,17 +1981,40 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
     // load kernels
     {
 #define GGML_WGPU_ADD_KERNEL(name) \
-        ctx->pipeline_##name = wgpuDeviceCreateComputePipeline(     \
-            ctx->device, &(const WGPUComputePipelineDescriptor){    \
-                        .label = "compute_pipeline_" #name,         \
-                        .layout = ctx->pipeline_layout,             \
-                        .compute =                                  \
-                            (const WGPUProgrammableStageDescriptor){\
-                                .module = ctx->shader_module,       \
-                                .entryPoint = "kernel_" #name,      \
-                            },                                      \
-                    });                                             \
-        ASSERT_CHECK(ctx->pipeline_##name);
+        { \
+            char * shader_src = malloc(sizeof(src_ggml_shader_common_0) + sizeof(src_ggml_shader_common_1) + sizeof(src_ggml_shader_common_2) + sizeof(src_ggml_shader_kernel_##name) + 1); \
+            memset(shader_src, 0, sizeof(src_ggml_shader_common_0) + sizeof(src_ggml_shader_common_1) + sizeof(src_ggml_shader_common_2) + sizeof(src_ggml_shader_kernel_##name) + 1); \
+            strcat(shader_src, src_ggml_shader_common_0); \
+            strcat(shader_src, src_ggml_shader_common_1); \
+            strcat(shader_src, src_ggml_shader_common_2); \
+            strcat(shader_src, src_ggml_shader_kernel_##name); \
+            ctx->shader_module_##name = wgpuDeviceCreateShaderModule( \
+            ctx->device, &(const WGPUShaderModuleDescriptor){ \
+                        .label = "ggml_shader_module_" #name, \
+                        .nextInChain = \
+                            (const WGPUChainedStruct *)&( \
+                                const WGPUShaderModuleWGSLDescriptor){ \
+                                .chain = \
+                                    (const WGPUChainedStruct){ \
+                                        .sType = WGPUSType_ShaderModuleWGSLDescriptor, \
+                                    }, \
+                                .code = shader_src, \
+                            }, \
+                    }); \
+            ASSERT_CHECK(ctx->shader_module_##name); \
+            ctx->pipeline_##name = wgpuDeviceCreateComputePipeline(     \
+                ctx->device, &(const WGPUComputePipelineDescriptor){    \
+                            .label = "compute_pipeline_" #name,         \
+                            .layout = ctx->pipeline_layout,             \
+                            .compute =                                  \
+                                (const WGPUProgrammableStageDescriptor){\
+                                    .module = ctx->shader_module_##name,       \
+                                    .entryPoint = "kernel_" #name,      \
+                                },                                      \
+                        });                                             \
+            ASSERT_CHECK(ctx->pipeline_##name);                       \ 
+            free(shader_src); \
+        }
 
 
         GGML_WGPU_ADD_KERNEL(silu);
@@ -1933,44 +2061,44 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     }
 
 #define GGML_WGPU_DEL_KERNEL(name) \
-    if (ctx->pipeline_##name) wgpuComputePipelineRelease(ctx->pipeline_##name);
+    if (ctx->pipeline_##name) wgpuComputePipelineRelease(ctx->pipeline_##name); \
+    if (ctx->shader_module_##name) wgpuShaderModuleRelease(ctx->shader_module_##name);
 
-    GGML_WGPU_DEL_KERNEL(silu);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_simpl);
-    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti);
-    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti_large_dil);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets);
-    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
-    GGML_WGPU_DEL_KERNEL(add_and_trim);
-    GGML_WGPU_DEL_KERNEL(scale);
-    GGML_WGPU_DEL_KERNEL(scale_inplace);
-    GGML_WGPU_DEL_KERNEL(sub);
-    GGML_WGPU_DEL_KERNEL(sqr);
-    GGML_WGPU_DEL_KERNEL(sum);
-    GGML_WGPU_DEL_KERNEL(repeat);
-    GGML_WGPU_DEL_KERNEL(mul);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_input);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_input_large_dil);
-    GGML_WGPU_DEL_KERNEL(acc);
-    GGML_WGPU_DEL_KERNEL(add_and_tanh_back);
-    GGML_WGPU_DEL_KERNEL(add);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias);
-    GGML_WGPU_DEL_KERNEL(special_adam_step);
-    GGML_WGPU_DEL_KERNEL(special_adam_step_inplace);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage1);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage2);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage1);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage2);
-    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_nk1);
+    GGML_WGPU_DEL_KERNEL(silu)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_simpl)
+    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti)
+    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti_large_dil)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets)
+    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3)
+    GGML_WGPU_DEL_KERNEL(add_and_trim)
+    GGML_WGPU_DEL_KERNEL(scale)
+    GGML_WGPU_DEL_KERNEL(scale_inplace)
+    GGML_WGPU_DEL_KERNEL(sub)
+    GGML_WGPU_DEL_KERNEL(sqr)
+    GGML_WGPU_DEL_KERNEL(sum)
+    GGML_WGPU_DEL_KERNEL(repeat)
+    GGML_WGPU_DEL_KERNEL(mul)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_input)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_input_large_dil)
+    GGML_WGPU_DEL_KERNEL(acc)
+    GGML_WGPU_DEL_KERNEL(add_and_tanh_back)
+    GGML_WGPU_DEL_KERNEL(add)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias)
+    GGML_WGPU_DEL_KERNEL(special_adam_step)
+    GGML_WGPU_DEL_KERNEL(special_adam_step_inplace)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage1)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage2)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage1)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_stage2)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter_nk1)
 
 #undef GGML_WGPU_DEL_KERNEL
     
 
     if (ctx->pipeline_layout) wgpuPipelineLayoutRelease(ctx->pipeline_layout);
     if (ctx->bind_group_layout) wgpuBindGroupLayoutRelease(ctx->bind_group_layout);
-    if (ctx->shader_module) wgpuShaderModuleRelease(ctx->shader_module);
     for (int i=0; i<GGML_WGPU_NUM_EXTRA_UNIFORM_BINDINGS; i++) {
         if (ctx->placeholder_uniform_buffer[i]) wgpuBufferRelease(ctx->placeholder_uniform_buffer[i]);
     }
