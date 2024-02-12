@@ -971,7 +971,7 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 static const char src_ggml_shader_kernel_sum[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f16, 256>;
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -981,10 +981,10 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
     let ne00 = tensor_dimension_params.src[0].nb[1] / tensor_dimension_params.src[0].nb[0];
     let num_el_src0 = ne00 * u32(tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
 
-    var sum : f16 = 0.0;
+    var sum : f32 = 0.0;
     
     for (var i = local_id.x; i < num_el_src0; i = i + 256u) {
-        sum = sum + get_src0_lin(i);
+        sum = sum + f32(get_src0_lin(i));
     }
 
     workgroup_data[local_id.x] = sum;
@@ -995,7 +995,7 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
         for (var i = 0u; i < 256u; i = i + 1u) {
             sum = sum + workgroup_data[i];
         }
-        set_dst_lin(0u, sum);
+        set_dst_lin(0u, f16(sum));
     }
 }
 
