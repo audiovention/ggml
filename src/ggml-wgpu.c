@@ -62,7 +62,6 @@ static void handle_request_device(WGPURequestDeviceStatus status,
   *(WGPUDevice *)userdata = device;
 }
 
-static volatile bool S_WGPU_BUFFER_MAPPED = false;
 #ifdef WEBGPU_BACKEND_DAWN
 void sleep_ms(int milliseconds)
 {
@@ -78,29 +77,6 @@ void sleep_ms(int milliseconds)
     #endif
 }
 #endif
-static void wait_for_buffer_map(WGPUDevice device, WGPUQueue queue) {
-    while (!S_WGPU_BUFFER_MAPPED) {
-#ifdef WEBGPU_BACKEND_WGPU
-        // Non-standardized behavior: submit empty queue to flush callbacks
-        // (wgpu-native also has a wgpuDevicePoll but its API is more complex)
-        // wgpuQueueSubmit(queue, 0, NULL);
-        wgpuDevicePoll(device, true, NULL);
-#else
-        // Non-standard Dawn way
-        wgpuDeviceTick(device);
-        sleep_ms(1);
-#endif
-    }
-    S_WGPU_BUFFER_MAPPED = false;
-}
-static void handle_buffer_map(WGPUBufferMapAsyncStatus status, void *userdata) {
-  UNUSED(userdata);
-  if(status != WGPUBufferMapAsyncStatus_Success) {
-    printf(LOG_PREFIX " buffer_map status=%#.8x\n", status);
-  } else {
-    S_WGPU_BUFFER_MAPPED = true;
-  }
-}
 
 
 #define MULTILINE(...) #__VA_ARGS__
@@ -1699,6 +1675,7 @@ struct ggml_wgpu_context {
 
     int n_buffers;
     struct ggml_wgpu_buffer buffers[GGML_WGPU_MAX_BUFFERS];
+    bool wgpu_buffer_mapped_flag;
 
     WGPUQuerySet timestamp_queries;
     WGPUBuffer timestamp_queries_resolve_buffer;
@@ -1741,6 +1718,31 @@ struct ggml_wgpu_context {
 
 #undef GGML_WGPU_DECL_KERNEL
 };
+
+
+static void wait_for_buffer_map(struct ggml_wgpu_context* ctx) {
+    while (!(ctx->wgpu_buffer_mapped_flag)) {
+#ifdef WEBGPU_BACKEND_WGPU
+        // Non-standardized behavior: submit empty queue to flush callbacks
+        // (wgpu-native also has a wgpuDevicePoll but its API is more complex)
+        // wgpuQueueSubmit(ctx->queue, 0, NULL);
+        wgpuDevicePoll(ctx->device, true, NULL);
+#else
+        // Non-standard Dawn way
+        wgpuDeviceTick(ctx->device);
+        sleep_ms(1);
+#endif
+    }
+    ctx->wgpu_buffer_mapped_flag = false;
+}
+static void handle_buffer_map(WGPUBufferMapAsyncStatus status, void *userdata) {
+    struct ggml_wgpu_context* ctx = userdata;
+    if(status != WGPUBufferMapAsyncStatus_Success) {
+        printf(LOG_PREFIX " buffer_map status=%#.8x\n", status);
+    } else {
+        ctx->wgpu_buffer_mapped_flag = true;
+    }
+}
 
 
 ggml_log_callback ggml_wgpu_log_callback = NULL;
@@ -1817,6 +1819,8 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
     // Configure context
     struct ggml_wgpu_context * ctx = malloc(sizeof(struct ggml_wgpu_context));
     memset(ctx, 0, sizeof(struct ggml_wgpu_context));
+
+    ctx->wgpu_buffer_mapped_flag = false;
 
     WGPUInstanceDescriptor desc = {0};
 
@@ -2315,8 +2319,8 @@ void ggml_wgpu_read_back_buffer(
     wgpuQueueSubmit(ctx->queue, 1, &command_buffer);
 
     wgpuBufferMapAsync(ph, WGPUMapMode_Read, 0, original_size,
-                     handle_buffer_map, NULL);
-    wait_for_buffer_map(ctx->device, ctx->queue);
+                     handle_buffer_map, ctx);
+    wait_for_buffer_map(ctx);
     // wgpuDevicePoll(ctx->device, true, NULL);
 
     const void * buf = wgpuBufferGetConstMappedRange(ph, 0, original_size);
@@ -2395,8 +2399,8 @@ void ggml_wgpu_get_tensor(
     wgpuQueueSubmit(ctx->queue, 1, &command_buffer);
 
     wgpuBufferMapAsync(ph, WGPUMapMode_Read, 0, nbytes,
-                     handle_buffer_map, NULL);
-    wait_for_buffer_map(ctx->device, ctx->queue);
+                     handle_buffer_map, ctx);
+    wait_for_buffer_map(ctx);
     // wgpuDevicePoll(ctx->device, true, NULL);
 
     const void * buf = wgpuBufferGetConstMappedRange(ph, 0, nbytes);
@@ -2806,8 +2810,8 @@ void ggml_wgpu_graph_compute(
 
     if (ctx->timestamp_queries) {
         wgpuBufferMapAsync(ctx->timestamp_queries_read_buffer, WGPUMapMode_Read, 0, 8*(gf->n_nodes + 1),
-                        handle_buffer_map, NULL);
-        wait_for_buffer_map(ctx->device, ctx->queue);
+                        handle_buffer_map, ctx);
+        wait_for_buffer_map(ctx);
         // wgpuDevicePoll(ctx->device, true, NULL);
 
         const void * buf = wgpuBufferGetConstMappedRange(ctx->timestamp_queries_read_buffer, 0, 8*(gf->n_nodes + 1));
