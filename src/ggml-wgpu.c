@@ -1046,7 +1046,7 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f16, 256>;
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1077,7 +1077,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
 
     let base_offset = wg_id.x * d0 + input_len - real_input_len;
 
@@ -1087,7 +1087,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
         for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
             // output = output + 
             //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
-            output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+            output = output + f32(get_src0_lin(base_idx_src0 + isample)) * f32(get_src1_lin(base_idx_src1 + isample));
         }
         // workgroupBarrier();
     }
@@ -1101,7 +1101,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
             output = output + workgroup_data[i];
         }
 
-        set_dst(global_id.y, global_id.z, wg_id.x, output);
+        set_dst(global_id.y, global_id.z, wg_id.x, f16(output));
     }
 }
 
@@ -1110,7 +1110,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_nk1[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f16, 256>;
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1121,14 +1121,14 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
     let output_len = u32(tensor_dimension_params.src[1].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
     let base_offset = input_len - output_len + global_id.y * tensor_dimension_params.src[0].nb[1];
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2];
         let base_idx_src1 = ir * tensor_dimension_params.src[1].nb[2] + wg_id.x * tensor_dimension_params.src[1].nb[1];
         for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-            output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+            output = output + f32(get_src0_lin(base_idx_src0 + isample)) * f32(get_src1_lin(base_idx_src1 + isample));
         }
     }
 
@@ -1141,7 +1141,7 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
             output = output + workgroup_data[i];
         }
 
-        set_dst(wg_id.x, global_id.y, 0u, output);
+        set_dst(wg_id.x, global_id.y, 0u, f16(output));
     }
 }
 
