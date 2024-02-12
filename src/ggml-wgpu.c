@@ -1547,6 +1547,12 @@ fn kernel_conv_1d_small_kern_back_bias_stage2(@builtin(global_invocation_id) glo
 
 static const char src_ggml_shader_kernel_special_adam_step[] = MULTILINE(
 
+@group(0) @binding(2)
+var<storage,read_write> src2_f32: array<f32>;
+
+@group(0) @binding(3)
+var<storage,read_write> src3_f32: array<f32>;
+
 
 @compute
 @workgroup_size(256)
@@ -1563,8 +1569,8 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
 
     var x = f32(get_src0_lin(global_id.x));
     var g = f32(get_src1_lin(global_id.x));
-    var m = f32(get_src2_lin(global_id.x));
-    var v = f32(get_src3_lin(global_id.x));
+    var m = src2_f32[global_id.x];
+    var v = src3_f32[global_id.x];
 
     m = m*beta1 +   g*(1.0 - beta1);
     v = v*beta2 + g*g*(1.0 - beta2);
@@ -1572,8 +1578,8 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    set_src2_lin(global_id.x, f16(m));
-    set_src3_lin(global_id.x, f16(v));
+    src2_f32[global_id.x] = m;
+    src3_f32[global_id.x] = v;
     set_dst_lin(global_id.x, f16(x));
 }
 
@@ -1581,6 +1587,13 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
 
 
 static const char src_ggml_shader_kernel_special_adam_step_inplace[] = MULTILINE(
+
+@group(0) @binding(2)
+var<storage,read_write> src2_f32: array<f32>;
+
+@group(0) @binding(3)
+var<storage,read_write> src3_f32: array<f32>;
+
 
 @compute
 @workgroup_size(256)
@@ -1597,8 +1610,8 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
 
     var x = f32(get_dst_lin(global_id.x));
     var g = f32(get_src1_lin(global_id.x));
-    var m = f32(get_src2_lin(global_id.x));
-    var v = f32(get_src3_lin(global_id.x));
+    var m = src2_f32[global_id.x];
+    var v = src3_f32[global_id.x];
 
     m = m*beta1 +   g*(1.0 - beta1);
     v = v*beta2 + g*g*(1.0 - beta2);
@@ -1606,8 +1619,8 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    set_src2_lin(global_id.x, f16(m));
-    set_src3_lin(global_id.x, f16(v));
+    src2_f32[global_id.x] = m;
+    src3_f32[global_id.x] = v;
     set_dst_lin(global_id.x, f16(x));
 }
 
@@ -2496,7 +2509,11 @@ void ggml_wgpu_graph_compute(
             const enum ggml_type srcit = srci ? srci->type : GGML_TYPE_COUNT;
             // GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
 #if MY_OPTI_USE_F16
-            GGML_ASSERT(srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
+            if (dst->op == GGML_OP_SPECIAL_ADAM_STEP && (src_idx == 2 || src_idx == 3)) {
+                GGML_ASSERT(srcit == GGML_TYPE_F32);
+            } else {
+                GGML_ASSERT(srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
+            }
 #else
             GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_COUNT);
 #endif

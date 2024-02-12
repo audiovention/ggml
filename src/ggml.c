@@ -6032,8 +6032,8 @@ struct ggml_tensor * ggml_special_adam_step(
         struct ggml_tensor  * gradient) {
 
     struct ggml_tensor * result = ggml_view_tensor(ctx, param);
-    struct ggml_tensor * m = ggml_dup_tensor(ctx, param);
-    struct ggml_tensor * v = ggml_dup_tensor(ctx, param);
+    struct ggml_tensor * m = ggml_new_tensor(ctx, GGML_TYPE_F32, param->n_dims, param->ne);
+    struct ggml_tensor * v = ggml_new_tensor(ctx, GGML_TYPE_F32, param->n_dims, param->ne);
 
     const float sched = 1.f;
     const float alpha = 0.004f;
