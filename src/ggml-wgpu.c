@@ -1483,7 +1483,7 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias_stage1[] = MULTILINE(
 
-var<workgroup> workgroup_data_v4f: array<vec4h, 256>;
+var<workgroup> workgroup_data_v4f: array<vec4f, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1493,30 +1493,30 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
     let output_len = u32(tensor_dimension_params.src[0].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output = vec4h();
+    var output = vec4f();
 
     let base_idx_src0_base = (wg_id.x * tensor_dimension_params.src[0].nb[1] + wg_id.y * tensor_dimension_params.src[0].nb[2]) / 4u;
     for (var isample = local_id.x; isample < ((output_len+3u)/4u); isample = isample + 256u) {
-        let mult1 = vec4h(
-            f16((4u * isample) < output_len),
-            f16((4u * isample + 1u) < output_len),
-            f16((4u * isample + 2u) < output_len),
-            f16((4u * isample + 3u) < output_len)
+        let mult1 = vec4f(
+            f32((4u * isample) < output_len),
+            f32((4u * isample + 1u) < output_len),
+            f32((4u * isample + 2u) < output_len),
+            f32((4u * isample + 3u) < output_len)
         );
 
-        output = output + mult1 * src0_v4[base_idx_src0_base + isample];
+        output = output + mult1 * vec4f(src0_v4[base_idx_src0_base + isample]);
     }
 
     workgroup_data_v4f[local_id.x] = output;
     workgroupBarrier();
 
     if (0u == local_id.x) {
-        output = vec4h();
+        output = vec4f();
         for (var i = 0u; i < 256u; i = i + 1u) {
             output = output + workgroup_data_v4f[i];
         }
 
-        set_src5_lin(wg_id.y + wg_id.x * num_batches, output.x+output.y+output.z+output.w);
+        set_src5_lin(wg_id.y + wg_id.x * num_batches, f16(output.x+output.y+output.z+output.w));
     }
 }
 
@@ -1533,13 +1533,13 @@ fn kernel_conv_1d_small_kern_back_bias_stage2(@builtin(global_invocation_id) glo
     @builtin(local_invocation_id) local_id: vec3<u32>) {
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
 
     let base_idx_src1 = wg_id.x * num_batches;
     for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
-        output = output + get_src5_lin(base_idx_src1 + isample);
+        output = output + f32(get_src5_lin(base_idx_src1 + isample));
     }
-    set_dst(0u, wg_id.x, 0u, output);
+    set_dst(0u, wg_id.x, 0u, f16(output));
 }
 
 );
