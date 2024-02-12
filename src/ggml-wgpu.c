@@ -1253,10 +1253,10 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
         return;
     }
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
 
     if (accumulate) {
-        output = get_src2(global_id.x, global_id.y, global_id.z);
+        output = f32(get_src2(global_id.x, global_id.y, global_id.z));
     }
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
@@ -1268,12 +1268,12 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
                 // output = output + 
                 //     get_src0(idx_oc, global_id.y, ik) * 
                 //     get_src1(global_id.x - idx_offset, idx_oc, global_id.z);
-                output = output + get_src0_lin(base_idx_src0 + idx_oc) * get_src1_lin(base_idx_src1 + idx_oc * tensor_dimension_params.src[1].nb[1]);
+                output = output + f32(get_src0_lin(base_idx_src0 + idx_oc)) * f32(get_src1_lin(base_idx_src1 + idx_oc * tensor_dimension_params.src[1].nb[1]));
             }
         }
     }
 
-    set_dst(global_id.x, global_id.y, global_id.z, output);
+    set_dst(global_id.x, global_id.y, global_id.z, f16(output));
 }
 
 );
@@ -1407,11 +1407,11 @@ fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>)
         return;
     }
 
-    let x = src0_v4[global_id.x];
-    let y = src1_v4[global_id.x];
+    let x = vec4f(src0_v4[global_id.x]);
+    let y = vec4f(src1_v4[global_id.x]);
     let z = (1.0 - x*x)*y;
 
-    dst_v4[global_id.x] = z;
+    dst_v4[global_id.x] = vec4h(z);
 }
 
 );
