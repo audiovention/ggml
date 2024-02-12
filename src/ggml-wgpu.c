@@ -1555,16 +1555,16 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
         return;
     }
 
-    let beta1: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][0]));
-    let beta2: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][1]));
-    let beta1h: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][2]));
-    let beta2h: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][3]));
-    let eps: f16 = f16(bitcast<f32>(tensor_dimension_params.params[1][0]));
+    let beta1 = bitcast<f32>(tensor_dimension_params.params[0][0]);
+    let beta2 = bitcast<f32>(tensor_dimension_params.params[0][1]);
+    let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
+    let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
+    let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
 
-    var x = get_src0_lin(global_id.x);
-    var g = get_src1_lin(global_id.x);
-    var m = get_src2_lin(global_id.x);
-    var v = get_src3_lin(global_id.x);
+    var x = f32(get_src0_lin(global_id.x));
+    var g = f32(get_src1_lin(global_id.x));
+    var m = f32(get_src2_lin(global_id.x));
+    var v = f32(get_src3_lin(global_id.x));
 
     m = m*beta1 +   g*(1.0 - beta1);
     v = v*beta2 + g*g*(1.0 - beta2);
@@ -1572,9 +1572,9 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    set_src2_lin(global_id.x, m);
-    set_src3_lin(global_id.x, v);
-    set_dst_lin(global_id.x, x);
+    set_src2_lin(global_id.x, f16(m));
+    set_src3_lin(global_id.x, f16(v));
+    set_dst_lin(global_id.x, f16(x));
 }
 
 );
@@ -1589,16 +1589,16 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
         return;
     }
 
-    let beta1: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][0]));
-    let beta2: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][1]));
-    let beta1h: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][2]));
-    let beta2h: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][3]));
-    let eps: f16 = f16(bitcast<f32>(tensor_dimension_params.params[1][0]));
+    let beta1 = bitcast<f32>(tensor_dimension_params.params[0][0]);
+    let beta2 = bitcast<f32>(tensor_dimension_params.params[0][1]);
+    let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
+    let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
+    let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
 
-    var x = get_dst_lin(global_id.x);
-    var g = get_src1_lin(global_id.x);
-    var m = get_src2_lin(global_id.x);
-    var v = get_src3_lin(global_id.x);
+    var x = f32(get_dst_lin(global_id.x));
+    var g = f32(get_src1_lin(global_id.x));
+    var m = f32(get_src2_lin(global_id.x));
+    var v = f32(get_src3_lin(global_id.x));
 
     m = m*beta1 +   g*(1.0 - beta1);
     v = v*beta2 + g*g*(1.0 - beta2);
@@ -1606,9 +1606,9 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    set_src2_lin(global_id.x, m);
-    set_src3_lin(global_id.x, v);
-    set_dst_lin(global_id.x, x);
+    set_src2_lin(global_id.x, f16(m));
+    set_src3_lin(global_id.x, f16(v));
+    set_dst_lin(global_id.x, f16(x));
 }
 
 );
