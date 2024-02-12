@@ -83,6 +83,8 @@ void sleep_ms(int milliseconds)
 
 static const char src_ggml_shader_common_0[] = MULTILINE(
 
+enable f16;
+
 struct TensorDimensionParam {
         ne : vec4i,
         nb : vec4u,
@@ -99,47 +101,47 @@ struct TensorDimensionParams {
 
 
 @group(0) @binding(0)
-var<storage,read_write> src0: array<f32>;
+var<storage,read_write> src0: array<f16>;
 
 @group(0) @binding(1)
-var<storage,read_write> src1: array<f32>;
+var<storage,read_write> src1: array<f16>;
 
 @group(0) @binding(2)
-var<storage,read_write> src2: array<f32>;
+var<storage,read_write> src2: array<f16>;
 
 @group(0) @binding(3)
-var<storage,read_write> src3: array<f32>;
+var<storage,read_write> src3: array<f16>;
 
 @group(0) @binding(4)
-var<storage,read_write> src4: array<f32>;
+var<storage,read_write> src4: array<f16>;
 
 @group(0) @binding(5)
-var<storage,read_write> src5: array<f32>;
+var<storage,read_write> src5: array<f16>;
 
 @group(0) @binding(6)
-var<storage,read_write> dst: array<f32>;
+var<storage,read_write> dst: array<f16>;
 
 
 @group(0) @binding(0)
-var<storage,read_write> src0_v4: array<vec4f>;
+var<storage,read_write> src0_v4: array<vec4h>;
 
 @group(0) @binding(1)
-var<storage,read_write> src1_v4: array<vec4f>;
+var<storage,read_write> src1_v4: array<vec4h>;
 
 @group(0) @binding(2)
-var<storage,read_write> src2_v4: array<vec4f>;
+var<storage,read_write> src2_v4: array<vec4h>;
 
 @group(0) @binding(3)
-var<storage,read_write> src3_v4: array<vec4f>;
+var<storage,read_write> src3_v4: array<vec4h>;
 
 @group(0) @binding(4)
-var<storage,read_write> src4_v4: array<vec4f>;
+var<storage,read_write> src4_v4: array<vec4h>;
 
 @group(0) @binding(5)
-var<storage,read_write> src5_v4: array<vec4f>;
+var<storage,read_write> src5_v4: array<vec4h>;
 
 @group(0) @binding(6)
-var<storage,read_write> dst_v4: array<vec4f>;
+var<storage,read_write> dst_v4: array<vec4h>;
 
 
 
@@ -154,7 +156,7 @@ var<uniform> extra_uniform0: array<vec4f, 1024>;
 var<uniform> extra_uniform1: array<vec4f, 1024>;
 
 
-fn get_src0(x: u32, y: u32, z: u32) -> f32 {
+fn get_src0(x: u32, y: u32, z: u32) -> f16 {
     return src0[x 
                 //   * tensor_dimension_params.src[0].nb[0]
                 + y * tensor_dimension_params.src[0].nb[1] +
@@ -163,7 +165,7 @@ fn get_src0(x: u32, y: u32, z: u32) -> f32 {
                     ];
 }
 
-fn get_src1(x: u32, y: u32, z: u32) -> f32 {
+fn get_src1(x: u32, y: u32, z: u32) -> f16 {
     return src1[x 
                 //   * tensor_dimension_params.src[1].nb[0]
                 + y * tensor_dimension_params.src[1].nb[1] +
@@ -172,7 +174,7 @@ fn get_src1(x: u32, y: u32, z: u32) -> f32 {
                     ];
 }
 
-fn get_src2(x: u32, y: u32, z: u32) -> f32 {
+fn get_src2(x: u32, y: u32, z: u32) -> f16 {
     return src2[x 
                 //   * tensor_dimension_params.src[2].nb[0]
                 + y * tensor_dimension_params.src[2].nb[1] +
@@ -181,7 +183,7 @@ fn get_src2(x: u32, y: u32, z: u32) -> f32 {
                     ];
 }
 
-fn get_src3(x: u32, y: u32, z: u32) -> f32 {
+fn get_src3(x: u32, y: u32, z: u32) -> f16 {
     return src3[x 
                 //   * tensor_dimension_params.src[3].nb[0]
                 + y * tensor_dimension_params.src[3].nb[1] +
@@ -190,7 +192,7 @@ fn get_src3(x: u32, y: u32, z: u32) -> f32 {
                     ];
 }
 
-fn get_src4(x: u32, y: u32, z: u32) -> f32 {
+fn get_src4(x: u32, y: u32, z: u32) -> f16 {
     return src4[x 
                 //   * tensor_dimension_params.src[4].nb[0]
                 + y * tensor_dimension_params.src[4].nb[1] +
@@ -199,7 +201,7 @@ fn get_src4(x: u32, y: u32, z: u32) -> f32 {
                     ];
 }
 
-fn get_src5(x: u32, y: u32, z: u32) -> f32 {
+fn get_src5(x: u32, y: u32, z: u32) -> f16 {
     return src5[x 
                 //   * tensor_dimension_params.src[5].nb[0]
                 + y * tensor_dimension_params.src[5].nb[1] +
@@ -208,7 +210,7 @@ fn get_src5(x: u32, y: u32, z: u32) -> f32 {
                     ];
 }
 
-fn set_dst(x: u32, y: u32, z: u32, v: f32) {
+fn set_dst(x: u32, y: u32, z: u32, v: f16) {
     dst[ x 
         //    * tensor_dimension_params.dst.nb[0]
          + y * tensor_dimension_params.dst.nb[1] +
@@ -222,49 +224,49 @@ fn set_dst(x: u32, y: u32, z: u32, v: f32) {
 static const char src_ggml_shader_common_1[] = MULTILINE(
 
 
-fn get_src0_lin(x: u32) -> f32 {
+fn get_src0_lin(x: u32) -> f16 {
     return src0[x 
                 //   * tensor_dimension_params.src[0].nb[0]
                     // + tensor_dimension_params.src[0].offset
                     ];
 }
 
-fn get_src1_lin(x: u32) -> f32 {
+fn get_src1_lin(x: u32) -> f16 {
     return src1[x 
                 //   * tensor_dimension_params.src[1].nb[0]
                     // + tensor_dimension_params.src[1].offset
                     ];
 }
 
-fn get_src2_lin(x: u32) -> f32 {
+fn get_src2_lin(x: u32) -> f16 {
     return src2[x 
                 //   * tensor_dimension_params.src[2].nb[0]
                     // + tensor_dimension_params.src[2].offset
                     ];
 }
 
-fn get_src3_lin(x: u32) -> f32 {
+fn get_src3_lin(x: u32) -> f16 {
     return src3[x 
                 //   * tensor_dimension_params.src[3].nb[0]
                     // + tensor_dimension_params.src[3].offset
                     ];
 }
 
-fn get_src4_lin(x: u32) -> f32 {
+fn get_src4_lin(x: u32) -> f16 {
     return src4[x 
                 //   * tensor_dimension_params.src[4].nb[0]
                     // + tensor_dimension_params.src[4].offset
                     ];
 }
 
-fn get_src5_lin(x: u32) -> f32 {
+fn get_src5_lin(x: u32) -> f16 {
     return src5[x 
                 //   * tensor_dimension_params.src[5].nb[0]
                     // + tensor_dimension_params.src[5].offset
                     ];
 }
 
-fn get_dst_lin(x: u32) -> f32 {
+fn get_dst_lin(x: u32) -> f16 {
     return dst[ x 
         //    * tensor_dimension_params.dst.nb[0]
             // + tensor_dimension_params.dst.offset
@@ -272,49 +274,49 @@ fn get_dst_lin(x: u32) -> f32 {
 }
 
 
-fn set_dst_lin(x: u32, v: f32) {
+fn set_dst_lin(x: u32, v: f16) {
     dst[ x 
         //    * tensor_dimension_params.dst.nb[0]
             // + tensor_dimension_params.dst.offset
              ] = v;
 }
 
-fn set_src0_lin(x: u32, v: f32) {
+fn set_src0_lin(x: u32, v: f16) {
     src0[ x 
         //    * tensor_dimension_params.src[0].nb[0]
             // + tensor_dimension_params.src[0].offset
              ] = v;
 }
 
-fn set_src1_lin(x: u32, v: f32) {
+fn set_src1_lin(x: u32, v: f16) {
     src1[ x 
         //    * tensor_dimension_params.src[1].nb[0]
             // + tensor_dimension_params.src[1].offset
              ] = v;
 }
 
-fn set_src2_lin(x: u32, v: f32) {
+fn set_src2_lin(x: u32, v: f16) {
     src2[ x 
         //    * tensor_dimension_params.src[2].nb[0]
             // + tensor_dimension_params.src[2].offset
              ] = v;
 }
 
-fn set_src3_lin(x: u32, v: f32) {
+fn set_src3_lin(x: u32, v: f16) {
     src3[ x 
         //    * tensor_dimension_params.src[3].nb[0]
             // + tensor_dimension_params.src[3].offset
              ] = v;
 }
 
-fn set_src4_lin(x: u32, v: f32) {
+fn set_src4_lin(x: u32, v: f16) {
     src4[ x 
         //    * tensor_dimension_params.src[4].nb[0]
             // + tensor_dimension_params.src[4].offset
              ] = v;
 }
 
-fn set_src5_lin(x: u32, v: f32) {
+fn set_src5_lin(x: u32, v: f16) {
     src5[ x 
         //    * tensor_dimension_params.src[5].nb[0]
             // + tensor_dimension_params.src[5].offset
@@ -326,7 +328,7 @@ fn set_src5_lin(x: u32, v: f32) {
 static const char src_ggml_shader_common_2[] = MULTILINE(
 
 
-fn set_src0(x: u32, y: u32, z: u32, v: f32) {
+fn set_src0(x: u32, y: u32, z: u32, v: f16) {
     src0[ x 
         //    * tensor_dimension_params.src[0].nb[0]
          + y * tensor_dimension_params.src[0].nb[1] +
@@ -335,7 +337,7 @@ fn set_src0(x: u32, y: u32, z: u32, v: f32) {
              ] = v;
 }
 
-fn set_src1(x: u32, y: u32, z: u32, v: f32) {
+fn set_src1(x: u32, y: u32, z: u32, v: f16) {
     src1[ x 
         //    * tensor_dimension_params.src[1].nb[0]
          + y * tensor_dimension_params.src[1].nb[1] +
@@ -344,7 +346,7 @@ fn set_src1(x: u32, y: u32, z: u32, v: f32) {
              ] = v;
 }
 
-fn set_src2(x: u32, y: u32, z: u32, v: f32) {
+fn set_src2(x: u32, y: u32, z: u32, v: f16) {
     src2[ x 
         //    * tensor_dimension_params.src[2].nb[0]
          + y * tensor_dimension_params.src[2].nb[1] +
@@ -353,7 +355,7 @@ fn set_src2(x: u32, y: u32, z: u32, v: f32) {
              ] = v;
 }
 
-fn set_src3(x: u32, y: u32, z: u32, v: f32) {
+fn set_src3(x: u32, y: u32, z: u32, v: f16) {
     src3[ x 
         //    * tensor_dimension_params.src[3].nb[0]
          + y * tensor_dimension_params.src[3].nb[1] +
@@ -362,7 +364,7 @@ fn set_src3(x: u32, y: u32, z: u32, v: f32) {
              ] = v;
 }
 
-fn set_src4(x: u32, y: u32, z: u32, v: f32) {
+fn set_src4(x: u32, y: u32, z: u32, v: f16) {
     src4[ x 
         //    * tensor_dimension_params.src[4].nb[0]
          + y * tensor_dimension_params.src[4].nb[1] +
@@ -371,7 +373,7 @@ fn set_src4(x: u32, y: u32, z: u32, v: f32) {
              ] = v;
 }
 
-fn set_src5(x: u32, y: u32, z: u32, v: f32) {
+fn set_src5(x: u32, y: u32, z: u32, v: f16) {
     src5[ x 
         //    * tensor_dimension_params.src[5].nb[0]
          + y * tensor_dimension_params.src[5].nb[1] +
@@ -434,12 +436,12 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
 
     if (has_bias) {
-        let bias_idx = global_id.y * tensor_dimension_params.src[2].nb[1];
-        let bias = extra_uniform1[bias_idx/4u][bias_idx%4u];
-        // let bias = get_src2(0u, global_id.y, 0u);
+        // let bias_idx = global_id.y * tensor_dimension_params.src[2].nb[1];
+        // let bias = f16(extra_uniform1[bias_idx/4u][bias_idx%4u]);
+        let bias = get_src2(0u, global_id.y, 0u);
         output += bias;
     }
 
@@ -454,9 +456,9 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
         let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
             let input = get_src1_lin(in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
-            // let kernel = get_src0(global_id.y, ic, ik);
-            let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
-            let kernel = extra_uniform0[kernel_idx/4u][kernel_idx%4u];
+            let kernel = get_src0(global_id.y, ic, ik);
+            // let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
+            // let kernel = f16(extra_uniform0[kernel_idx/4u][kernel_idx%4u]);
             output = output + input * kernel;
         }
     }
@@ -497,8 +499,8 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
         return;
     }
 
-    // var output : f32 = 0.0;
-    var output = vec4f();
+    // var output : f16 = 0.0;
+    var output = vec4h();
 
     if (has_bias) {
         // let bias_idx = global_id.y * tensor_dimension_params.src[2].nb[1];
@@ -553,7 +555,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 
 // const nk_8x8x3 = 3u;
 // const channels_8x8x3 = 8u;
-// var<workgroup> workgroup_data_input_8x8x3: array<array<vec4f, channels_8x8x3>, 32>;
+// var<workgroup> workgroup_data_input_8x8x3: array<array<vec4h, channels_8x8x3>, 32>;
 // @compute
 // @workgroup_size(32, channels_8x8x3)
 // fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) global_id: vec3<u32>, 
@@ -575,7 +577,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 //         return;
 //     }
 
-//     var kernel = array<array<f32, channels_8x8x3>, nk_8x8x3>();
+//     var kernel = array<array<f16, channels_8x8x3>, nk_8x8x3>();
 //     for (var ik = 0u; ik < nk_8x8x3; ik = ik + 1u) {
 //         for (var ic = 0u; ic < channels_8x8x3; ic = ic + 1u) {
 //             kernel[ik][ic] = get_src0(local_id.y, ic, ik);
@@ -586,7 +588,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 //     let input_values_vec_this_thread = values_vec_this_thread + nk_8x8x3 - 1u;
 
 
-//     var output = array<vec4f, nk_8x8x3>();
+//     var output = array<vec4h, nk_8x8x3>();
 
 //     var bias = 0.0;
 //     if (has_bias) {
@@ -601,7 +603,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 //         workgroup_data_input_8x8x3[local_id.x][local_id.y] = src1_v4[input_base_idx + i * d0d4];
 //         workgroupBarrier();
 
-//         var src3_here = vec4f();
+//         var src3_here = vec4h();
 //         let dst_offs_vec_idx = (max(i, nk_8x8x3 - 1u) + 1u - nk_8x8x3) * d0d4;
 //         if (has_inject_signal && i >= (nk_8x8x3 - 1u)) {
 //             src3_here = src3_v4[src3_base_idx + dst_offs_vec_idx];
@@ -629,7 +631,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 //             dst_v4[dst_base_idx + dst_offs_vec_idx] = output[reg_idx];
 //         }
 
-//         output[reg_idx] = vec4f();
+//         output[reg_idx] = vec4h();
 //     }
 // }
 
@@ -645,8 +647,8 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 // const total_kernel_invocs_warp = kernel_conv_1d_small_kern_output_channels_per_warp * kernel_conv_1d_small_kern_num_threads_x;
 // const iters_to_load_kernel = (kernel_conv_1d_small_kern_total_kernel_size + total_kernel_invocs_warp - 1u) / total_kernel_invocs_warp;
 
-// var<workgroup> workgroup_data_kernel: array<array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_nk>, kernel_conv_1d_small_kern_output_channels_per_warp>;
-// var<workgroup> workgroup_data_input:  array<array<f32, kernel_conv_1d_small_kern_num_threads_x>, kernel_conv_1d_small_kern_input_channels>;
+// var<workgroup> workgroup_data_kernel: array<array<array<f16, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_nk>, kernel_conv_1d_small_kern_output_channels_per_warp>;
+// var<workgroup> workgroup_data_input:  array<array<f16, kernel_conv_1d_small_kern_num_threads_x>, kernel_conv_1d_small_kern_input_channels>;
 
 
 // fn get_dilated_start_idx(x: u32, d0: u32) -> u32 {
@@ -706,7 +708,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 
 //     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-//     var output = array<f32, kernel_conv_1d_small_kern_output_values_per_thread>();
+//     var output = array<f16, kernel_conv_1d_small_kern_output_values_per_thread>();
 
 //     if (has_bias) {
 //         let ph = get_src2(0u, global_id.y, 0u);
@@ -791,7 +793,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 
 //     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-//     var output = array<f32, kernel_conv_1d_small_kern_output_values_per_thread>();
+//     var output = array<f16, kernel_conv_1d_small_kern_output_values_per_thread>();
 
 //     if (has_bias) {
 //         let ph = get_src2(0u, global_id.y, 0u);
@@ -862,7 +864,7 @@ fn kernel_conv_1d_small_kern_simpl(@builtin(global_invocation_id) global_id: vec
         return;
     }
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
 
     if (has_bias) {
         output += get_src2(0u, global_id.y, 0u);
@@ -969,7 +971,7 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 static const char src_ggml_shader_kernel_sum[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f32, 256>;
+var<workgroup> workgroup_data: array<f16, 256>;
 
 @compute
 @workgroup_size(256)
@@ -979,7 +981,7 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
     let ne00 = tensor_dimension_params.src[0].nb[1] / tensor_dimension_params.src[0].nb[0];
     let num_el_src0 = ne00 * u32(tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
 
-    var sum : f32 = 0.0;
+    var sum : f16 = 0.0;
     
     for (var i = local_id.x; i < num_el_src0; i = i + 256u) {
         sum = sum + get_src0_lin(i);
@@ -1044,7 +1046,7 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f32, 256>;
+var<workgroup> workgroup_data: array<f16, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1075,7 +1077,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
 
     let base_offset = wg_id.x * d0 + input_len - real_input_len;
 
@@ -1108,7 +1110,7 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_nk1[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f32, 256>;
+var<workgroup> workgroup_data: array<f16, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1119,7 +1121,7 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
     let output_len = u32(tensor_dimension_params.src[1].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
     let base_offset = input_len - output_len + global_id.y * tensor_dimension_params.src[0].nb[1];
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
@@ -1149,7 +1151,7 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_stage1[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f32, 256>;
+var<workgroup> workgroup_data: array<f16, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1174,7 +1176,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
 
     let base_offset = idx_ik * d0 + input_len - real_input_len;
 
@@ -1215,7 +1217,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage2(@builtin(global_invocation_id) g
     let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
     let output_channels = u32(tensor_dimension_params.dst.ne[0]);
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
 
     let nb1 = num_batches;
     let nb2 = nb1 * output_channels;
@@ -1251,7 +1253,7 @@ fn kernel_conv_1d_small_kern_back_input(@builtin(global_invocation_id) global_id
         return;
     }
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
 
     if (accumulate) {
         output = get_src2(global_id.x, global_id.y, global_id.z);
@@ -1299,7 +1301,7 @@ fn kernel_conv_1d_small_kern_back_input_large_dil(@builtin(global_invocation_id)
     }
 
 
-    var output = vec4f();
+    var output = vec4h();
 
     if (accumulate) {
         let idx_src2 = (global_id.z * tensor_dimension_params.src[2].nb[2] +
@@ -1313,11 +1315,11 @@ fn kernel_conv_1d_small_kern_back_input_large_dil(@builtin(global_invocation_id)
         if (mult_idx >= idx_offset && (mult_idx < (idx_offset+output_len))) {
             let base_idx_src0 = global_id.y * tensor_dimension_params.src[0].nb[1] + ik * tensor_dimension_params.src[0].nb[2];
             let base_idx_src1 = global_id.z * tensor_dimension_params.src[1].nb[2] + (mult_idx - idx_offset);
-            let mult1 = vec4f(
-                f32((mult_idx - idx_offset) < output_len),
-                f32((mult_idx - idx_offset + 1u) < output_len),
-                f32((mult_idx - idx_offset + 2u) < output_len),
-                f32((mult_idx - idx_offset + 3u) < output_len)
+            let mult1 = vec4h(
+                f16((mult_idx - idx_offset) < output_len),
+                f16((mult_idx - idx_offset + 1u) < output_len),
+                f16((mult_idx - idx_offset + 2u) < output_len),
+                f16((mult_idx - idx_offset + 3u) < output_len)
             );
             for (var idx_oc = 0u; idx_oc < output_channels; idx_oc = idx_oc + 1u) {
                 // output = output + 
@@ -1362,7 +1364,7 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
     if (!zero_out_accumulator) {
         output = get_src0(global_id.x, global_id.y, global_id.z);
     }
@@ -1437,7 +1439,7 @@ fn kernel_add(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f32, 256>;
+var<workgroup> workgroup_data: array<f16, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1448,7 +1450,7 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
     let output_len = u32(tensor_dimension_params.src[0].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2];
@@ -1481,7 +1483,7 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias_stage1[] = MULTILINE(
 
-var<workgroup> workgroup_data_v4f: array<vec4f, 256>;
+var<workgroup> workgroup_data_v4f: array<vec4h, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1491,15 +1493,15 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
     let output_len = u32(tensor_dimension_params.src[0].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output = vec4f();
+    var output = vec4h();
 
     let base_idx_src0_base = (wg_id.x * tensor_dimension_params.src[0].nb[1] + wg_id.y * tensor_dimension_params.src[0].nb[2]) / 4u;
     for (var isample = local_id.x; isample < ((output_len+3u)/4u); isample = isample + 256u) {
-        let mult1 = vec4f(
-            f32((4u * isample) < output_len),
-            f32((4u * isample + 1u) < output_len),
-            f32((4u * isample + 2u) < output_len),
-            f32((4u * isample + 3u) < output_len)
+        let mult1 = vec4h(
+            f16((4u * isample) < output_len),
+            f16((4u * isample + 1u) < output_len),
+            f16((4u * isample + 2u) < output_len),
+            f16((4u * isample + 3u) < output_len)
         );
 
         output = output + mult1 * src0_v4[base_idx_src0_base + isample];
@@ -1509,7 +1511,7 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
     workgroupBarrier();
 
     if (0u == local_id.x) {
-        output = vec4f();
+        output = vec4h();
         for (var i = 0u; i < 256u; i = i + 1u) {
             output = output + workgroup_data_v4f[i];
         }
@@ -1531,7 +1533,7 @@ fn kernel_conv_1d_small_kern_back_bias_stage2(@builtin(global_invocation_id) glo
     @builtin(local_invocation_id) local_id: vec3<u32>) {
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output : f32 = 0.0;
+    var output : f16 = 0.0;
 
     let base_idx_src1 = wg_id.x * num_batches;
     for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
@@ -1553,11 +1555,11 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
         return;
     }
 
-    let beta1 = bitcast<f32>(tensor_dimension_params.params[0][0]);
-    let beta2 = bitcast<f32>(tensor_dimension_params.params[0][1]);
-    let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
-    let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
-    let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
+    let beta1: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][0]));
+    let beta2: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][1]));
+    let beta1h: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][2]));
+    let beta2h: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][3]));
+    let eps: f16 = f16(bitcast<f32>(tensor_dimension_params.params[1][0]));
 
     var x = get_src0_lin(global_id.x);
     var g = get_src1_lin(global_id.x);
@@ -1587,11 +1589,11 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
         return;
     }
 
-    let beta1 = bitcast<f32>(tensor_dimension_params.params[0][0]);
-    let beta2 = bitcast<f32>(tensor_dimension_params.params[0][1]);
-    let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
-    let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
-    let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
+    let beta1: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][0]));
+    let beta2: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][1]));
+    let beta1h: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][2]));
+    let beta2h: f16 = f16(bitcast<f32>(tensor_dimension_params.params[0][3]));
+    let eps: f16 = f16(bitcast<f32>(tensor_dimension_params.params[1][0]));
 
     var x = get_dst_lin(global_id.x);
     var g = get_src1_lin(global_id.x);
@@ -2453,7 +2455,11 @@ void ggml_wgpu_graph_compute(
         }
 
         // GGML_ASSERT(dst->type == GGML_TYPE_F32 || dst->type == GGML_TYPE_F16);
+#if MY_OPTI_USE_F16
+        GGML_ASSERT(dst->type == GGML_TYPE_F16);
+#else
         GGML_ASSERT(dst->type == GGML_TYPE_F32);
+#endif
         size_t offs_dst  = 0;
         WGPUBuffer id_dst  = ggml_wgpu_get_buffer(ctx, dst,  &offs_dst);
         GGML_ASSERT(id_dst);
@@ -2489,7 +2495,12 @@ void ggml_wgpu_graph_compute(
 
             const enum ggml_type srcit = srci ? srci->type : GGML_TYPE_COUNT;
             // GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
+#if MY_OPTI_USE_F16
+            GGML_ASSERT(srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
+#else
             GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_COUNT);
+#endif
+
             size_t offs_srci = 0;
             WGPUBuffer id_srci = srci ? ggml_wgpu_get_buffer(ctx, srci, &offs_srci) : NULL;
 

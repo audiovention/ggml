@@ -6167,8 +6167,13 @@ static struct ggml_tensor * ggml_acc_impl(
         bool zero_out_accumulator) {
     GGML_ASSERT(ggml_nelements(b) <= ggml_nelements(a));
     GGML_ASSERT(ggml_is_contiguous(a));
+#if MY_OPTI_USE_F16
+    GGML_ASSERT(a->type == GGML_TYPE_F16);
+    GGML_ASSERT(b->type == GGML_TYPE_F16);
+#else
     GGML_ASSERT(a->type == GGML_TYPE_F32);
     GGML_ASSERT(b->type == GGML_TYPE_F32);
+#endif
 
 
     // Few extra limitations to simplify wgpu kernel
@@ -8106,7 +8111,11 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
         GGML_ASSERT(inject_signal->ne[1] == filter->ne[0]);
         GGML_ASSERT(inject_signal->ne[2] == signal->ne[2]);
         GGML_ASSERT(inject_signal->ne[3] == 1);
+#if MY_OPTI_USE_F16
+        GGML_ASSERT(inject_signal->type == GGML_TYPE_F16);
+#else
         GGML_ASSERT(inject_signal->type == GGML_TYPE_F32);
+#endif
         GGML_ASSERT(inject_signal->ne[0] >= realOL);
     }
 
@@ -8127,7 +8136,11 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
         signal->ne[2],
         1,
     };
+#if MY_OPTI_USE_F16
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F16, 3, ne);
+#else
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+#endif
 
     int32_t params[] = { s0, p0, d0, apply_tanh ? 1 : 0, bias ? 1 : 0, inject_signal ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
@@ -8181,7 +8194,11 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_input(
         GGML_ASSERT(accumulator->ne[2] == ne[2]);
         GGML_ASSERT(accumulator->ne[3] == ne[3]);
     }
+#if MY_OPTI_USE_F16
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F16, 3, ne);
+#else
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+#endif
 
     int32_t params[] = { s0, p0, d0, accumulator ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
@@ -8225,7 +8242,11 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_filter(
         kernel_size,
         1,
     };
+#if MY_OPTI_USE_F16
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F16, 3, ne);
+#else
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+#endif
 
     int32_t params[] = { s0, p0, d0 };
     ggml_set_op_params(result, params, sizeof(params));
@@ -8258,7 +8279,11 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_bias(
         1,
         1,
     };
+#if MY_OPTI_USE_F16
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F16, 3, ne);
+#else
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+#endif
 
     result->op = GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
