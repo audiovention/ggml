@@ -1151,7 +1151,7 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_stage1[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f16, 256>;
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1176,14 +1176,14 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
 
     let base_offset = idx_ik * d0 + input_len - real_input_len;
 
     let base_idx_src0 = base_offset + idx_ir * tensor_dimension_params.src[0].nb[2] + idx_ic * tensor_dimension_params.src[0].nb[1];
     let base_idx_src1 = idx_ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
     for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-        output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+        output = output + f32(get_src0_lin(base_idx_src0 + isample)) * f32(get_src1_lin(base_idx_src1 + isample));
     }
 
     workgroup_data[local_id.x] = output;
@@ -1199,7 +1199,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
         let nb2 = nb1 * output_channels;
         let nb3 = nb2 * input_channels;
 
-        set_src5_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik, output);
+        set_src5_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik, f16(output));
     }
 }
 
@@ -1217,7 +1217,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage2(@builtin(global_invocation_id) g
     let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
     let output_channels = u32(tensor_dimension_params.dst.ne[0]);
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
 
     let nb1 = num_batches;
     let nb2 = nb1 * output_channels;
@@ -1225,9 +1225,9 @@ fn kernel_conv_1d_small_kern_back_filter_stage2(@builtin(global_invocation_id) g
 
     let base_idx_src1 = nb1 * global_id.y + nb2 * global_id.z +  nb3 * wg_id.x;
     for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
-        output = output + get_src5_lin(base_idx_src1 + isample);
+        output = output + f32(get_src5_lin(base_idx_src1 + isample));
     }
-    set_dst(global_id.y, global_id.z, wg_id.x, output);
+    set_dst(global_id.y, global_id.z, wg_id.x, f16(output));
 }
 
 );
@@ -1439,7 +1439,7 @@ fn kernel_add(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<f16, 256>;
+var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
 @workgroup_size(256)
@@ -1450,17 +1450,17 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
     let output_len = u32(tensor_dimension_params.src[0].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2];
         // TODO: handle output_len not being a multiple of 4
         for (var isample = 4u*local_id.x; isample < output_len; isample = isample + 4u*256u) {
             let base_idx_src0 = base_idx_src0_base + isample;
-            output = output + get_src0_lin(base_idx_src0);
-            output = output + get_src0_lin(base_idx_src0+1u);
-            output = output + get_src0_lin(base_idx_src0+2u);
-            output = output + get_src0_lin(base_idx_src0+3u);
+            output = output + f32(get_src0_lin(base_idx_src0));
+            output = output + f32(get_src0_lin(base_idx_src0+1u));
+            output = output + f32(get_src0_lin(base_idx_src0+2u));
+            output = output + f32(get_src0_lin(base_idx_src0+3u));
         }
     }
 
@@ -1473,7 +1473,7 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
             output = output + workgroup_data[i];
         }
 
-        set_dst(0u, wg_id.x, 0u, output);
+        set_dst(0u, wg_id.x, 0u, f16(output));
     }
 
 }
