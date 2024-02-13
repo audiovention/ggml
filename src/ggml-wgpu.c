@@ -1364,9 +1364,9 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
     if (!zero_out_accumulator) {
-        output = get_src0(global_id.x, global_id.y, global_id.z);
+        output = f32(get_src0(global_id.x, global_id.y, global_id.z));
     }
 
     // var dst_addr_offset = global_id.z * tensor_dimension_params.dst.nb[2] +
@@ -1387,10 +1387,10 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     if (global_id.x >= offset_ne && global_id.x < nc_limit) {
         let idx0 = global_id.x - offset_ne;
-        output = output + get_src1(idx0, global_id.y, global_id.z);
+        output = output + f32(get_src1(idx0, global_id.y, global_id.z));
     }
 
-    set_dst(global_id.x, global_id.y, global_id.z, output);
+    set_dst(global_id.x, global_id.y, global_id.z, f16(output));
 }
 
 );
