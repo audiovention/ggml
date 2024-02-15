@@ -235,7 +235,7 @@ inline static void * ggml_aligned_malloc(size_t size) {
     GGML_TENSOR_LOCALS(size_t,  nb,  dst,  nb)
 
 #if defined(GGML_USE_MYBLAS)
-#include "myblas.h"
+#include "../../myblas/myblas.h"
 #endif
 
 #if defined(GGML_USE_ACCELERATE)
@@ -15068,8 +15068,11 @@ static void ggml_compute_forward_conv_1d_small_kern(
             const long offset = d0 * ik;
 
             float * src_data = (float *)((char *) src1->data + ir*nb12 + (offset + input_len - real_input_len)*nb10);
-
+#if GGML_USE_MYBLAS
+            my_cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+#else
             cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+#endif
                     output_len, output_channels, input_channels,
                     1.0f,   src_data,  nb11/nb10,
                             kern_data, nb01/nb00,
@@ -15163,7 +15166,11 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
             float * src_data = (float *)((char *) src1->data + ir*nb12);
             float * dst_data = (float *)((char *) dst->data + ir*nb2 + ik*d0*nb0 + 0*(input_len - real_input_len)*nb0);
 
+#if GGML_USE_MYBLAS
+            my_cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+#else
             cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+#endif
                     output_len, input_channels, output_channels,
                     1.0f,   src_data,  nb11/nb10,
                             kern_data, nb01/nb00,
@@ -15244,7 +15251,11 @@ static void ggml_compute_forward_conv_1d_small_kern_back_filter(
             const float * A_src_data_gradient = (float *)((char *) src1->data + ir*nb12);
             const float * B_src_data_signal = (float *)((char *) src0->data + ir*nb02 + ik*d0*nb00 + (input_len - real_input_len)*nb00);
 
+#if GGML_USE_MYBLAS
+            my_cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+#else
             cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+#endif
                     output_channels, input_channels, output_len,
                     1.0f,   A_src_data_gradient,  nb11/nb10,
                             B_src_data_signal, nb01/nb00,
