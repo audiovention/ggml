@@ -15069,14 +15069,13 @@ static void ggml_compute_forward_conv_1d_small_kern(
 
             float * src_data = (float *)((char *) src1->data + ir*nb12 + (offset + input_len - real_input_len)*nb10);
 #if GGML_USE_MYBLAS
-            my_cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+            my_cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
 #else
-            cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+            cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
 #endif
-                    output_channels, output_len, input_channels,
-                    1.0f,   
-                    kern_data, nb01/nb00,
-                    src_data,  nb11/nb10,
+                    output_len, output_channels, input_channels,
+                    1.0f,   src_data,  nb11/nb10,
+                            kern_data, nb01/nb00,
                     ((ik==0 && !initialize_output) ? 0.0f : 1.0f),   dst_data,  nb1/nb0);
         }
 
@@ -15168,14 +15167,13 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
             float * dst_data = (float *)((char *) dst->data + ir*nb2 + ik*d0*nb0 + 0*(input_len - real_input_len)*nb0);
 
 #if GGML_USE_MYBLAS
-            my_cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+            my_cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
 #else
-            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+            cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
 #endif
-                    input_channels, output_len, output_channels,
-                    1.0f,   
-                    kern_data, nb01/nb00,
-                    src_data,  nb11/nb10,
+                    output_len, input_channels, output_channels,
+                    1.0f,   src_data,  nb11/nb10,
+                            kern_data, nb01/nb00,
                     1.0f,   dst_data,  nb1/nb0);
         }
     }
@@ -15254,14 +15252,13 @@ static void ggml_compute_forward_conv_1d_small_kern_back_filter(
             const float * B_src_data_signal = (float *)((char *) src0->data + ir*nb02 + ik*d0*nb00 + (input_len - real_input_len)*nb00);
 
 #if GGML_USE_MYBLAS
-            my_cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+            my_cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
 #else
-            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+            cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
 #endif
-                    input_channels, output_channels, output_len,
-                    1.0f,   
-                    B_src_data_signal, nb01/nb00,
-                    A_src_data_gradient,  nb11/nb10,
+                    output_channels, input_channels, output_len,
+                    1.0f,   A_src_data_gradient,  nb11/nb10,
+                            B_src_data_signal, nb01/nb00,
                     ((ir == 0) ? 0.0f : 1.0f),   kern_data,  nb1/nb0);
         }
     }
