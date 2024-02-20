@@ -4079,9 +4079,10 @@ inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x)
 }
 inline static void ggml_vec_add_and_tanh_f32 (const int n, float * y, const float * x1, const float * x2) 
 {
-// #ifdef GGML_USE_ACCELERATE
-//     vvtanhf(y, x, &n);
-// #else
+#ifdef GGML_USE_ACCELERATE
+    vDSP_vadd(x1, 1, x2, 1, y, 1, n);
+    vvtanhf(y, y, &n);
+#else
     #ifdef __AVX2__
     int i = 0;
     float tmp1[8] = {0};
@@ -4113,7 +4114,7 @@ inline static void ggml_vec_add_and_tanh_f32 (const int n, float * y, const floa
     #else
     for (int i = 0; i < n; ++i) y[i] = tanhf(x1[i]+x2[i]);  
     #endif
-// #endif
+#endif
 }
 
 inline static void ggml_vec_add_and_tanh_back_f32 (const int n, float * z, const float * x, const float * y) 
