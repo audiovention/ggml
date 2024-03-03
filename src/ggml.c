@@ -6035,6 +6035,7 @@ struct ggml_tensor * ggml_special_adam_step(
     struct ggml_tensor * result = ggml_view_tensor(ctx, param);
     struct ggml_tensor * m = ggml_new_tensor(ctx, GGML_TYPE_F32, param->n_dims, param->ne);
     struct ggml_tensor * v = ggml_new_tensor(ctx, GGML_TYPE_F32, param->n_dims, param->ne);
+    struct ggml_tensor * master_weights = ggml_new_tensor(ctx, GGML_TYPE_F32, param->n_dims, param->ne);
 
     const float sched = 1.f;
     const float alpha = 0.004f;
@@ -6059,6 +6060,7 @@ struct ggml_tensor * ggml_special_adam_step(
     result->src[1] = gradient;
     result->src[2] = m;
     result->src[3] = v;
+    result->src[4] = master_weights;
 
     return result;
 }

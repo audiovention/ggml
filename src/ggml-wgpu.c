@@ -1553,6 +1553,8 @@ var<storage,read_write> src2_f32: array<f32>;
 @group(0) @binding(3)
 var<storage,read_write> src3_f32: array<f32>;
 
+@group(0) @binding(4)
+var<storage,read_write> src4_f32: array<f32>;
 
 @compute
 @workgroup_size(256)
@@ -1568,7 +1570,7 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
     let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
     let gradient_scale = bitcast<f32>(tensor_dimension_params.params[1][1]);
 
-    var x = f32(get_src0_lin(global_id.x));
+    var x = src4_f32[global_id.x];
     var g = f32(get_src1_lin(global_id.x)) * gradient_scale;
     var m = src2_f32[global_id.x];
     var v = src3_f32[global_id.x];
@@ -1581,6 +1583,7 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
 
     src2_f32[global_id.x] = m;
     src3_f32[global_id.x] = v;
+    src4_f32[global_id.x] = x;
     set_dst_lin(global_id.x, f16(x));
 }
 
@@ -1595,6 +1598,8 @@ var<storage,read_write> src2_f32: array<f32>;
 @group(0) @binding(3)
 var<storage,read_write> src3_f32: array<f32>;
 
+@group(0) @binding(4)
+var<storage,read_write> src4_f32: array<f32>;
 
 @compute
 @workgroup_size(256)
@@ -1610,7 +1615,7 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
     let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
     let gradient_scale = bitcast<f32>(tensor_dimension_params.params[1][1]);
 
-    var x = f32(get_dst_lin(global_id.x));
+    var x = src4_f32[global_id.x];
     var g = f32(get_src1_lin(global_id.x)) * gradient_scale;
     var m = src2_f32[global_id.x];
     var v = src3_f32[global_id.x];
@@ -1623,6 +1628,7 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
 
     src2_f32[global_id.x] = m;
     src3_f32[global_id.x] = v;
+    src4_f32[global_id.x] = x;
     set_dst_lin(global_id.x, f16(x));
 }
 
@@ -2511,7 +2517,7 @@ void ggml_wgpu_graph_compute(
             const enum ggml_type srcit = srci ? srci->type : GGML_TYPE_COUNT;
             // GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
 #if MY_OPTI_USE_F16
-            if (dst->op == GGML_OP_SPECIAL_ADAM_STEP && (src_idx == 2 || src_idx == 3)) {
+            if (dst->op == GGML_OP_SPECIAL_ADAM_STEP && (src_idx == 2 || src_idx == 3 || src_idx == 4)) {
                 GGML_ASSERT(srcit == GGML_TYPE_F32);
             } else {
                 GGML_ASSERT(srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
@@ -2800,6 +2806,7 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[2]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[3]));
+                    GGML_ASSERT(ggml_is_contiguous(dst->src[4]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                     if (is_op_inplace_which_src == 0) {
                         GGML_WGPU_ENCODE_KERNEL(special_adam_step_inplace, dispatch_x, 1, 1)

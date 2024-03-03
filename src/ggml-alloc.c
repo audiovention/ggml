@@ -470,7 +470,17 @@ size_t ggml_allocr_alloc_graph_n(
                 // No need to allocate src[0], src[1] and dst as they are already handled by the rest of the graph
                 ggml_allocr_alloc(alloc, node->src[2]);
                 ggml_allocr_alloc(alloc, node->src[3]);
+                ggml_allocr_alloc(alloc, node->src[4]);
                 if (!ggml_allocr_is_measure(alloc)) {
+                    for (int ii1=0; ii1<node->src[0]->ne[0]; ii1++) {
+                        for (int jj1=0; jj1<node->src[0]->ne[1]; jj1++) {
+                            for (int kk1=0; kk1<node->src[0]->ne[2]; kk1++) {
+                                for (int ll1=0; ll1<node->src[0]->ne[3]; ll1++) {
+                                    ggml_set_f32_nd(node->src[4], ii1, jj1, kk1, ll1, ggml_get_f32_nd(node->src[0], ii1, jj1, kk1, ll1));
+                                }
+                            }
+                        }
+                    }
                     ggml_set_zero(node->src[2]);
                     ggml_set_zero(node->src[3]);
                 }
