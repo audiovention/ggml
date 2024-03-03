@@ -1558,9 +1558,10 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
     let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
     let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
     let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
+    let gradient_scale = bitcast<f32>(tensor_dimension_params.params[1][1]);
 
     var x = get_src0_lin(global_id.x);
-    var g = get_src1_lin(global_id.x);
+    var g = get_src1_lin(global_id.x) * gradient_scale;
     var m = get_src2_lin(global_id.x);
     var v = get_src3_lin(global_id.x);
 
@@ -1592,9 +1593,10 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
     let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
     let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
     let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
+    let gradient_scale = bitcast<f32>(tensor_dimension_params.params[1][1]);
 
     var x = get_dst_lin(global_id.x);
-    var g = get_src1_lin(global_id.x);
+    var g = get_src1_lin(global_id.x) * gradient_scale;
     var m = get_src2_lin(global_id.x);
     var v = get_src3_lin(global_id.x);
 

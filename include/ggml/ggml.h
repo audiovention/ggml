@@ -1826,7 +1826,7 @@ extern "C" {
 
     GGML_API void ggml_apply_adam_step_to_graph(struct ggml_context *ctx, struct ggml_cgraph* gb);
     GGML_API void ggml_apply_adam_params_to_graph(struct ggml_cgraph* gb, const float sched, const float alpha, 
-        const float beta1, const float beta2, const float eps, int iters_now);
+        const float beta1, const float beta2, const float eps, int iters_now, const float gradient_scale);
 
     // optimization methods
     enum ggml_opt_type {

@@ -6047,8 +6047,10 @@ struct ggml_tensor * ggml_special_adam_step(
     const float beta1h = alpha*sched/(1.0f - powf(beta1, iters_now));
     const float beta2h =        1.0f/(1.0f - powf(beta2, iters_now));
 
+    const float gradient_scale = 1.0f;
 
-    float params[] = { beta1, beta2, beta1h, beta2h, eps};
+
+    float params[] = { beta1, beta2, beta1h, beta2h, eps, gradient_scale};
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_SPECIAL_ADAM_STEP;
@@ -16414,6 +16416,7 @@ static void ggml_compute_forward_special_adam_step(
     const float beta1h = ((float *)dst->op_params)[2];
     const float beta2h = ((float *)dst->op_params)[3];
     const float eps = ((float *)dst->op_params)[4];
+    const float gradient_scale = ((float *)dst->op_params)[5];
 
     // TODO: optimize
 
@@ -16427,7 +16430,7 @@ static void ggml_compute_forward_special_adam_step(
                 float * out = (float *)((char *) dst->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
                 for (int i00 = 0; i00 < ne00; i00++) {
                     float x  = p[i00];
-                    float g_ = g[i00];
+                    float g_ = g[i00] * gradient_scale;
                     m[i00] = m[i00]*beta1 +    g_*(1.0f - beta1);
                     v[i00] = v[i00]*beta2 + g_*g_*(1.0f - beta2);
                     float mh = m[i00]*beta1h;
@@ -21493,12 +21496,12 @@ void ggml_apply_adam_step_to_graph(struct ggml_context *ctx, struct ggml_cgraph*
 
 
 
-void ggml_apply_adam_params_to_graph(struct ggml_cgraph* gb, const float sched, const float alpha, const float beta1, const float beta2, const float eps, int iters_now)
+void ggml_apply_adam_params_to_graph(struct ggml_cgraph* gb, const float sched, const float alpha, const float beta1, const float beta2, const float eps, int iters_now, const float gradient_scale)
 {
     const float beta1h = alpha*sched/(1.0f - powf(beta1, iters_now));
     const float beta2h =        1.0f/(1.0f - powf(beta2, iters_now));
 
-    float params[] = { beta1, beta2, beta1h, beta2h, eps};
+    float params[] = { beta1, beta2, beta1h, beta2h, eps, gradient_scale};
 
     for (int i=0; i < gb->n_nodes; i++) {
         struct ggml_tensor * node = gb->nodes[i];
