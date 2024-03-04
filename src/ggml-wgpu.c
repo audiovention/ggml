@@ -1362,7 +1362,7 @@ fn kernel_acc(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let nc = u32(tensor_dimension_params.src[1].ne[0]);
     let nc_out = u32(tensor_dimension_params.dst.ne[0]);
-    let offset_ne = offset / 4u;
+    let offset_ne = offset / 2u;
     let nc_limit = nc + offset_ne;
     let nc_after = nc_out - nc_limit;
 
