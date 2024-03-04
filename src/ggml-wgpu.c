@@ -436,17 +436,17 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
 
     if (has_bias) {
         // let bias_idx = global_id.y * tensor_dimension_params.src[2].nb[1];
         // let bias = f16(extra_uniform1[bias_idx/4u][bias_idx%4u]);
         let bias = get_src2(0u, global_id.y, 0u);
-        output += bias;
+        output += f32(bias);
     }
 
     if (has_inject_signal) {
-        output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
+        output += f32(get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z));
     }
 
     let base_src1_offset = input_len - real_input_len + global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
@@ -459,7 +459,7 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
             let kernel = get_src0(global_id.y, ic, ik);
             // let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
             // let kernel = f16(extra_uniform0[kernel_idx/4u][kernel_idx%4u]);
-            output = output + input * kernel;
+            output = output + f32(input) * f32(kernel);
         }
     }
 
@@ -467,7 +467,7 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
         output = tanh(output);
     }
 
-    set_dst(global_id.x, global_id.y, global_id.z, output);
+    set_dst(global_id.x, global_id.y, global_id.z, f16(output));
 }
 
 );
@@ -500,18 +500,18 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
     }
 
     // var output : f16 = 0.0;
-    var output = vec4h();
+    var output = vec4f();
 
     if (has_bias) {
         // let bias_idx = global_id.y * tensor_dimension_params.src[2].nb[1];
         // let bias = extra_uniform1[bias_idx/4u][bias_idx%4u];
         let bias = get_src2(0u, global_id.y, 0u);
-        output += bias;
+        output += f32(bias);
     }
 
     if (has_inject_signal) {
         let src3_idx = global_id.x + global_id.y * tensor_dimension_params.src[3].nb[1]/4u + global_id.z * tensor_dimension_params.src[3].nb[2]/4u;
-        output += src3_v4[src3_idx];
+        output += vec4f(src3_v4[src3_idx]);
         // output.x += get_src3(mult_idx,      global_id.y, global_id.z);
         // output.y += get_src3(mult_idx + 1u, global_id.y, global_id.z);
         // output.z += get_src3(mult_idx + 2u, global_id.y, global_id.z);
@@ -534,7 +534,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
             let kernel = get_src0(global_id.y, ic, ik);
             // let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
             // let kernel = extra_uniform0[kernel_idx/4u][kernel_idx%4u];
-            output = output + input * kernel;
+            output = output + vec4f(input) * f32(kernel);
         }
     }
 
@@ -543,7 +543,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
     }
 
     let dst_idx = global_id.x + global_id.y * tensor_dimension_params.dst.nb[1]/4u + global_id.z * tensor_dimension_params.dst.nb[2]/4u;
-    dst_v4[dst_idx] = output;
+    dst_v4[dst_idx] = vec4h(output);
 
     // set_dst(mult_idx, global_id.y, global_id.z,    output.x);
     // set_dst(mult_idx+1u, global_id.y, global_id.z, output.y);
@@ -864,24 +864,24 @@ fn kernel_conv_1d_small_kern_simpl(@builtin(global_invocation_id) global_id: vec
         return;
     }
 
-    var output : f16 = 0.0;
+    var output : f32 = 0.0;
 
     if (has_bias) {
-        output += get_src2(0u, global_id.y, 0u);
+        output += f32(get_src2(0u, global_id.y, 0u));
     }
 
     if (has_inject_signal) {
-        output += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
+        output += f32(get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z));
     }
 
     let in_idx_offset = input_len - output_len + global_id.x;
     for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
         let input = get_src1(in_idx_offset, ic, global_id.z);
         let kernel = get_src0(global_id.y, ic, 0u);
-        output = output + input * kernel;
+        output = output + f32(input) * f32(kernel);
     }
 
-    set_dst(global_id.x, global_id.y, global_id.z, output);
+    set_dst(global_id.x, global_id.y, global_id.z, f16(output));
 }
 
 );
