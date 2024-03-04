@@ -1151,6 +1151,9 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_stage1[] = MULTILINE(
 
+@group(0) @binding(5)
+var<storage,read_write> src5_f32: array<f32>;
+
 var<workgroup> workgroup_data: array<f32, 256>;
 
 @compute
@@ -1199,7 +1202,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
         let nb2 = nb1 * output_channels;
         let nb3 = nb2 * input_channels;
 
-        set_src5_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik, f16(output));
+        src5_f32[idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik] = output;
     }
 }
 
@@ -1207,6 +1210,9 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
 
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_filter_stage2[] = MULTILINE(
+
+@group(0) @binding(5)
+var<storage,read_write> src5_f32: array<f32>;
 
 @compute
 @workgroup_size(1)
@@ -1225,7 +1231,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage2(@builtin(global_invocation_id) g
 
     let base_idx_src1 = nb1 * global_id.y + nb2 * global_id.z +  nb3 * wg_id.x;
     for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
-        output = output + f32(get_src5_lin(base_idx_src1 + isample));
+        output = output + src5_f32[base_idx_src1 + isample];
     }
     set_dst(global_id.y, global_id.z, wg_id.x, f16(output));
 }
@@ -1301,13 +1307,13 @@ fn kernel_conv_1d_small_kern_back_input_large_dil(@builtin(global_invocation_id)
     }
 
 
-    var output = vec4h();
+    var output = vec4f();
 
     if (accumulate) {
         let idx_src2 = (global_id.z * tensor_dimension_params.src[2].nb[2] +
             global_id.y * tensor_dimension_params.src[2].nb[1] +
             mult_idx) / 4u;
-        output = src2_v4[idx_src2];
+        output = vec4f(src2_v4[idx_src2]);
     }
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
@@ -1315,19 +1321,19 @@ fn kernel_conv_1d_small_kern_back_input_large_dil(@builtin(global_invocation_id)
         if (mult_idx >= idx_offset && (mult_idx < (idx_offset+output_len))) {
             let base_idx_src0 = global_id.y * tensor_dimension_params.src[0].nb[1] + ik * tensor_dimension_params.src[0].nb[2];
             let base_idx_src1 = global_id.z * tensor_dimension_params.src[1].nb[2] + (mult_idx - idx_offset);
-            let mult1 = vec4h(
-                f16((mult_idx - idx_offset) < output_len),
-                f16((mult_idx - idx_offset + 1u) < output_len),
-                f16((mult_idx - idx_offset + 2u) < output_len),
-                f16((mult_idx - idx_offset + 3u) < output_len)
+            let mult1 = vec4f(
+                f32((mult_idx - idx_offset) < output_len),
+                f32((mult_idx - idx_offset + 1u) < output_len),
+                f32((mult_idx - idx_offset + 2u) < output_len),
+                f32((mult_idx - idx_offset + 3u) < output_len)
             );
             for (var idx_oc = 0u; idx_oc < output_channels; idx_oc = idx_oc + 1u) {
                 // output = output + 
                 //     get_src0(idx_oc, global_id.y, ik) * 
                 //     get_src1(mult_idx - idx_offset, idx_oc, global_id.z);
-                let val_src0 = get_src0_lin(base_idx_src0 + idx_oc);
+                let val_src0 = f32(get_src0_lin(base_idx_src0 + idx_oc));
                 let idx_src1 = (base_idx_src1 + idx_oc * tensor_dimension_params.src[1].nb[1]) / 4u;
-                output = output + val_src0 * mult1 * src1_v4[idx_src1];
+                output = output + val_src0 * mult1 * vec4f(src1_v4[idx_src1]);
             }
         }
     }
@@ -1335,7 +1341,7 @@ fn kernel_conv_1d_small_kern_back_input_large_dil(@builtin(global_invocation_id)
     let dst_idx = (global_id.z * tensor_dimension_params.dst.nb[2] +
         global_id.y * tensor_dimension_params.dst.nb[1] +
         mult_idx) / 4u;
-    dst_v4[dst_idx] = output;
+    dst_v4[dst_idx] = vec4h(output);
 }
 
 );
@@ -1483,6 +1489,9 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias_stage1[] = MULTILINE(
 
+@group(0) @binding(5)
+var<storage,read_write> src5_f32: array<f32>;
+
 var<workgroup> workgroup_data_v4f: array<vec4f, 256>;
 
 @compute
@@ -1516,7 +1525,8 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
             output = output + workgroup_data_v4f[i];
         }
 
-        set_src5_lin(wg_id.y + wg_id.x * num_batches, f16(output.x+output.y+output.z+output.w));
+        src5_f32[wg_id.y + wg_id.x * num_batches] = output.x+output.y+output.z+output.w;
+        // set_src5_lin(wg_id.y + wg_id.x * num_batches, f16(output.x+output.y+output.z+output.w));
     }
 }
 
@@ -1524,6 +1534,9 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
 
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias_stage2[] = MULTILINE(
+
+@group(0) @binding(5)
+var<storage,read_write> src5_f32: array<f32>;
 
 
 @compute
@@ -1537,7 +1550,7 @@ fn kernel_conv_1d_small_kern_back_bias_stage2(@builtin(global_invocation_id) glo
 
     let base_idx_src1 = wg_id.x * num_batches;
     for (var isample = 0u; isample < num_batches; isample = isample + 1u) {
-        output = output + f32(get_src5_lin(base_idx_src1 + isample));
+        output = output + src5_f32[base_idx_src1 + isample];
     }
     set_dst(0u, wg_id.x, 0u, f16(output));
 }
