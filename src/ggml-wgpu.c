@@ -599,10 +599,13 @@ static const char src_ggml_shader_kernel_scale[] = MULTILINE(
 @compute
 @workgroup_size(256)
 fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= num_el_dst()) {
+    let mult_idx = global_id.x * 4u;
+
+    if (mult_idx >= num_el_dst()) {
         return;
     }
-    set_dst_lin(global_id.x, get_src0_lin(global_id.x) * get_src1_lin(0u));
+    
+    dst_v4[global_id.x] = src0_v4[global_id.x] * get_src1_lin(0u);
 }
 
 );
@@ -613,10 +616,13 @@ static const char src_ggml_shader_kernel_scale_inplace[] = MULTILINE(
 @compute
 @workgroup_size(256)
 fn kernel_scale_inplace(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= num_el_dst()) {
+    let mult_idx = global_id.x * 4u;
+
+    if (mult_idx >= num_el_dst()) {
         return;
     }
-    set_dst_lin(global_id.x, get_dst_lin(global_id.x) * get_src1_lin(0u));
+
+    dst_v4[global_id.x] = dst_v4[global_id.x] * get_src1_lin(0u);
 }
 
 );
@@ -2317,7 +2323,7 @@ void ggml_wgpu_graph_compute(
                 {
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
+                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 1024);
                     if (is_op_inplace_which_src == 0) {
                         GGML_WGPU_ENCODE_KERNEL(scale_inplace, dispatch_x, 1, 1)
                     } else {
