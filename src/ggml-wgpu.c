@@ -279,9 +279,106 @@ fn set_dst_lin(x: u32, v: f32) {
              ] = v;
 }
 
+fn set_src0_lin(x: u32, v: f32) {
+    src0[ x 
+        //    * tensor_dimension_params.src[0].nb[0]
+            // + tensor_dimension_params.src[0].offset
+             ] = v;
+}
+
+fn set_src1_lin(x: u32, v: f32) {
+    src1[ x 
+        //    * tensor_dimension_params.src[1].nb[0]
+            // + tensor_dimension_params.src[1].offset
+             ] = v;
+}
+
+fn set_src2_lin(x: u32, v: f32) {
+    src2[ x 
+        //    * tensor_dimension_params.src[2].nb[0]
+            // + tensor_dimension_params.src[2].offset
+             ] = v;
+}
+
+fn set_src3_lin(x: u32, v: f32) {
+    src3[ x 
+        //    * tensor_dimension_params.src[3].nb[0]
+            // + tensor_dimension_params.src[3].offset
+             ] = v;
+}
+
+fn set_src4_lin(x: u32, v: f32) {
+    src4[ x 
+        //    * tensor_dimension_params.src[4].nb[0]
+            // + tensor_dimension_params.src[4].offset
+             ] = v;
+}
+
+fn set_src5_lin(x: u32, v: f32) {
+    src5[ x 
+        //    * tensor_dimension_params.src[5].nb[0]
+            // + tensor_dimension_params.src[5].offset
+             ] = v;
+}
+
 );
 
 static const char src_ggml_shader_common_2[] = MULTILINE(
+
+
+fn set_src0(x: u32, y: u32, z: u32, v: f32) {
+    src0[ x 
+        //    * tensor_dimension_params.src[0].nb[0]
+         + y * tensor_dimension_params.src[0].nb[1] +
+         z * tensor_dimension_params.src[0].nb[2]
+            // + tensor_dimension_params.src[0].offset
+             ] = v;
+}
+
+fn set_src1(x: u32, y: u32, z: u32, v: f32) {
+    src1[ x 
+        //    * tensor_dimension_params.src[1].nb[0]
+         + y * tensor_dimension_params.src[1].nb[1] +
+         z * tensor_dimension_params.src[1].nb[2]
+            // + tensor_dimension_params.src[1].offset
+             ] = v;
+}
+
+fn set_src2(x: u32, y: u32, z: u32, v: f32) {
+    src2[ x 
+        //    * tensor_dimension_params.src[2].nb[0]
+         + y * tensor_dimension_params.src[2].nb[1] +
+         z * tensor_dimension_params.src[2].nb[2]
+            // + tensor_dimension_params.src[2].offset
+             ] = v;
+}
+
+fn set_src3(x: u32, y: u32, z: u32, v: f32) {
+    src3[ x 
+        //    * tensor_dimension_params.src[3].nb[0]
+         + y * tensor_dimension_params.src[3].nb[1] +
+         z * tensor_dimension_params.src[3].nb[2]
+            // + tensor_dimension_params.src[3].offset
+             ] = v;
+}
+
+fn set_src4(x: u32, y: u32, z: u32, v: f32) {
+    src4[ x 
+        //    * tensor_dimension_params.src[4].nb[0]
+         + y * tensor_dimension_params.src[4].nb[1] +
+         z * tensor_dimension_params.src[4].nb[2]
+            // + tensor_dimension_params.src[4].offset
+             ] = v;
+}
+
+fn set_src5(x: u32, y: u32, z: u32, v: f32) {
+    src5[ x 
+        //    * tensor_dimension_params.src[5].nb[0]
+         + y * tensor_dimension_params.src[5].nb[1] +
+         z * tensor_dimension_params.src[5].nb[2]
+            // + tensor_dimension_params.src[5].offset
+             ] = v;
+}
 
 
 fn num_el_dst() -> u32 {
@@ -507,7 +604,7 @@ fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (mult_idx >= num_el_dst()) {
         return;
     }
-
+    
     dst_v4[global_id.x] = src0_v4[global_id.x] * get_src1_lin(0u);
 }
 
@@ -794,7 +891,7 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
         let nb2 = nb1 * output_channels;
         let nb3 = nb2 * input_channels;
 
-        src5[idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik] = output;
+        set_src5_lin(idx_ir + nb1 * global_id.y + nb2 * idx_ic +  nb3 * idx_ik, output);
     }
 }
 
@@ -1111,7 +1208,7 @@ fn kernel_conv_1d_small_kern_back_bias_stage1(@builtin(global_invocation_id) glo
             output = output + workgroup_data_v4f[i];
         }
 
-        src5[wg_id.y + wg_id.x * num_batches] = output.x+output.y+output.z+output.w;
+        set_src5_lin(wg_id.y + wg_id.x * num_batches, output.x+output.y+output.z+output.w);
     }
 }
 
@@ -1168,8 +1265,8 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    src2[global_id.x] = m;
-    src3[global_id.x] = v;
+    set_src2_lin(global_id.x, m);
+    set_src3_lin(global_id.x, v);
     set_dst_lin(global_id.x, x);
 }
 
@@ -1203,8 +1300,8 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    src2[global_id.x] = m;
-    src3[global_id.x] = v;
+    set_src2_lin(global_id.x, m);
+    set_src3_lin(global_id.x, v);
     set_dst_lin(global_id.x, x);
 }
 
