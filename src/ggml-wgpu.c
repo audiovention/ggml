@@ -403,46 +403,46 @@ static const char src_ggml_shader_common_3[] = MULTILINE(
 
 
 fn get_src0_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src0(x/2u, y, z);
+    let val1 = get_src0(x/2u, y/2u, z/2u);
     let vec1 = unpack2x16float(bitcast<u32>(val1));
     return vec1[x%2u];
 }
 
 fn get_src1_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src1(x/2u, y, z);
+    let val1 = get_src1(x/2u, y/2u, z/2u);
     let vec1 = unpack2x16float(bitcast<u32>(val1));
     return vec1[x%2u];
 }
 
 fn get_src2_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src2(x/2u, y, z);
+    let val1 = get_src2(x/2u, y/2u, z/2u);
     let vec1 = unpack2x16float(bitcast<u32>(val1));
     return vec1[x%2u];
 }
 
 fn get_src3_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src3(x/2u, y, z);
+    let val1 = get_src3(x/2u, y/2u, z/2u);
     let vec1 = unpack2x16float(bitcast<u32>(val1));
     return vec1[x%2u];
 }
 
 fn get_src4_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src4(x/2u, y, z);
+    let val1 = get_src4(x/2u, y/2u, z/2u);
     let vec1 = unpack2x16float(bitcast<u32>(val1));
     return vec1[x%2u];
 }
 
 fn get_src5_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src5(x/2u, y, z);
+    let val1 = get_src5(x/2u, y/2u, z/2u);
     let vec1 = unpack2x16float(bitcast<u32>(val1));
     return vec1[x%2u];
 }
 
 fn set_dst_pf16(x: u32, y: u32, z: u32, v: f32) {
-    let val1 = get_dst(x/2u, y, z);
+    let val1 = get_dst(x/2u, y/2u, z/2u);
     var vec1 = unpack2x16float(bitcast<u32>(val1));
     vec1[x%2u] = v;
-    set_dst(x/2u, y, z, bitcast<f32>(pack2x16float(vec1)));
+    set_dst(x/2u, y/2u, z/2u, bitcast<f32>(pack2x16float(vec1)));
 }
 
 fn get_src0_lin_pf16(x: u32) -> f32 {
@@ -576,6 +576,74 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     }
 
     set_dst(global_id.x, global_id.y, global_id.z, output);
+}
+
+);
+
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_pf16[] = MULTILINE(
+
+@compute
+@workgroup_size(256)
+fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let apply_tanh = bool(tensor_dimension_params.params[0][3]);
+    let has_bias = bool(tensor_dimension_params.params[1][0]);
+    let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let input_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+    let num_batches = u32(tensor_dimension_params.dst.ne[2]);
+
+    if (global_id.x >= output_len) {
+        return;
+    }
+    if (global_id.y >= output_channels) {
+        return;
+    }
+    if (global_id.z >= num_batches) {
+        return;
+    }
+
+    let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
+
+    var output : f32 = 0.0;
+
+    if (has_bias) {
+        let bias = get_src2_pf16(0u, global_id.y, 0u);
+        output += bias;
+    }
+
+    if (has_inject_signal) {
+        output += get_src3_pf16(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
+    }
+
+    let base_src1_offset = input_len - real_input_len + global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
+
+    for (var ik = 0u; ik < nk; ik = ik + 1u) {
+        let in_idx_offset = ik * d0 + base_src1_offset;
+        let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
+        for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
+            let input = get_src1_lin_pf16(in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
+            let kernel = get_src0_pf16(global_id.y, ic, ik);
+            let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
+            output = output + input * kernel;
+        }
+    }
+
+    if (apply_tanh) {
+        output = tanh(output);
+    }
+
+    set_dst_pf16(global_id.x, global_id.y, global_id.z, output);
 }
 
 );
@@ -1494,6 +1562,7 @@ struct ggml_wgpu_context {
 
     GGML_WGPU_DECL_KERNEL(silu)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_pf16)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_simpl)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets)
     GGML_WGPU_DECL_KERNEL(add_and_trim)
@@ -1827,6 +1896,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
 
         GGML_WGPU_ADD_KERNEL(silu);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_pf16);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_simpl);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offsets);
         GGML_WGPU_ADD_KERNEL(add_and_trim);
@@ -1871,6 +1941,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
 
     GGML_WGPU_DEL_KERNEL(silu)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_pf16)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_simpl)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets)
     GGML_WGPU_DEL_KERNEL(add_and_trim)
