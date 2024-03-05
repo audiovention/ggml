@@ -208,6 +208,15 @@ fn get_src5(x: u32, y: u32, z: u32) -> f32 {
                     ];
 }
 
+fn get_dst(x: u32, y: u32, z: u32) -> f32 {
+    return dst[ x 
+        //    * tensor_dimension_params.dst.nb[0]
+         + y * tensor_dimension_params.dst.nb[1] +
+         z * tensor_dimension_params.dst.nb[2]
+            // + tensor_dimension_params.dst.offset
+             ];
+}
+
 fn set_dst(x: u32, y: u32, z: u32, v: f32) {
     dst[ x 
         //    * tensor_dimension_params.dst.nb[0]
@@ -388,6 +397,107 @@ fn num_el_dst() -> u32 {
 }
 
 );
+
+
+static const char src_ggml_shader_common_3[] = MULTILINE(
+
+
+fn get_src0_pf16(x: u32, y: u32, z: u32) -> f32 {
+    let val1 = get_src0(x/2u, y, z);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src1_pf16(x: u32, y: u32, z: u32) -> f32 {
+    let val1 = get_src1(x/2u, y, z);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src2_pf16(x: u32, y: u32, z: u32) -> f32 {
+    let val1 = get_src2(x/2u, y, z);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src3_pf16(x: u32, y: u32, z: u32) -> f32 {
+    let val1 = get_src3(x/2u, y, z);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src4_pf16(x: u32, y: u32, z: u32) -> f32 {
+    let val1 = get_src4(x/2u, y, z);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src5_pf16(x: u32, y: u32, z: u32) -> f32 {
+    let val1 = get_src5(x/2u, y, z);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn set_dst_pf16(x: u32, y: u32, z: u32, v: f32) {
+    let val1 = get_dst(x/2u, y, z);
+    var vec1 = unpack2x16float(bitcast<u32>(val1));
+    vec1[x%2u] = v;
+    set_dst(x/2u, y, z, bitcast<f32>(pack2x16float(vec1)));
+}
+
+fn get_src0_lin_pf16(x: u32) -> f32 {
+    let val1 = get_src0_lin(x/2u);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src1_lin_pf16(x: u32) -> f32 {
+    let val1 = get_src1_lin(x/2u);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src2_lin_pf16(x: u32) -> f32 {
+    let val1 = get_src2_lin(x/2u);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src3_lin_pf16(x: u32) -> f32 {
+    let val1 = get_src3_lin(x/2u);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src4_lin_pf16(x: u32) -> f32 {
+    let val1 = get_src4_lin(x/2u);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_src5_lin_pf16(x: u32) -> f32 {
+    let val1 = get_src5_lin(x/2u);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+fn get_dst_lin_pf16(x: u32) -> f32 {
+    let val1 = get_dst_lin(x/2u);
+    let vec1 = unpack2x16float(bitcast<u32>(val1));
+    return vec1[x%2u];
+}
+
+
+fn set_dst_lin_pf16(x: u32, v: f32) {
+    let val1 = get_dst_lin(x/2u);
+    var vec1 = unpack2x16float(bitcast<u32>(val1));
+    vec1[x%2u] = v;
+    set_dst_lin(x/2u, bitcast<f32>(pack2x16float(vec1)));
+}
+
+
+);
+
 
 static const char src_ggml_shader_kernel_silu[] = MULTILINE(
 
@@ -1679,11 +1789,12 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
     {
 #define GGML_WGPU_ADD_KERNEL(name) \
         { \
-            char * shader_src = malloc(sizeof(src_ggml_shader_common_0) + sizeof(src_ggml_shader_common_1) + sizeof(src_ggml_shader_common_2) + sizeof(src_ggml_shader_kernel_##name) + 1); \
-            memset(shader_src, 0, sizeof(src_ggml_shader_common_0) + sizeof(src_ggml_shader_common_1) + sizeof(src_ggml_shader_common_2) + sizeof(src_ggml_shader_kernel_##name) + 1); \
+            char * shader_src = malloc(sizeof(src_ggml_shader_common_0) + sizeof(src_ggml_shader_common_1) + sizeof(src_ggml_shader_common_2) + sizeof(src_ggml_shader_common_3) + sizeof(src_ggml_shader_kernel_##name) + 1); \
+            memset(shader_src, 0, sizeof(src_ggml_shader_common_0) + sizeof(src_ggml_shader_common_1) + sizeof(src_ggml_shader_common_2) + sizeof(src_ggml_shader_common_3) + sizeof(src_ggml_shader_kernel_##name) + 1); \
             strcat(shader_src, src_ggml_shader_common_0);               \
             strcat(shader_src, src_ggml_shader_common_1);               \
             strcat(shader_src, src_ggml_shader_common_2);               \
+            strcat(shader_src, src_ggml_shader_common_3);               \
             strcat(shader_src, src_ggml_shader_kernel_##name);          \
             ctx->shader_module_##name = wgpuDeviceCreateShaderModule(   \
             ctx->device, &(const WGPUShaderModuleDescriptor){           \
