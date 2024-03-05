@@ -153,77 +153,54 @@ var<uniform> extra_uniform0: array<vec4f, 1024>;
 @group(0) @binding(9)
 var<uniform> extra_uniform1: array<vec4f, 1024>;
 
+fn calc_src_idx(x: u32, y: u32, z: u32, idx: i32) -> u32 {
+    return x 
+                //   * tensor_dimension_params.src[idx].nb[0]
+                + y * tensor_dimension_params.src[idx].nb[1] +
+                z * tensor_dimension_params.src[idx].nb[2]
+                    // + tensor_dimension_params.src[idx].offset
+                    ;
+}
+
+fn calc_dst_idx(x: u32, y: u32, z: u32) -> u32 {
+    return x 
+                //   * tensor_dimension_params.dst.nb[0]
+                + y * tensor_dimension_params.dst.nb[1] +
+                z * tensor_dimension_params.dst.nb[2]
+                    // + tensor_dimension_params.dst.offset
+                    ;
+}
 
 fn get_src0(x: u32, y: u32, z: u32) -> f32 {
-    return src0[x 
-                //   * tensor_dimension_params.src[0].nb[0]
-                + y * tensor_dimension_params.src[0].nb[1] +
-                z * tensor_dimension_params.src[0].nb[2]
-                    // + tensor_dimension_params.src[0].offset
-                    ];
+    return src0[calc_src_idx(x, y, z, 0)];
 }
 
 fn get_src1(x: u32, y: u32, z: u32) -> f32 {
-    return src1[x 
-                //   * tensor_dimension_params.src[1].nb[0]
-                + y * tensor_dimension_params.src[1].nb[1] +
-                z * tensor_dimension_params.src[1].nb[2]
-                    // + tensor_dimension_params.src[1].offset
-                    ];
+    return src1[calc_src_idx(x, y, z, 1)];
 }
 
 fn get_src2(x: u32, y: u32, z: u32) -> f32 {
-    return src2[x 
-                //   * tensor_dimension_params.src[2].nb[0]
-                + y * tensor_dimension_params.src[2].nb[1] +
-                z * tensor_dimension_params.src[2].nb[2]
-                    // + tensor_dimension_params.src[2].offset
-                    ];
+    return src2[calc_src_idx(x, y, z, 2)];
 }
 
 fn get_src3(x: u32, y: u32, z: u32) -> f32 {
-    return src3[x 
-                //   * tensor_dimension_params.src[3].nb[0]
-                + y * tensor_dimension_params.src[3].nb[1] +
-                z * tensor_dimension_params.src[3].nb[2]
-                    // + tensor_dimension_params.src[3].offset
-                    ];
+    return src3[calc_src_idx(x, y, z, 3)];
 }
 
 fn get_src4(x: u32, y: u32, z: u32) -> f32 {
-    return src4[x 
-                //   * tensor_dimension_params.src[4].nb[0]
-                + y * tensor_dimension_params.src[4].nb[1] +
-                z * tensor_dimension_params.src[4].nb[2]
-                    // + tensor_dimension_params.src[4].offset
-                    ];
+    return src4[calc_src_idx(x, y, z, 4)];
 }
 
 fn get_src5(x: u32, y: u32, z: u32) -> f32 {
-    return src5[x 
-                //   * tensor_dimension_params.src[5].nb[0]
-                + y * tensor_dimension_params.src[5].nb[1] +
-                z * tensor_dimension_params.src[5].nb[2]
-                    // + tensor_dimension_params.src[5].offset
-                    ];
+    return src5[calc_src_idx(x, y, z, 5)];
 }
 
 fn get_dst(x: u32, y: u32, z: u32) -> f32 {
-    return dst[ x 
-        //    * tensor_dimension_params.dst.nb[0]
-         + y * tensor_dimension_params.dst.nb[1] +
-         z * tensor_dimension_params.dst.nb[2]
-            // + tensor_dimension_params.dst.offset
-             ];
+    return dst[calc_dst_idx(x, y, z)];
 }
 
 fn set_dst(x: u32, y: u32, z: u32, v: f32) {
-    dst[ x 
-        //    * tensor_dimension_params.dst.nb[0]
-         + y * tensor_dimension_params.dst.nb[1] +
-         z * tensor_dimension_params.dst.nb[2]
-            // + tensor_dimension_params.dst.offset
-             ] = v;
+    dst[calc_dst_idx(x, y, z)] = v;
 }
 
 );
@@ -336,57 +313,27 @@ static const char src_ggml_shader_common_2[] = MULTILINE(
 
 
 fn set_src0(x: u32, y: u32, z: u32, v: f32) {
-    src0[ x 
-        //    * tensor_dimension_params.src[0].nb[0]
-         + y * tensor_dimension_params.src[0].nb[1] +
-         z * tensor_dimension_params.src[0].nb[2]
-            // + tensor_dimension_params.src[0].offset
-             ] = v;
+    src0[calc_src_idx(x, y, z, 0)] = v;
 }
 
 fn set_src1(x: u32, y: u32, z: u32, v: f32) {
-    src1[ x 
-        //    * tensor_dimension_params.src[1].nb[0]
-         + y * tensor_dimension_params.src[1].nb[1] +
-         z * tensor_dimension_params.src[1].nb[2]
-            // + tensor_dimension_params.src[1].offset
-             ] = v;
+    src1[calc_src_idx(x, y, z, 1)] = v;
 }
 
 fn set_src2(x: u32, y: u32, z: u32, v: f32) {
-    src2[ x 
-        //    * tensor_dimension_params.src[2].nb[0]
-         + y * tensor_dimension_params.src[2].nb[1] +
-         z * tensor_dimension_params.src[2].nb[2]
-            // + tensor_dimension_params.src[2].offset
-             ] = v;
+    src2[calc_src_idx(x, y, z, 2)] = v;
 }
 
 fn set_src3(x: u32, y: u32, z: u32, v: f32) {
-    src3[ x 
-        //    * tensor_dimension_params.src[3].nb[0]
-         + y * tensor_dimension_params.src[3].nb[1] +
-         z * tensor_dimension_params.src[3].nb[2]
-            // + tensor_dimension_params.src[3].offset
-             ] = v;
+    src3[calc_src_idx(x, y, z, 3)] = v;
 }
 
 fn set_src4(x: u32, y: u32, z: u32, v: f32) {
-    src4[ x 
-        //    * tensor_dimension_params.src[4].nb[0]
-         + y * tensor_dimension_params.src[4].nb[1] +
-         z * tensor_dimension_params.src[4].nb[2]
-            // + tensor_dimension_params.src[4].offset
-             ] = v;
+    src4[calc_src_idx(x, y, z, 4)] = v;
 }
 
 fn set_src5(x: u32, y: u32, z: u32, v: f32) {
-    src5[ x 
-        //    * tensor_dimension_params.src[5].nb[0]
-         + y * tensor_dimension_params.src[5].nb[1] +
-         z * tensor_dimension_params.src[5].nb[2]
-            // + tensor_dimension_params.src[5].offset
-             ] = v;
+    src5[calc_src_idx(x, y, z, 5)] = v;
 }
 
 
@@ -401,49 +348,6 @@ fn num_el_dst() -> u32 {
 
 static const char src_ggml_shader_common_3[] = MULTILINE(
 
-
-fn get_src0_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src0(x/2u, y/2u, z/2u);
-    let vec1 = unpack2x16float(bitcast<u32>(val1));
-    return vec1[x%2u];
-}
-
-fn get_src1_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src1(x/2u, y/2u, z/2u);
-    let vec1 = unpack2x16float(bitcast<u32>(val1));
-    return vec1[x%2u];
-}
-
-fn get_src2_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src2(x/2u, y/2u, z/2u);
-    let vec1 = unpack2x16float(bitcast<u32>(val1));
-    return vec1[x%2u];
-}
-
-fn get_src3_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src3(x/2u, y/2u, z/2u);
-    let vec1 = unpack2x16float(bitcast<u32>(val1));
-    return vec1[x%2u];
-}
-
-fn get_src4_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src4(x/2u, y/2u, z/2u);
-    let vec1 = unpack2x16float(bitcast<u32>(val1));
-    return vec1[x%2u];
-}
-
-fn get_src5_pf16(x: u32, y: u32, z: u32) -> f32 {
-    let val1 = get_src5(x/2u, y/2u, z/2u);
-    let vec1 = unpack2x16float(bitcast<u32>(val1));
-    return vec1[x%2u];
-}
-
-fn set_dst_pf16(x: u32, y: u32, z: u32, v: f32) {
-    let val1 = get_dst(x/2u, y/2u, z/2u);
-    var vec1 = unpack2x16float(bitcast<u32>(val1));
-    vec1[x%2u] = v;
-    set_dst(x/2u, y/2u, z/2u, bitcast<f32>(pack2x16float(vec1)));
-}
 
 fn get_src0_lin_pf16(x: u32) -> f32 {
     let val1 = get_src0_lin(x/2u);
@@ -494,6 +398,36 @@ fn set_dst_lin_pf16(x: u32, v: f32) {
     vec1[x%2u] = v;
     set_dst_lin(x/2u, bitcast<f32>(pack2x16float(vec1)));
 }
+
+
+fn get_src0_pf16(x: u32, y: u32, z: u32) -> f32 {
+    return get_src0_lin_pf16(calc_src_idx(x, y, z, 0));
+}
+
+fn get_src1_pf16(x: u32, y: u32, z: u32) -> f32 {
+    return get_src1_lin_pf16(calc_src_idx(x, y, z, 1));
+}
+
+fn get_src2_pf16(x: u32, y: u32, z: u32) -> f32 {
+    return get_src2_lin_pf16(calc_src_idx(x, y, z, 2));
+}
+
+fn get_src3_pf16(x: u32, y: u32, z: u32) -> f32 {
+    return get_src3_lin_pf16(calc_src_idx(x, y, z, 3));
+}
+
+fn get_src4_pf16(x: u32, y: u32, z: u32) -> f32 {
+    return get_src4_lin_pf16(calc_src_idx(x, y, z, 4));
+}
+
+fn get_src5_pf16(x: u32, y: u32, z: u32) -> f32 {
+    return get_src5_lin_pf16(calc_src_idx(x, y, z, 5));
+}
+
+fn set_dst_pf16(x: u32, y: u32, z: u32, v: f32) {
+    set_dst_lin_pf16(calc_dst_idx(x, y, z), v);
+}
+
 
 
 );
@@ -823,7 +757,7 @@ fn kernel_scale_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     var input = src0_v4[global_id.x];
-    let scale = get_src1_lin(0u);
+    let scale = get_src1_lin_pf16(0u);
     input.x = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.x)) * scale));
     input.y = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.y)) * scale));
     input.z = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.z)) * scale));
@@ -864,7 +798,7 @@ fn kernel_scale_inplace_pf16(@builtin(global_invocation_id) global_id: vec3<u32>
     }
 
     var input = dst_v4[global_id.x];
-    let scale = get_src1_lin(0u);
+    let scale = get_src1_lin_pf16(0u);
     input.x = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.x)) * scale));
     input.y = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.y)) * scale));
     input.z = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.z)) * scale));
