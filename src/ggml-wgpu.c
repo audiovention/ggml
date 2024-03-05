@@ -711,16 +711,20 @@ static const char src_ggml_shader_kernel_add_and_trim_pf16[] = MULTILINE(
 @compute
 @workgroup_size(256)
 fn kernel_add_and_trim_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let mult_idx = global_id.x * 2u;
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
 
-    if (global_id.x >= output_len) {
+    if (mult_idx >= output_len) {
         return;
     }
+
+    var result = vec2f();
+    result.x = get_src0_pf16(mult_idx + u32(tensor_dimension_params.src[0].ne[0]) - output_len, global_id.y, global_id.z) + 
+        get_src1_pf16(mult_idx + u32(tensor_dimension_params.src[1].ne[0]) - output_len, global_id.y, global_id.z);
+    result.y = get_src0_pf16(mult_idx+1u + u32(tensor_dimension_params.src[0].ne[0]) - output_len, global_id.y, global_id.z) + 
+        get_src1_pf16(mult_idx+1u + u32(tensor_dimension_params.src[1].ne[0]) - output_len, global_id.y, global_id.z);
     
-    set_dst_pf16(global_id.x, global_id.y, global_id.z, 
-        get_src0_pf16(global_id.x + u32(tensor_dimension_params.src[0].ne[0]) - output_len, global_id.y, global_id.z) + 
-        get_src1_pf16(global_id.x + u32(tensor_dimension_params.src[1].ne[0]) - output_len, global_id.y, global_id.z)
-    );
+    set_dst(global_id.x, global_id.y, global_id.z, bitcast<f32>(pack2x16float(result)));
 }
 
 );
@@ -2649,11 +2653,12 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_ADD_AND_TRIM:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
                     if (dst->type == GGML_TYPE_F16) {
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 512);
                         GGML_WGPU_ENCODE_KERNEL(add_and_trim_pf16, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                         GGML_WGPU_ENCODE_KERNEL(add_and_trim, dispatch_x, dst->ne[1], dst->ne[2])
                     }
                 } break;
