@@ -989,7 +989,9 @@ static const char src_ggml_shader_kernel_repeat_pf16[] = MULTILINE(
 @compute
 @workgroup_size(256)
 fn kernel_repeat_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
+    let mult_idx = global_id.x * 2u;
+
+    if (mult_idx >= u32(tensor_dimension_params.dst.ne[0])) {
         return;
     }
 
@@ -997,7 +999,7 @@ fn kernel_repeat_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx1 = global_id.y * u32(tensor_dimension_params.src[0].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
     let idx2 = global_id.z * u32(tensor_dimension_params.src[0].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
 
-    set_dst_pf16(global_id.x, global_id.y, global_id.z, get_src0_pf16(idx0, idx1, idx2));
+    set_dst(global_id.x, global_id.y, global_id.z, get_src0(idx0, idx1, idx2));
 }
 
 );
@@ -2728,11 +2730,12 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_REPEAT:
                 {
-                    const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
                     if (dst->type == GGML_TYPE_F16) {
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 512);
                         GGML_WGPU_ENCODE_KERNEL(repeat_pf16, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                         GGML_WGPU_ENCODE_KERNEL(repeat, dispatch_x, dst->ne[1], dst->ne[2])
                     }
                 } break;
