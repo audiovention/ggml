@@ -2793,6 +2793,7 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
+                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     GGML_ASSERT(dst->ne[3] == 1);
 #if 0
                     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
@@ -2812,6 +2813,7 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                 {
+                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     const int32_t d0 = dst->op_params[2];
                     GGML_ASSERT(dst->ne[3] == 1);
                     if (d0 >= 4) {
@@ -2824,12 +2826,14 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_ACC:
                 {
+                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(acc, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_ADD_AND_TANH_BACK:
                 {
+                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
@@ -2840,12 +2844,14 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_ADD:
                 {
+                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
                     GGML_WGPU_ENCODE_KERNEL(add, dispatch_x, dst->ne[1], dst->ne[2])
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
                 {
+                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     GGML_ASSERT(dst->ne[0] == 1);
                     GGML_ASSERT(dst->ne[2] == 1);
                     GGML_ASSERT(dst->ne[3] == 1);
@@ -2859,6 +2865,7 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_SPECIAL_ADAM_STEP:
                 {
+                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
