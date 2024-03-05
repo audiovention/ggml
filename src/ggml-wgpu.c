@@ -497,12 +497,9 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
         return;
     }
 
-    // var output : f32 = 0.0;
     var output = vec4f();
 
     if (has_bias) {
-        // let bias_idx = global_id.y * tensor_dimension_params.src[2].nb[1];
-        // let bias = extra_uniform1[bias_idx/4u][bias_idx%4u];
         let bias = get_src2(0u, global_id.y, 0u);
         output += bias;
     }
@@ -510,28 +507,16 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
     if (has_inject_signal) {
         let src3_idx = global_id.x + global_id.y * tensor_dimension_params.src[3].nb[1]/4u + global_id.z * tensor_dimension_params.src[3].nb[2]/4u;
         output += src3_v4[src3_idx];
-        // output.x += get_src3(mult_idx,      global_id.y, global_id.z);
-        // output.y += get_src3(mult_idx + 1u, global_id.y, global_id.z);
-        // output.z += get_src3(mult_idx + 2u, global_id.y, global_id.z);
-        // output.w += get_src3(mult_idx + 3u, global_id.y, global_id.z);
     }
 
     let base_src1_offset = mult_idx + global_id.z * tensor_dimension_params.src[1].nb[2];
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
         let in_idx_offset = ik * d0 + base_src1_offset;
-        // let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            // let input_idx = in_idx_offset + ic * tensor_dimension_params.src[1].nb[1];
             let input_idx = (in_idx_offset + ic * tensor_dimension_params.src[1].nb[1])/4u;
             var input = src1_v4[input_idx];
-            // input.x = get_src1_lin(input_idx);
-            // input.y = get_src1_lin(input_idx+1u);
-            // input.z = get_src1_lin(input_idx+2u);
-            // input.w = get_src1_lin(input_idx+3u);
             let kernel = get_src0(global_id.y, ic, ik);
-            // let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
-            // let kernel = extra_uniform0[kernel_idx/4u][kernel_idx%4u];
             output = output + input * kernel;
         }
     }
@@ -542,306 +527,10 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
 
     let dst_idx = global_id.x + global_id.y * tensor_dimension_params.dst.nb[1]/4u + global_id.z * tensor_dimension_params.dst.nb[2]/4u;
     dst_v4[dst_idx] = output;
-
-    // set_dst(mult_idx, global_id.y, global_id.z,    output.x);
-    // set_dst(mult_idx+1u, global_id.y, global_id.z, output.y);
-    // set_dst(mult_idx+2u, global_id.y, global_id.z, output.z);
-    // set_dst(mult_idx+3u, global_id.y, global_id.z, output.w);
 }
 
 );
 
-// const nk_8x8x3 = 3u;
-// const channels_8x8x3 = 8u;
-// var<workgroup> workgroup_data_input_8x8x3: array<array<vec4f, channels_8x8x3>, 32>;
-// @compute
-// @workgroup_size(32, channels_8x8x3)
-// fn kernel_conv_1d_small_kern_no_offsets_8x8x3(@builtin(global_invocation_id) global_id: vec3<u32>, 
-//     @builtin(workgroup_id) wg_id: vec3<u32>,
-//     @builtin(local_invocation_id) local_id: vec3<u32>) {
-//     let d0 = u32(tensor_dimension_params.params[0][2]);
-//     let d0d4 = d0 / 4u;
-//     let apply_tanh = bool(tensor_dimension_params.params[0][3]);
-//     let has_bias = bool(tensor_dimension_params.params[1][0]);
-//     let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
-
-//     let output_len = u32(tensor_dimension_params.dst.ne[0]);
-//     let output_len_d4 = (output_len + 3u) / 4u;
-
-//     let kern_output_vec_values_per_thread = 16u;
-//     let start_idx_d4 = (global_id.x/d0d4) * kern_output_vec_values_per_thread * d0d4 + (global_id.x) % d0d4;
-
-//     if (start_idx_d4 >= output_len_d4) {
-//         return;
-//     }
-
-//     var kernel = array<array<f32, channels_8x8x3>, nk_8x8x3>();
-//     for (var ik = 0u; ik < nk_8x8x3; ik = ik + 1u) {
-//         for (var ic = 0u; ic < channels_8x8x3; ic = ic + 1u) {
-//             kernel[ik][ic] = get_src0(local_id.y, ic, ik);
-//         }
-//     }
-
-//     let values_vec_this_thread = min((output_len_d4 - start_idx_d4) / d0d4 + 1u, kern_output_vec_values_per_thread);
-//     let input_values_vec_this_thread = values_vec_this_thread + nk_8x8x3 - 1u;
-
-
-//     var output = array<vec4f, nk_8x8x3>();
-
-//     var bias = 0.0;
-//     if (has_bias) {
-//         bias = get_src2(0u, local_id.y, 0u);
-//     }
-
-//     let input_base_idx = start_idx_d4 + (local_id.y * tensor_dimension_params.src[1].nb[1] + global_id.z * tensor_dimension_params.src[1].nb[2]) / 4u;
-//     let src3_base_idx  = start_idx_d4 + (local_id.y * tensor_dimension_params.src[3].nb[1] + global_id.z * tensor_dimension_params.src[3].nb[2]) / 4u;
-//     let dst_base_idx   = start_idx_d4 + (local_id.y * tensor_dimension_params.dst.nb[1]    + global_id.z * tensor_dimension_params.dst.nb[2]   ) / 4u;
-
-//     for (var i = 0u; i < input_values_vec_this_thread; i = i + 1u) {
-//         workgroup_data_input_8x8x3[local_id.x][local_id.y] = src1_v4[input_base_idx + i * d0d4];
-//         workgroupBarrier();
-
-//         var src3_here = vec4f();
-//         let dst_offs_vec_idx = (max(i, nk_8x8x3 - 1u) + 1u - nk_8x8x3) * d0d4;
-//         if (has_inject_signal && i >= (nk_8x8x3 - 1u)) {
-//             src3_here = src3_v4[src3_base_idx + dst_offs_vec_idx];
-//         }
-
-//         for (var ic = 0u; ic < channels_8x8x3; ic = ic + 1u) {
-//             let ic_adj = (ic + local_id.y) % channels_8x8x3;
-//             let in_here = workgroup_data_input_8x8x3[local_id.x][ic_adj];
-//             for (var ik = 0u; ik < nk_8x8x3; ik = ik + 1u) {
-//                 let kern_idx = (i + ik) % nk_8x8x3;
-//                 output[ik] = output[ik] + in_here * kernel[kern_idx][ic_adj];
-//             }
-//         }
-
-//         let reg_idx = nk_8x8x3 - 1u - (i % nk_8x8x3);
-
-//         if (i >= (nk_8x8x3 - 1u)) {
-//             output[reg_idx] = output[reg_idx] + bias;
-//             if (has_inject_signal) {
-//                 output[reg_idx] += src3_here;
-//             }
-//             if (apply_tanh) {
-//                 output[reg_idx] = tanh(output[reg_idx]);
-//             }
-//             dst_v4[dst_base_idx + dst_offs_vec_idx] = output[reg_idx];
-//         }
-
-//         output[reg_idx] = vec4f();
-//     }
-// }
-
-
-// const kernel_conv_1d_small_kern_output_values_per_thread = 16u;
-// const kernel_conv_1d_small_kern_output_channels_per_warp = 16u;
-// const kernel_conv_1d_small_kern_num_threads_x = 16u;
-// const kernel_conv_1d_small_kern_input_channels = 16u;
-// const kernel_conv_1d_small_kern_nk = 3u;
-// const kernel_conv_1d_small_kern_input_values_per_thread = kernel_conv_1d_small_kern_output_values_per_thread + kernel_conv_1d_small_kern_nk - 1u;
-// const kernel_conv_1d_small_kern_total_kernel_size = kernel_conv_1d_small_kern_output_channels_per_warp * kernel_conv_1d_small_kern_input_channels * kernel_conv_1d_small_kern_nk;
-// // const kernel_conv_1d_small_kern_total_input_size = kernel_conv_1d_small_kern_input_channels * kernel_conv_1d_small_kern_input_values_per_thread * kernel_conv_1d_small_kern_num_threads_x;
-// const total_kernel_invocs_warp = kernel_conv_1d_small_kern_output_channels_per_warp * kernel_conv_1d_small_kern_num_threads_x;
-// const iters_to_load_kernel = (kernel_conv_1d_small_kern_total_kernel_size + total_kernel_invocs_warp - 1u) / total_kernel_invocs_warp;
-
-// var<workgroup> workgroup_data_kernel: array<array<array<f32, kernel_conv_1d_small_kern_input_channels>, kernel_conv_1d_small_kern_nk>, kernel_conv_1d_small_kern_output_channels_per_warp>;
-// var<workgroup> workgroup_data_input:  array<array<f32, kernel_conv_1d_small_kern_num_threads_x>, kernel_conv_1d_small_kern_input_channels>;
-
-
-// fn get_dilated_start_idx(x: u32, d0: u32) -> u32 {
-//     return (x/d0) * kernel_conv_1d_small_kern_output_values_per_thread * d0 + x % d0;
-// }
-
-// fn get_dilated_idx(start_idx: u32, idx: u32, d0: u32) -> u32 {
-//     return start_idx + idx * d0;
-// }
-
-// fn index_linear_from_3d(x: u32, y: u32, z: u32, x_max:u32, y_max: u32, z_max: u32) -> u32 {
-//     return (z * y_max + y) * x_max + x;
-// }
-
-// fn index_3d_from_linear(idx: u32, x_max:u32, y_max: u32, z_max: u32) -> vec3<u32> {
-//     let z = idx / (x_max * y_max);
-//     let y = (idx - z * x_max * y_max) / x_max;
-//     let x = idx - z * x_max * y_max - y * x_max;
-//     return vec3<u32>(x, y, z);
-// }
-
-// @compute
-// @workgroup_size(kernel_conv_1d_small_kern_num_threads_x, kernel_conv_1d_small_kern_output_channels_per_warp)
-// fn kernel_conv_1d_small_kern_opti(@builtin(global_invocation_id) global_id: vec3<u32>, 
-//     @builtin(workgroup_id) wg_id: vec3<u32>,
-//     @builtin(local_invocation_id) local_id: vec3<u32>,
-//     @builtin(local_invocation_index) local_index: u32) {
-//     let s0 = u32(tensor_dimension_params.params[0][0]);
-//     let p0 = u32(tensor_dimension_params.params[0][1]);
-//     let d0 = u32(tensor_dimension_params.params[0][2]);
-//     let apply_tanh = bool(tensor_dimension_params.params[0][3]);
-//     let has_bias = bool(tensor_dimension_params.params[1][0]);
-//     let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
-//     let nk = u32(tensor_dimension_params.src[0].ne[2]);
-
-
-//     let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
-//     let output_channels = u32(tensor_dimension_params.dst.ne[1]);
-//     let input_len = u32(tensor_dimension_params.src[1].ne[0]);
-//     let output_len = u32(tensor_dimension_params.dst.ne[0]);
-//     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
-
-//     let start_idx = get_dilated_start_idx(global_id.x, d0);
-
-//     if (start_idx >= output_len) {
-//         return;
-//     }
-//     if (global_id.y >= output_channels) {
-//         return;
-//     }
-//     // if (global_id.z >= num_batches) {
-//     //     return;
-//     // }
-
-//     let values_this_thread = min((output_len - start_idx) / d0 + 1u, kernel_conv_1d_small_kern_output_values_per_thread);
-//     let input_values_this_thread = values_this_thread + kernel_conv_1d_small_kern_nk - 1u;
-
-//     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
-
-//     var output = array<f32, kernel_conv_1d_small_kern_output_values_per_thread>();
-
-//     if (has_bias) {
-//         let ph = get_src2(0u, global_id.y, 0u);
-//         for (var i = 0u; i < values_this_thread; i = i + 1u) {
-//             output[i] = ph;
-//         }
-//     }
-
-//     if (has_inject_signal) {
-//         for (var i = 0u; i < values_this_thread; i = i + 1u) {
-//             output[i] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + get_dilated_idx(start_idx, i, d0), global_id.y, global_id.z);
-//         }
-//     }
-
-//     let base_in_idx_offset = input_len - real_input_len;
-
-//     for (var i=0u; i<input_values_this_thread; i=i+1u) {
-//         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-//             let input = get_src1(base_in_idx_offset + get_dilated_idx(start_idx, i, d0), ic, global_id.z);
-//             for (var ik = 0u; ik < nk; ik = ik + 1u) {
-//                 let iout = i32(i + ik) - 2;
-//                 if ( iout >= 0 && iout < i32(values_this_thread)) {
-//                     let kernel = get_src0(global_id.y, ic, nk-ik- 1u);
-//                     output[iout] = output[iout] + input * kernel;
-//                 }
-//             }
-//         }
-//     }
-
-//     if (apply_tanh) {
-//         for (var i = 0u; i < values_this_thread; i = i + 1u) {
-//             output[i] = tanh(output[i]);
-//         }
-//     }
-
-//     for (var i = 0u; i < values_this_thread; i = i + 1u) {
-//         set_dst(get_dilated_idx(start_idx, i, d0), global_id.y, global_id.z, output[i]);
-//     }
-// }
-
-
-// @compute
-// @workgroup_size(kernel_conv_1d_small_kern_num_threads_x, kernel_conv_1d_small_kern_output_channels_per_warp)
-// fn kernel_conv_1d_small_kern_opti_large_dil(@builtin(global_invocation_id) global_id: vec3<u32>, 
-//     @builtin(workgroup_id) wg_id: vec3<u32>,
-//     @builtin(local_invocation_id) local_id: vec3<u32>,
-//     @builtin(local_invocation_index) local_index: u32) {
-//     let s0 = u32(tensor_dimension_params.params[0][0]);
-//     let p0 = u32(tensor_dimension_params.params[0][1]);
-//     let d0 = u32(tensor_dimension_params.params[0][2]);
-//     let apply_tanh = bool(tensor_dimension_params.params[0][3]);
-//     let has_bias = bool(tensor_dimension_params.params[1][0]);
-//     let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
-//     let nk = u32(tensor_dimension_params.src[0].ne[2]);
-
-
-//     let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
-//     let output_channels = u32(tensor_dimension_params.dst.ne[1]);
-//     let input_len = u32(tensor_dimension_params.src[1].ne[0]);
-//     let output_len = u32(tensor_dimension_params.dst.ne[0]);
-//     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
-
-//     let start_idx = get_dilated_start_idx(wg_id.x*kernel_conv_1d_small_kern_num_threads_x, d0);
-
-//     if (start_idx >= output_len) {
-//         return;
-//     }
-//     // if (global_id.y >= output_channels) {
-//     //     return;
-//     // }
-//     // if (global_id.z >= num_batches) {
-//     //     return;
-//     // }
-
-//     for (var ik=0u; ik<kernel_conv_1d_small_kern_nk; ik=ik+1u) {
-//         workgroup_data_kernel[local_id.y][nk-ik- 1u][local_id.x] = get_src0(local_id.x, local_id.y, ik);
-//     }
-//     workgroupBarrier();
-
-//     let values_this_thread = min((output_len - start_idx) / d0 + 1u, kernel_conv_1d_small_kern_output_values_per_thread);
-//     let input_values_this_thread = values_this_thread + kernel_conv_1d_small_kern_nk - 1u;
-
-//     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
-
-//     var output = array<f32, kernel_conv_1d_small_kern_output_values_per_thread>();
-
-//     if (has_bias) {
-//         let ph = get_src2(0u, global_id.y, 0u);
-//         for (var i = 0u; i < values_this_thread; i = i + 1u) {
-//             output[i] = ph;
-//         }
-//     }
-
-//     if (has_inject_signal) {
-//         let offs1 = local_id.x + u32(tensor_dimension_params.src[3].ne[0]) - output_len + start_idx + global_id.y * tensor_dimension_params.src[3].nb[1] +
-//             global_id.z * tensor_dimension_params.src[3].nb[2];
-//         for (var i = 0u; i < values_this_thread; i = i + 1u) {
-//             // output[i] += get_src3(u32(tensor_dimension_params.src[3].ne[0]) - output_len + start_idx + local_id.x + i*d0, global_id.y, global_id.z);
-//             output[i] += get_src3_lin(i*d0+offs1);
-//         }
-//     }
-
-//     let base_in_idx_offset = input_len - real_input_len;
-//     let base_in_idx = base_in_idx_offset + start_idx + local_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
-
-//     for (var i=0u; i<input_values_this_thread; i=i+1u) {
-//         workgroup_data_input[local_id.y][local_id.x] = get_src1_lin(base_in_idx + i*d0 + local_id.y * tensor_dimension_params.src[1].nb[1]);
-//         workgroupBarrier();
-//         for (var ic = 0u; ic < kernel_conv_1d_small_kern_input_channels; ic = ic + 1u) {
-//             // let input = get_src1_lin(base_in_idx + i*d0 + ic * tensor_dimension_params.src[1].nb[1]);
-//             let input = workgroup_data_input[ic][local_id.x];
-//             for (var ik = 0u; ik < kernel_conv_1d_small_kern_nk; ik = ik + 1u) {
-//                 let iout = i32(i + ik) - 2;
-//                 if ( iout >= 0 && iout < i32(values_this_thread)) {
-//                     let kernel = workgroup_data_kernel[ic][ik][global_id.y];
-//                     // let kernel = get_src0(global_id.y, ic, nk-ik- 1u);
-//                     output[iout] = output[iout] + input * kernel;
-//                 }
-//             }
-//         }
-//     }
-
-//     if (apply_tanh) {
-//         for (var i = 0u; i < values_this_thread; i = i + 1u) {
-//             output[i] = tanh(output[i]);
-//         }
-//     }
-
-//     let offs1 = local_id.x + start_idx + global_id.y * tensor_dimension_params.dst.nb[1] +
-//             global_id.z * tensor_dimension_params.dst.nb[2];
-//     for (var i = 0u; i < values_this_thread; i = i + 1u) {
-//         set_dst_lin(i*d0+offs1, output[i]);
-//         // set_dst(start_idx + local_id.x + i*d0, global_id.y, global_id.z, output[i]);
-//     }
-// }
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_simpl[] = MULTILINE(
 
@@ -1087,7 +776,6 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
             //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
             output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
         }
-        // workgroupBarrier();
     }
 
     workgroup_data[local_id.x] = output;
@@ -1691,10 +1379,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(silu)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_simpl)
-    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti)
-    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_opti_large_dil)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets)
-    // GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3)
     GGML_WGPU_DECL_KERNEL(add_and_trim)
     GGML_WGPU_DECL_KERNEL(scale)
     GGML_WGPU_DECL_KERNEL(scale_inplace)
@@ -2026,10 +1711,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(silu);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_simpl);
-        // GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_opti);
-        // GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_opti_large_dil);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offsets);
-        // GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offsets_8x8x3);
         GGML_WGPU_ADD_KERNEL(add_and_trim);
         GGML_WGPU_ADD_KERNEL(scale);
         GGML_WGPU_ADD_KERNEL(scale_inplace);
@@ -2073,10 +1755,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(silu)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_simpl)
-    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti)
-    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_opti_large_dil)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets)
-    // GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets_8x8x3)
     GGML_WGPU_DEL_KERNEL(add_and_trim)
     GGML_WGPU_DEL_KERNEL(scale)
     GGML_WGPU_DEL_KERNEL(scale_inplace)
@@ -2617,36 +2296,14 @@ void ggml_wgpu_graph_compute(
                         if (dst->src[3]) {
                             GGML_ASSERT(output_len == dst->src[3]->ne[0]);
                         }
-                        if (0 && d0 >=16 && 16 == dst->src[0]->ne[0] && 16 == dst->src[0]->ne[1] && 3 == nk) {
-                            GGML_ASSERT(false);
-                            // const int32_t vals_to_round = MAX(d0, num_threads_x);
-                            // const int32_t dispatch_x = vals_to_round/num_threads_x * CEIL_DIV(output_len, (vals_to_round * vals_per_thread));
-                            // const int32_t dispatch_y = 1;//CEIL_DIV(dst->ne[1], 16);
-                            // if (d0 >=16) {
-                            //     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti_large_dil, dispatch_x, dispatch_y, dst->ne[2])
-                            // } else {
-                            //     GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_opti, dispatch_x, dispatch_y, dst->ne[2])
-                            // }
+                        if (d0>=4) {
+                            const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
+                            const int32_t dispatch_y = dst->ne[1];
+                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dst->ne[2])
                         } else {
-                            if (d0>=4) {
-                                if (0 && dst->ne[1] == 8) {
-                                    const int32_t dispatch_x = CEIL_DIV(output_len, 4*32*16);
-                                    // GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets_8x8x3, dispatch_x, 1, dst->ne[2])
-                                } else {
-                                    const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
-                                    const int32_t dispatch_y = dst->ne[1];
-                                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dst->ne[2])
-                                }
-                            } else {
-                                const int32_t dispatch_x = CEIL_DIV(output_len, 256);
-                                const int32_t dispatch_y = dst->ne[1];
-                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
-                            }
-                            // const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
-                            // // const int32_t dispatch_y = CEIL_DIV(dst->ne[1], 2);
-                            // const int32_t dispatch_y = dst->ne[1];
-                            // // GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
-                            // GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dst->ne[2])
+                            const int32_t dispatch_x = CEIL_DIV(output_len, 256);
+                            const int32_t dispatch_y = dst->ne[1];
+                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
                         }
                     }
                 } break;
