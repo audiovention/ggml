@@ -63,6 +63,7 @@ static void handle_request_device(WGPURequestDeviceStatus status,
 }
 
 #ifdef WEBGPU_BACKEND_DAWN
+#include "time.h"
 void sleep_ms(int milliseconds)
 {
     #ifdef WIN32
