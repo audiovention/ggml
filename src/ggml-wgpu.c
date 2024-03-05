@@ -771,6 +771,27 @@ fn kernel_add_and_trim(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 );
 
+
+static const char src_ggml_shader_kernel_add_and_trim_pf16[] = MULTILINE(
+
+@compute
+@workgroup_size(256)
+fn kernel_add_and_trim_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+
+    if (global_id.x >= output_len) {
+        return;
+    }
+    
+    set_dst_pf16(global_id.x, global_id.y, global_id.z, 
+        get_src0_pf16(global_id.x + u32(tensor_dimension_params.src[0].ne[0]) - output_len, global_id.y, global_id.z) + 
+        get_src1_pf16(global_id.x + u32(tensor_dimension_params.src[1].ne[0]) - output_len, global_id.y, global_id.z)
+    );
+}
+
+);
+
+
 static const char src_ggml_shader_kernel_scale[] = MULTILINE(
 
 
@@ -784,6 +805,31 @@ fn kernel_scale(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     
     dst_v4[global_id.x] = src0_v4[global_id.x] * get_src1_lin(0u);
+}
+
+);
+
+
+static const char src_ggml_shader_kernel_scale_pf16[] = MULTILINE(
+
+
+@compute
+@workgroup_size(256)
+fn kernel_scale_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let mult_idx = global_id.x * 8u;
+
+    if (mult_idx >= num_el_dst()) {
+        return;
+    }
+
+    var input = src0_v4[global_id.x];
+    let scale = get_src1_lin(0u);
+    input.x = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.x)) * scale));
+    input.y = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.y)) * scale));
+    input.z = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.z)) * scale));
+    input.w = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.w)) * scale));
+    
+    dst_v4[global_id.x] = input;
 }
 
 );
@@ -805,6 +851,31 @@ fn kernel_scale_inplace(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 );
 
+
+static const char src_ggml_shader_kernel_scale_inplace_pf16[] = MULTILINE(
+
+@compute
+@workgroup_size(256)
+fn kernel_scale_inplace_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let mult_idx = global_id.x * 8u;
+
+    if (mult_idx >= num_el_dst()) {
+        return;
+    }
+
+    var input = dst_v4[global_id.x];
+    let scale = get_src1_lin(0u);
+    input.x = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.x)) * scale));
+    input.y = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.y)) * scale));
+    input.z = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.z)) * scale));
+    input.w = bitcast<f32>(pack2x16float(unpack2x16float(bitcast<u32>(input.w)) * scale));
+    
+    dst_v4[global_id.x] = input;
+}
+
+);
+
+
 static const char src_ggml_shader_kernel_sub[] = MULTILINE(
 
 
@@ -824,6 +895,27 @@ fn kernel_sub(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 );
 
+
+static const char src_ggml_shader_kernel_sub_pf16[] = MULTILINE(
+
+
+@compute
+@workgroup_size(256)
+fn kernel_sub_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= num_el_dst()) {
+        return;
+    }
+    if ((global_id.x % tensor_dimension_params.dst.nb[1])<u32(tensor_dimension_params.dst.ne[0])) {
+        set_dst_lin_pf16(global_id.x, get_src0_lin_pf16(global_id.x) - get_src1_lin_pf16(global_id.x));
+    } else {
+        set_dst_lin_pf16(global_id.x, 0.0);
+    }
+    // set_dst_lin_pf16(global_id.x, get_src0_lin_pf16(global_id.x) - get_src1_lin_pf16(global_id.x));
+}
+
+);
+
+
 static const char src_ggml_shader_kernel_sqr[] = MULTILINE(
 
 
@@ -835,6 +927,22 @@ fn kernel_sqr(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     let x = get_src0_lin(global_id.x);
     set_dst_lin(global_id.x, x * x);
+}
+
+);
+
+
+static const char src_ggml_shader_kernel_sqr_pf16[] = MULTILINE(
+
+
+@compute
+@workgroup_size(256)
+fn kernel_sqr_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= num_el_dst()) {
+        return;
+    }
+    let x = get_src0_lin_pf16(global_id.x);
+    set_dst_lin_pf16(global_id.x, x * x);
 }
 
 );
@@ -873,6 +981,39 @@ fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>,
 );
 
 
+static const char src_ggml_shader_kernel_sum_pf16[] = MULTILINE(
+
+var<workgroup> workgroup_data: array<f32, 256>;
+
+@compute
+@workgroup_size(256)
+fn kernel_sum_pf16(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let ne00 = tensor_dimension_params.src[0].nb[1] / tensor_dimension_params.src[0].nb[0];
+    let num_el_src0 = ne00 * u32(tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
+
+    var sum : f32 = 0.0;
+    
+    for (var i = local_id.x; i < num_el_src0; i = i + 256u) {
+        sum = sum + get_src0_lin_pf16(i);
+    }
+
+    workgroup_data[local_id.x] = sum;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        sum = 0.0;
+        for (var i = 0u; i < 256u; i = i + 1u) {
+            sum = sum + workgroup_data[i];
+        }
+        set_dst_lin_pf16(0u, sum);
+    }
+}
+
+);
+
+
 static const char src_ggml_shader_kernel_repeat[] = MULTILINE(
 
 
@@ -888,6 +1029,26 @@ fn kernel_repeat(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx2 = global_id.z * u32(tensor_dimension_params.src[0].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
 
     set_dst(global_id.x, global_id.y, global_id.z, get_src0(idx0, idx1, idx2));
+}
+
+);
+
+
+static const char src_ggml_shader_kernel_repeat_pf16[] = MULTILINE(
+
+
+@compute
+@workgroup_size(256)
+fn kernel_repeat_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
+        return;
+    }
+
+    let idx0 = global_id.x * u32(tensor_dimension_params.src[0].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+    let idx1 = global_id.y * u32(tensor_dimension_params.src[0].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
+    let idx2 = global_id.z * u32(tensor_dimension_params.src[0].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
+
+    set_dst_pf16(global_id.x, global_id.y, global_id.z, get_src0_pf16(idx0, idx1, idx2));
 }
 
 );
@@ -909,6 +1070,28 @@ fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     set_dst(global_id.x, global_id.y, global_id.z, 
         get_src0(global_id.x, global_id.y, global_id.z) * get_src1(idx0, idx1, idx2));
+}
+
+
+);
+
+
+static const char src_ggml_shader_kernel_mul_pf16[] = MULTILINE(
+
+
+@compute
+@workgroup_size(256)
+fn kernel_mul_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
+        return;
+    }
+
+    let idx0 = global_id.x * u32(tensor_dimension_params.src[1].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+    let idx1 = global_id.y * u32(tensor_dimension_params.src[1].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
+    let idx2 = global_id.z * u32(tensor_dimension_params.src[1].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
+
+    set_dst_pf16(global_id.x, global_id.y, global_id.z, 
+        get_src0_pf16(global_id.x, global_id.y, global_id.z) * get_src1_pf16(idx0, idx1, idx2));
 }
 
 
@@ -1566,13 +1749,21 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_simpl)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets)
     GGML_WGPU_DECL_KERNEL(add_and_trim)
+    GGML_WGPU_DECL_KERNEL(add_and_trim_pf16)
     GGML_WGPU_DECL_KERNEL(scale)
+    GGML_WGPU_DECL_KERNEL(scale_pf16)
     GGML_WGPU_DECL_KERNEL(scale_inplace)
+    GGML_WGPU_DECL_KERNEL(scale_inplace_pf16)
     GGML_WGPU_DECL_KERNEL(sub)
+    GGML_WGPU_DECL_KERNEL(sub_pf16)
     GGML_WGPU_DECL_KERNEL(sqr)
+    GGML_WGPU_DECL_KERNEL(sqr_pf16)
     GGML_WGPU_DECL_KERNEL(sum)
+    GGML_WGPU_DECL_KERNEL(sum_pf16)
     GGML_WGPU_DECL_KERNEL(repeat)
+    GGML_WGPU_DECL_KERNEL(repeat_pf16)
     GGML_WGPU_DECL_KERNEL(mul)
+    GGML_WGPU_DECL_KERNEL(mul_pf16)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_filter)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_input)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_input_large_dil)
@@ -1900,13 +2091,21 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_simpl);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offsets);
         GGML_WGPU_ADD_KERNEL(add_and_trim);
+        GGML_WGPU_ADD_KERNEL(add_and_trim_pf16);
         GGML_WGPU_ADD_KERNEL(scale);
+        GGML_WGPU_ADD_KERNEL(scale_pf16);
         GGML_WGPU_ADD_KERNEL(scale_inplace);
+        GGML_WGPU_ADD_KERNEL(scale_inplace_pf16);
         GGML_WGPU_ADD_KERNEL(sub);
+        GGML_WGPU_ADD_KERNEL(sub_pf16);
         GGML_WGPU_ADD_KERNEL(sqr);
+        GGML_WGPU_ADD_KERNEL(sqr_pf16);
         GGML_WGPU_ADD_KERNEL(sum);
+        GGML_WGPU_ADD_KERNEL(sum_pf16);
         GGML_WGPU_ADD_KERNEL(repeat);
+        GGML_WGPU_ADD_KERNEL(repeat_pf16);
         GGML_WGPU_ADD_KERNEL(mul);
+        GGML_WGPU_ADD_KERNEL(mul_pf16);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_filter);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_input);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_input_large_dil);
@@ -1945,13 +2144,21 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_simpl)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets)
     GGML_WGPU_DEL_KERNEL(add_and_trim)
+    GGML_WGPU_DEL_KERNEL(add_and_trim_pf16)
     GGML_WGPU_DEL_KERNEL(scale)
+    GGML_WGPU_DEL_KERNEL(scale_pf16)
     GGML_WGPU_DEL_KERNEL(scale_inplace)
+    GGML_WGPU_DEL_KERNEL(scale_inplace_pf16)
     GGML_WGPU_DEL_KERNEL(sub)
+    GGML_WGPU_DEL_KERNEL(sub_pf16)
     GGML_WGPU_DEL_KERNEL(sqr)
+    GGML_WGPU_DEL_KERNEL(sqr_pf16)
     GGML_WGPU_DEL_KERNEL(sum)
+    GGML_WGPU_DEL_KERNEL(sum_pf16)
     GGML_WGPU_DEL_KERNEL(repeat)
+    GGML_WGPU_DEL_KERNEL(repeat_pf16)
     GGML_WGPU_DEL_KERNEL(mul)
+    GGML_WGPU_DEL_KERNEL(mul_pf16)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_filter)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_input)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_input_large_dil)
@@ -2321,8 +2528,7 @@ void ggml_wgpu_graph_compute(
                 }
         }
 
-        // GGML_ASSERT(dst->type == GGML_TYPE_F32 || dst->type == GGML_TYPE_F16);
-        GGML_ASSERT(dst->type == GGML_TYPE_F32);
+        GGML_ASSERT(dst->type == GGML_TYPE_F32 || dst->type == GGML_TYPE_F16);
         size_t offs_dst  = 0;
         WGPUBuffer id_dst  = ggml_wgpu_get_buffer(ctx, dst,  &offs_dst);
         GGML_ASSERT(id_dst);
@@ -2357,8 +2563,7 @@ void ggml_wgpu_graph_compute(
             // if (srci) GGML_ASSERT(0 == (srci->nb[1]%16));
 
             const enum ggml_type srcit = srci ? srci->type : GGML_TYPE_COUNT;
-            // GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
-            GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_COUNT);
+            GGML_ASSERT(srcit == GGML_TYPE_F32 || srcit == GGML_TYPE_F16 || srcit == GGML_TYPE_COUNT);
             size_t offs_srci = 0;
             WGPUBuffer id_srci = srci ? ggml_wgpu_get_buffer(ctx, srci, &offs_srci) : NULL;
 
@@ -2475,23 +2680,29 @@ void ggml_wgpu_graph_compute(
                     const int64_t nk = dst->src[0]->ne[2];
                     const int64_t output_len = dst->ne[0];
                     const int64_t real_input_len = output_len + d0*(nk-1);
-                    if (1 == nk) {
+                    if (dst->type == GGML_TYPE_F16) {
                         const int32_t dispatch_x = CEIL_DIV(output_len, 256);
-                        GGML_ASSERT(0 == dst->op_params[3]);
-                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
+                        const int32_t dispatch_y = dst->ne[1];
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_pf16, dispatch_x, dispatch_y, dst->ne[2])
                     } else {
-                        GGML_ASSERT(real_input_len == dst->src[1]->ne[0]);
-                        if (dst->src[3]) {
-                            GGML_ASSERT(output_len == dst->src[3]->ne[0]);
-                        }
-                        if (d0>=4) {
-                            const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
-                            const int32_t dispatch_y = dst->ne[1];
-                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dst->ne[2])
-                        } else {
+                        if (1 == nk) {
                             const int32_t dispatch_x = CEIL_DIV(output_len, 256);
-                            const int32_t dispatch_y = dst->ne[1];
-                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
+                            GGML_ASSERT(0 == dst->op_params[3]);
+                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_simpl, dispatch_x, dst->ne[1], dst->ne[2])
+                        } else {
+                            GGML_ASSERT(real_input_len == dst->src[1]->ne[0]);
+                            if (dst->src[3]) {
+                                GGML_ASSERT(output_len == dst->src[3]->ne[0]);
+                            }
+                            if (d0>=4) {
+                                const int32_t dispatch_x = CEIL_DIV(output_len, 4*256);
+                                const int32_t dispatch_y = dst->ne[1];
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dst->ne[2])
+                            } else {
+                                const int32_t dispatch_x = CEIL_DIV(output_len, 256);
+                                const int32_t dispatch_y = dst->ne[1];
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dst->ne[2])
+                            }
                         }
                     }
                 } break;
@@ -2499,17 +2710,32 @@ void ggml_wgpu_graph_compute(
                 {
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(add_and_trim, dispatch_x, dst->ne[1], dst->ne[2])
+                    if (dst->type == GGML_TYPE_F16) {
+                        GGML_WGPU_ENCODE_KERNEL(add_and_trim_pf16, dispatch_x, dst->ne[1], dst->ne[2])
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(add_and_trim, dispatch_x, dst->ne[1], dst->ne[2])
+                    }
                 } break;
             case GGML_OP_SCALE:
                 {
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 1024);
                     if (is_op_inplace_which_src == 0) {
-                        GGML_WGPU_ENCODE_KERNEL(scale_inplace, dispatch_x, 1, 1)
+                        if (dst->type == GGML_TYPE_F16) {
+                            const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 2048);
+                            GGML_WGPU_ENCODE_KERNEL(scale_inplace_pf16, dispatch_x, 1, 1)
+                        } else {
+                            const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 1024);
+                            GGML_WGPU_ENCODE_KERNEL(scale_inplace, dispatch_x, 1, 1)
+                        }
                     } else {
-                        GGML_WGPU_ENCODE_KERNEL(scale, dispatch_x, 1, 1)
+                        if (dst->type == GGML_TYPE_F16) {
+                            const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 2048);
+                            GGML_WGPU_ENCODE_KERNEL(scale_pf16, dispatch_x, 1, 1)
+                        } else {
+                            const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 1024);
+                            GGML_WGPU_ENCODE_KERNEL(scale, dispatch_x, 1, 1)
+                        }
                     }
                 } break;
             case GGML_OP_SUB:
@@ -2519,30 +2745,51 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                     GGML_WGPU_ENCODE_KERNEL(sub, dispatch_x, 1, 1)
+                    if (dst->type == GGML_TYPE_F16) {
+                        GGML_WGPU_ENCODE_KERNEL(sub_pf16, dispatch_x, 1, 1)
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(sub, dispatch_x, 1, 1)
+                    }
                 } break;
             case GGML_OP_SQR:
                 {
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
-                    GGML_WGPU_ENCODE_KERNEL(sqr, dispatch_x, 1, 1)
+                    if (dst->type == GGML_TYPE_F16) {
+                        GGML_WGPU_ENCODE_KERNEL(sqr_pf16, dispatch_x, 1, 1)
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(sqr, dispatch_x, 1, 1)
+                    }
                 } break;
             case GGML_OP_SUM:
                 {
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
-                    GGML_WGPU_ENCODE_KERNEL(sum, 1, 1, 1)
+                    if (dst->type == GGML_TYPE_F16) {
+                        GGML_WGPU_ENCODE_KERNEL(sum_pf16, 1, 1, 1)
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(sum, 1, 1, 1)
+                    }
                 } break;
             case GGML_OP_REPEAT:
                 {
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(repeat, dispatch_x, dst->ne[1], dst->ne[2])
+                    if (dst->type == GGML_TYPE_F16) {
+                        GGML_WGPU_ENCODE_KERNEL(repeat_pf16, dispatch_x, dst->ne[1], dst->ne[2])
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(repeat, dispatch_x, dst->ne[1], dst->ne[2])
+                    }
                 } break;
             case GGML_OP_MUL:
                 {
                     const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(mul, dispatch_x, dst->ne[1], dst->ne[2])
+                    if (dst->type == GGML_TYPE_F16) {
+                        GGML_WGPU_ENCODE_KERNEL(mul_pf16, dispatch_x, dst->ne[1], dst->ne[2])
+                    } else {
+                        GGML_WGPU_ENCODE_KERNEL(mul, dispatch_x, dst->ne[1], dst->ne[2])
+                    }
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
