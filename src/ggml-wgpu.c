@@ -872,11 +872,18 @@ static const char src_ggml_shader_kernel_sqr_pf16[] = MULTILINE(
 @compute
 @workgroup_size(256)
 fn kernel_sqr_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= num_el_dst()) {
+    let mult_idx = global_id.x * 2u;
+
+    if (mult_idx >= num_el_dst()) {
         return;
     }
-    let x = get_src0_lin_pf16(global_id.x);
-    set_dst_lin_pf16(global_id.x, x * x);
+
+    var input = src0[global_id.x];
+    var res = unpack2x16float(bitcast<u32>(input));
+    res = res * res;
+    input = bitcast<f32>(pack2x16float(res));
+    
+    dst[global_id.x] = input;
 }
 
 );
@@ -2689,10 +2696,11 @@ void ggml_wgpu_graph_compute(
                 {
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                     if (dst->type == GGML_TYPE_F16) {
+                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 512);
                         GGML_WGPU_ENCODE_KERNEL(sqr_pf16, dispatch_x, 1, 1)
                     } else {
+                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                         GGML_WGPU_ENCODE_KERNEL(sqr, dispatch_x, 1, 1)
                     }
                 } break;
