@@ -6033,8 +6033,12 @@ struct ggml_tensor * ggml_special_adam_step(
         struct ggml_tensor  * gradient) {
 
     struct ggml_tensor * result = ggml_view_tensor(ctx, param);
-    struct ggml_tensor * m = ggml_dup_tensor(ctx, param);
-    struct ggml_tensor * v = ggml_dup_tensor(ctx, param);
+    struct ggml_tensor * m = ggml_new_tensor(ctx, GGML_TYPE_F32, param->n_dims, param->ne);
+    struct ggml_tensor * v = ggml_new_tensor(ctx, GGML_TYPE_F32, param->n_dims, param->ne);
+    struct ggml_tensor * master_weights = NULL;
+    if (param->type != GGML_TYPE_F32) {
+        master_weights = ggml_new_tensor(ctx, GGML_TYPE_F32, param->n_dims, param->ne);
+    }
 
     const float sched = 1.f;
     const float alpha = 0.004f;
@@ -6059,6 +6063,7 @@ struct ggml_tensor * ggml_special_adam_step(
     result->src[1] = gradient;
     result->src[2] = m;
     result->src[3] = v;
+    result->src[4] = master_weights;
 
     return result;
 }
@@ -6170,8 +6175,8 @@ static struct ggml_tensor * ggml_acc_impl(
         bool zero_out_accumulator) {
     GGML_ASSERT(ggml_nelements(b) <= ggml_nelements(a));
     GGML_ASSERT(ggml_is_contiguous(a));
-    GGML_ASSERT(a->type == GGML_TYPE_F32);
-    GGML_ASSERT(b->type == GGML_TYPE_F32);
+    GGML_ASSERT(a->type == GGML_TYPE_F32 || a->type == GGML_TYPE_F16);
+    GGML_ASSERT(b->type == a->type);
 
 
     // Few extra limitations to simplify wgpu kernel
@@ -8109,7 +8114,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
         GGML_ASSERT(inject_signal->ne[1] == filter->ne[0]);
         GGML_ASSERT(inject_signal->ne[2] == signal->ne[2]);
         GGML_ASSERT(inject_signal->ne[3] == 1);
-        GGML_ASSERT(inject_signal->type == GGML_TYPE_F32);
+        GGML_ASSERT(inject_signal->type == signal->type);
         GGML_ASSERT(inject_signal->ne[0] >= realOL);
     }
 
@@ -8130,7 +8135,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
         signal->ne[2],
         1,
     };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, signal->type, 3, ne);
 
     int32_t params[] = { s0, p0, d0, apply_tanh ? 1 : 0, bias ? 1 : 0, inject_signal ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
@@ -8184,7 +8189,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_input(
         GGML_ASSERT(accumulator->ne[2] == ne[2]);
         GGML_ASSERT(accumulator->ne[3] == ne[3]);
     }
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, gradient->type, 3, ne);
 
     int32_t params[] = { s0, p0, d0, accumulator ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
@@ -8228,7 +8233,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_filter(
         kernel_size,
         1,
     };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, gradient->type, 3, ne);
 
     int32_t params[] = { s0, p0, d0 };
     ggml_set_op_params(result, params, sizeof(params));
@@ -8261,7 +8266,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern_back_bias(
         1,
         1,
     };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, gradient->type, 3, ne);
 
     result->op = GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
