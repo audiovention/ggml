@@ -840,15 +840,19 @@ static const char src_ggml_shader_kernel_sub_pf16[] = MULTILINE(
 @compute
 @workgroup_size(256)
 fn kernel_sub_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= num_el_dst()) {
+    let mult_idx = global_id.x * 2u;
+    if (mult_idx >= num_el_dst()) {
         return;
     }
-    if ((global_id.x % tensor_dimension_params.dst.nb[1])<u32(tensor_dimension_params.dst.ne[0])) {
-        set_dst_lin_pf16(global_id.x, get_src0_lin_pf16(global_id.x) - get_src1_lin_pf16(global_id.x));
-    } else {
-        set_dst_lin_pf16(global_id.x, 0.0);
+
+    var result = unpack2x16float(bitcast<u32>(get_src0_lin(global_id.x))) - unpack2x16float(bitcast<u32>(get_src1_lin(global_id.x)));
+    if ((mult_idx % tensor_dimension_params.dst.nb[1])>=u32(tensor_dimension_params.dst.ne[0])) {
+        result.x = 0.0;
     }
-    // set_dst_lin_pf16(global_id.x, get_src0_lin_pf16(global_id.x) - get_src1_lin_pf16(global_id.x));
+    if (((mult_idx+1u) % tensor_dimension_params.dst.nb[1])>=u32(tensor_dimension_params.dst.ne[0])) {
+        result.y = 0.0;
+    }
+    set_dst_lin(global_id.x, bitcast<f32>(pack2x16float(result)));
 }
 
 );
@@ -2689,11 +2693,11 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
-                    GGML_WGPU_ENCODE_KERNEL(sub, dispatch_x, 1, 1)
                     if (dst->type == GGML_TYPE_F16) {
+                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 512);
                         GGML_WGPU_ENCODE_KERNEL(sub_pf16, dispatch_x, 1, 1)
                     } else {
+                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                         GGML_WGPU_ENCODE_KERNEL(sub, dispatch_x, 1, 1)
                     }
                 } break;
