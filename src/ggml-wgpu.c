@@ -537,7 +537,9 @@ fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
-    if (global_id.x >= output_len) {
+    let mult_idx = global_id.x * 2u;
+
+    if (mult_idx >= output_len) {
         return;
     }
     if (global_id.y >= output_channels) {
@@ -549,7 +551,7 @@ fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
-    var output : f32 = 0.0;
+    var output = vec2f();
 
     if (has_bias) {
         let bias = get_src2_pf16(0u, global_id.y, 0u);
@@ -557,19 +559,22 @@ fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3
     }
 
     if (has_inject_signal) {
-        output += get_src3_pf16(u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z);
+        output.x += get_src3_pf16(u32(tensor_dimension_params.src[3].ne[0]) - output_len + mult_idx, global_id.y, global_id.z);
+        output.y += get_src3_pf16(u32(tensor_dimension_params.src[3].ne[0]) - output_len + mult_idx + 1u, global_id.y, global_id.z);
     }
 
-    let base_src1_offset = input_len - real_input_len + global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
+    let base_src1_offset = input_len - real_input_len + mult_idx + global_id.z * tensor_dimension_params.src[1].nb[2];
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
         let in_idx_offset = ik * d0 + base_src1_offset;
         let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
         for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            let input = get_src1_lin_pf16(in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
+            let input1 = get_src1_lin_pf16(in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
+            let input2 = get_src1_lin_pf16(1u + in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
             let kernel = get_src0_pf16(global_id.y, ic, ik);
             let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
-            output = output + input * kernel;
+            output.x = output.x + input1 * kernel;
+            output.y = output.y + input2 * kernel;
         }
     }
 
@@ -577,7 +582,7 @@ fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3
         output = tanh(output);
     }
 
-    set_dst_pf16(global_id.x, global_id.y, global_id.z, output);
+    set_dst(global_id.x, global_id.y, global_id.z, bitcast<f32>(pack2x16float(output)));
 }
 
 );
@@ -2636,7 +2641,7 @@ void ggml_wgpu_graph_compute(
                     const int64_t output_len = dst->ne[0];
                     const int64_t real_input_len = output_len + d0*(nk-1);
                     if (dst->type == GGML_TYPE_F16) {
-                        const int32_t dispatch_x = CEIL_DIV(output_len, 256);
+                        const int32_t dispatch_x = CEIL_DIV(output_len, 512);
                         const int32_t dispatch_y = dst->ne[1];
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_pf16, dispatch_x, dispatch_y, dst->ne[2])
                     } else {
