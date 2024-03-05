@@ -4736,7 +4736,8 @@ int64_t ggml_nelements(const struct ggml_tensor * tensor) {
 int64_t ggml_nelements_padded(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 #if PAD_TENSOR_FIRST_DIM
-    int64_t ne0 = ggml_up(tensor->ne[0], 4);
+    const int padd_num = tensor->type == GGML_TYPE_F16 ? 8 : 4;
+    int64_t ne0 = ggml_up(tensor->ne[0], padd_num);
 #else
     int64_t ne0 = tensor->ne[0];
 #endif
@@ -4755,7 +4756,8 @@ static inline size_t ggml_get_nb1(int64_t ne0, size_t nb0, enum ggml_type type) 
         return nb0 * ne0 / blck_size;
     }
 #if PAD_TENSOR_FIRST_DIM
-    return ggml_up(ne0, 4) * nb0;
+    const int padd_num = type == GGML_TYPE_F16 ? 8 : 4;
+    return ggml_up(ne0, padd_num) * nb0;
 #else
     return ne0 * nb0;
 #endif
@@ -4770,7 +4772,8 @@ size_t ggml_nbytes(const struct ggml_tensor * tensor) {
             int64_t ne = tensor->ne[i];
 #if PAD_TENSOR_FIRST_DIM
             if (i == 0) {
-                ne = ggml_up(ne, 4);
+                const int padd_num = tensor->type == GGML_TYPE_F16 ? 8 : 4;
+                ne = ggml_up(ne, padd_num);
             }
 #endif
             nbytes += (ne - 1)*tensor->nb[i];
