@@ -891,12 +891,12 @@ fn kernel_sqr_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    var input = src0[global_id.x];
+    var input = get_src0_lin(global_id.x);
     var res = unpack2x16float(bitcast<u32>(input));
     res = res * res;
     input = bitcast<f32>(pack2x16float(res));
     
-    dst[global_id.x] = input;
+    set_dst_lin(global_id.x, input);
 }
 
 );
