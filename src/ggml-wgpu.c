@@ -998,11 +998,15 @@ fn kernel_repeat_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    let idx0 = global_id.x * u32(tensor_dimension_params.src[0].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+    let idx0_1 = (mult_idx + 0u) * u32(tensor_dimension_params.src[0].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+    let idx0_2 = (mult_idx + 1u) * u32(tensor_dimension_params.src[0].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
     let idx1 = global_id.y * u32(tensor_dimension_params.src[0].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
     let idx2 = global_id.z * u32(tensor_dimension_params.src[0].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
 
-    set_dst(global_id.x, global_id.y, global_id.z, get_src0(idx0, idx1, idx2));
+    let output_vec = vec2f(get_src0_pf16(idx0_1, idx1, idx2), get_src0_pf16(idx0_2, idx1, idx2));
+    let output = bitcast<f32>(pack2x16float(output_vec));
+
+    set_dst_lin(calc_dst_idx(mult_idx, global_id.y, global_id.z)/2u, output);
 }
 
 );
