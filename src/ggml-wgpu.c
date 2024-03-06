@@ -1913,6 +1913,48 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
 
 );
 
+
+static const char src_ggml_shader_kernel_special_adam_step_pf16[] = MULTILINE(
+
+
+@compute
+@workgroup_size(256)
+fn kernel_special_adam_step_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let mult_idx = global_id.x * 2u;
+    if (mult_idx >= num_el_dst()) {
+        return;
+    }
+
+    let beta1 = bitcast<f32>(tensor_dimension_params.params[0][0]);
+    let beta2 = bitcast<f32>(tensor_dimension_params.params[0][1]);
+    let beta1h = bitcast<f32>(tensor_dimension_params.params[0][2]);
+    let beta2h = bitcast<f32>(tensor_dimension_params.params[0][3]);
+    let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
+    let gradient_scale = bitcast<f32>(tensor_dimension_params.params[1][1]);
+
+    var x = vec2f(get_src4_lin(mult_idx), get_src4_lin(mult_idx+1u));
+    var g = unpack2x16float(bitcast<u32>(get_src1_lin(global_id.x))) * gradient_scale;
+    var m = vec2f(get_src2_lin(mult_idx), get_src2_lin(mult_idx+1u));
+    var v = vec2f(get_src3_lin(mult_idx), get_src3_lin(mult_idx+1u));
+
+    m = m*beta1 +   g*(1.0 - beta1);
+    v = v*beta2 + g*g*(1.0 - beta2);
+    let mh = m*beta1h;
+    let vh = sqrt(v*beta2h) + eps;
+    x = x - mh/vh;
+
+    set_src2_lin(mult_idx + 0u, m.x);
+    set_src2_lin(mult_idx + 1u, m.y);
+    set_src3_lin(mult_idx + 0u, v.x);
+    set_src3_lin(mult_idx + 1u, v.y);
+    set_src4_lin(mult_idx + 0u, x.x);
+    set_src4_lin(mult_idx + 1u, x.y);
+
+    set_dst_lin(global_id.x, bitcast<f32>(pack2x16float(x)));
+}
+
+);
+
 #undef MULTILINE
 
 
@@ -2023,6 +2065,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_pf16)
     GGML_WGPU_DECL_KERNEL(special_adam_step)
+    GGML_WGPU_DECL_KERNEL(special_adam_step_pf16)
     GGML_WGPU_DECL_KERNEL(special_adam_step_inplace)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage1)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage2)
@@ -2371,6 +2414,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_pf16);
         GGML_WGPU_ADD_KERNEL(special_adam_step);
+        GGML_WGPU_ADD_KERNEL(special_adam_step_pf16);
         GGML_WGPU_ADD_KERNEL(special_adam_step_inplace);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage1);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage2);
@@ -2430,6 +2474,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_pf16)
     GGML_WGPU_DEL_KERNEL(special_adam_step)
+    GGML_WGPU_DEL_KERNEL(special_adam_step_pf16)
     GGML_WGPU_DEL_KERNEL(special_adam_step_inplace)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage1)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage2)
@@ -3153,17 +3198,22 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_SPECIAL_ADAM_STEP:
                 {
-                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[2]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[3]));
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
-                    if (is_op_inplace_which_src == 0) {
-                        GGML_WGPU_ENCODE_KERNEL(special_adam_step_inplace, dispatch_x, 1, 1)
+                    if (dst->type == GGML_TYPE_F16) {
+                        GGML_ASSERT(ggml_is_contiguous(dst->src[4]));
+                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 512);
+                        GGML_WGPU_ENCODE_KERNEL(special_adam_step_pf16, dispatch_x, 1, 1)
                     } else {
-                        GGML_WGPU_ENCODE_KERNEL(special_adam_step, dispatch_x, 1, 1)
+                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
+                        if (is_op_inplace_which_src == 0) {
+                            GGML_WGPU_ENCODE_KERNEL(special_adam_step_inplace, dispatch_x, 1, 1)
+                        } else {
+                            GGML_WGPU_ENCODE_KERNEL(special_adam_step, dispatch_x, 1, 1)
+                        }
                     }
                 } break;
             default:
