@@ -1934,7 +1934,7 @@ fn kernel_special_adam_step_pf16(@builtin(global_invocation_id) global_id: vec3<
     let gradient_scale = bitcast<f32>(tensor_dimension_params.params[1][1]);
 
     let idx_f32 = calc_src_idx(mult_idx, global_id.y, global_id.z, 4);
-    let idx_f16 = calc_src_idx(mult_idx, global_id.y, global_id.z, 0);
+    let idx_f16 = calc_dst_idx(mult_idx, global_id.y, global_id.z);
 
     var x = vec2f(get_src4_lin(idx_f32), get_src4_lin(idx_f32+1u));
     var g = unpack2x16float(bitcast<u32>(get_src1_lin(idx_f16/2u))) * gradient_scale;
