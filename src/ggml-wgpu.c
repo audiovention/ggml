@@ -1601,6 +1601,48 @@ fn kernel_add_and_tanh_back(@builtin(global_invocation_id) global_id: vec3<u32>)
 );
 
 
+static const char src_ggml_shader_kernel_add_and_tanh_back_pf16[] = MULTILINE(
+
+@compute
+@workgroup_size(256)
+fn kernel_add_and_tanh_back_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let mult_idx = global_id.x * 8u;
+
+    if (mult_idx >= num_el_dst()) {
+        return;
+    }
+
+    let x = src0_v4[global_id.x];
+    let y = src1_v4[global_id.x];
+    var z : vec4f;
+    var x1: vec2f;
+
+    x1 = unpack2x16float(bitcast<u32>(x.x));
+    z.x = bitcast<f32>(pack2x16float(
+        (1.0 - x1 * x1) * unpack2x16float(bitcast<u32>(y.x))
+    ));
+
+    x1 = unpack2x16float(bitcast<u32>(x.y));
+    z.y = bitcast<f32>(pack2x16float(
+        (1.0 - x1 * x1) * unpack2x16float(bitcast<u32>(y.y))
+    ));
+
+    x1 = unpack2x16float(bitcast<u32>(x.z));
+    z.z = bitcast<f32>(pack2x16float(
+        (1.0 - x1 * x1) * unpack2x16float(bitcast<u32>(y.z))
+    ));
+
+    x1 = unpack2x16float(bitcast<u32>(x.w));
+    z.w = bitcast<f32>(pack2x16float(
+        (1.0 - x1 * x1) * unpack2x16float(bitcast<u32>(y.w))
+    ));
+
+    dst_v4[global_id.x] = z;
+}
+
+);
+
+
 static const char src_ggml_shader_kernel_add[] = MULTILINE(
 
 @compute
@@ -1903,6 +1945,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(acc)
     GGML_WGPU_DECL_KERNEL(acc_pf16)
     GGML_WGPU_DECL_KERNEL(add_and_tanh_back)
+    GGML_WGPU_DECL_KERNEL(add_and_tanh_back_pf16)
     GGML_WGPU_DECL_KERNEL(add)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias)
     GGML_WGPU_DECL_KERNEL(special_adam_step)
@@ -2248,6 +2291,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(acc);
         GGML_WGPU_ADD_KERNEL(acc_pf16);
         GGML_WGPU_ADD_KERNEL(add_and_tanh_back);
+        GGML_WGPU_ADD_KERNEL(add_and_tanh_back_pf16);
         GGML_WGPU_ADD_KERNEL(add);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias);
         GGML_WGPU_ADD_KERNEL(special_adam_step);
@@ -2304,6 +2348,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(acc)
     GGML_WGPU_DEL_KERNEL(acc_pf16)
     GGML_WGPU_DEL_KERNEL(add_and_tanh_back)
+    GGML_WGPU_DEL_KERNEL(add_and_tanh_back_pf16)
     GGML_WGPU_DEL_KERNEL(add)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias)
     GGML_WGPU_DEL_KERNEL(special_adam_step)
@@ -2988,14 +3033,17 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_ADD_AND_TANH_BACK:
                 {
-                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     GGML_ASSERT(ggml_is_contiguous(dst));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
                     GGML_ASSERT(ggml_is_contiguous(dst->src[1]));
-
-                    const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 4*256);
                     GGML_ASSERT(dst->ne[3] == 1);
-                    GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, 1, 1)
+                    if (dst->type == GGML_TYPE_F16) {
+                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 2*4*256);
+                        GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back_pf16, dispatch_x, 1, 1)
+                    } else {
+                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 4*256);
+                        GGML_WGPU_ENCODE_KERNEL(add_and_tanh_back, dispatch_x, 1, 1)
+                    }
                 } break;
             case GGML_OP_ADD:
                 {
