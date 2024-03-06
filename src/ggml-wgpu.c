@@ -1733,6 +1733,52 @@ fn kernel_conv_1d_small_kern_back_bias(@builtin(global_invocation_id) global_id:
 
 );
 
+
+static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias_pf16[] = MULTILINE(
+
+var<workgroup> workgroup_data: array<f32, 256>;
+
+@compute
+@workgroup_size(256)
+fn kernel_conv_1d_small_kern_back_bias_pf16(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let output_len = u32(tensor_dimension_params.src[0].ne[0]);
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+
+    var output : f32 = 0.0;
+
+    for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
+        let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2];
+        // TODO: handle output_len not being a multiple of 4
+        for (var isample = 4u*local_id.x; isample < output_len; isample = isample + 4u*256u) {
+            let base_idx_src0 = base_idx_src0_base + isample;
+            output = output + get_src0_lin_pf16(base_idx_src0);
+            output = output + get_src0_lin_pf16(base_idx_src0+1u);
+            output = output + get_src0_lin_pf16(base_idx_src0+2u);
+            output = output + get_src0_lin_pf16(base_idx_src0+3u);
+        }
+    }
+
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        output = 0.0;
+        for (var i = 0u; i < 256u; i = i + 1u) {
+            output = output + workgroup_data[i];
+        }
+
+        set_dst_pf16(0u, wg_id.x, 0u, output);
+    }
+
+}
+
+
+);
+
+
 static const char src_ggml_shader_kernel_conv_1d_small_kern_back_bias_stage1[] = MULTILINE(
 
 var<workgroup> workgroup_data_v4f: array<vec4f, 256>;
@@ -1975,6 +2021,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(add)
     GGML_WGPU_DECL_KERNEL(add_pf16)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_pf16)
     GGML_WGPU_DECL_KERNEL(special_adam_step)
     GGML_WGPU_DECL_KERNEL(special_adam_step_inplace)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_back_bias_stage1)
@@ -2322,6 +2369,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(add);
         GGML_WGPU_ADD_KERNEL(add_pf16);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_pf16);
         GGML_WGPU_ADD_KERNEL(special_adam_step);
         GGML_WGPU_ADD_KERNEL(special_adam_step_inplace);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_back_bias_stage1);
@@ -2380,6 +2428,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(add)
     GGML_WGPU_DEL_KERNEL(add_pf16)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_pf16)
     GGML_WGPU_DEL_KERNEL(special_adam_step)
     GGML_WGPU_DEL_KERNEL(special_adam_step_inplace)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_back_bias_stage1)
@@ -3087,17 +3136,20 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
                 {
-                    GGML_ASSERT(dst->type == GGML_TYPE_F32);
                     GGML_ASSERT(dst->ne[0] == 1);
                     GGML_ASSERT(dst->ne[2] == 1);
                     GGML_ASSERT(dst->ne[3] == 1);
+                    if (dst->type == GGML_TYPE_F16) {
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_pf16, dst->ne[1], 1, 1)
+                    } else {
 #if 0
-                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dst->ne[1], 1, 1)
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias, dst->ne[1], 1, 1)
 #else
-                    GGML_ASSERT((4*dst->ne[1]*dst->src[0]->ne[2] *ggml_element_size(dst)) <= PLACEHOLDER_BUFFER_SIZE);
-                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage1, dst->ne[1], dst->src[0]->ne[2], 1)
-                    GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage2, dst->ne[1], 1, 1)
+                        GGML_ASSERT((4*dst->ne[1]*dst->src[0]->ne[2] *ggml_element_size(dst)) <= PLACEHOLDER_BUFFER_SIZE);
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage1, dst->ne[1], dst->src[0]->ne[2], 1)
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_bias_stage2, dst->ne[1], 1, 1)
 #endif
+                    }
                 } break;
             case GGML_OP_SPECIAL_ADAM_STEP:
                 {
