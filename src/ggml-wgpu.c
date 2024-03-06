@@ -1922,7 +1922,7 @@ static const char src_ggml_shader_kernel_special_adam_step_pf16[] = MULTILINE(
 @workgroup_size(256)
 fn kernel_special_adam_step_pf16(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let mult_idx = global_id.x * 2u;
-    if (mult_idx >= num_el_dst()) {
+    if (mult_idx >= u32(tensor_dimension_params.dst.ne[0])) {
         return;
     }
 
@@ -1933,10 +1933,13 @@ fn kernel_special_adam_step_pf16(@builtin(global_invocation_id) global_id: vec3<
     let eps = bitcast<f32>(tensor_dimension_params.params[1][0]);
     let gradient_scale = bitcast<f32>(tensor_dimension_params.params[1][1]);
 
-    var x = vec2f(get_src4_lin(mult_idx), get_src4_lin(mult_idx+1u));
-    var g = unpack2x16float(bitcast<u32>(get_src1_lin(global_id.x))) * gradient_scale;
-    var m = vec2f(get_src2_lin(mult_idx), get_src2_lin(mult_idx+1u));
-    var v = vec2f(get_src3_lin(mult_idx), get_src3_lin(mult_idx+1u));
+    let idx_f32 = calc_src_idx(mult_idx, global_id.y, global_id.z, 4);
+    let idx_f16 = calc_src_idx(mult_idx, global_id.y, global_id.z, 0);
+
+    var x = vec2f(get_src4_lin(idx_f32), get_src4_lin(idx_f32+1u));
+    var g = unpack2x16float(bitcast<u32>(get_src1_lin(idx_f16/2u))) * gradient_scale;
+    var m = vec2f(get_src2_lin(idx_f32), get_src2_lin(idx_f32+1u));
+    var v = vec2f(get_src3_lin(idx_f32), get_src3_lin(idx_f32+1u));
 
     m = m*beta1 +   g*(1.0 - beta1);
     v = v*beta2 + g*g*(1.0 - beta2);
@@ -1944,14 +1947,14 @@ fn kernel_special_adam_step_pf16(@builtin(global_invocation_id) global_id: vec3<
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    set_src2_lin(mult_idx + 0u, m.x);
-    set_src2_lin(mult_idx + 1u, m.y);
-    set_src3_lin(mult_idx + 0u, v.x);
-    set_src3_lin(mult_idx + 1u, v.y);
-    set_src4_lin(mult_idx + 0u, x.x);
-    set_src4_lin(mult_idx + 1u, x.y);
+    set_src2_lin(idx_f32 + 0u, m.x);
+    set_src2_lin(idx_f32 + 1u, m.y);
+    set_src3_lin(idx_f32 + 0u, v.x);
+    set_src3_lin(idx_f32 + 1u, v.y);
+    set_src4_lin(idx_f32 + 0u, x.x);
+    set_src4_lin(idx_f32 + 1u, x.y);
 
-    set_dst_lin(global_id.x, bitcast<f32>(pack2x16float(x)));
+    set_dst_lin(idx_f16/2u, bitcast<f32>(pack2x16float(x)));
 }
 
 );
@@ -3206,8 +3209,8 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(ggml_is_contiguous(dst->src[3]));
                     if (dst->type == GGML_TYPE_F16) {
                         GGML_ASSERT(ggml_is_contiguous(dst->src[4]));
-                        const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 512);
-                        GGML_WGPU_ENCODE_KERNEL(special_adam_step_pf16, dispatch_x, 1, 1)
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 512);
+                        GGML_WGPU_ENCODE_KERNEL(special_adam_step_pf16, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
                         const int32_t dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), 256);
                         if (is_op_inplace_which_src == 0) {
