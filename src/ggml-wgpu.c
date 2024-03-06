@@ -1152,9 +1152,9 @@ fn kernel_conv_1d_small_kern_back_filter_pf16(@builtin(global_invocation_id) glo
     // if (global_id.z >= input_channels) {
     //     return;
     // }
-    if (mult_idx >= output_channels) {
-        return;
-    }
+    // if (mult_idx >= output_channels) {
+    //     return;
+    // }
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
@@ -1169,9 +1169,10 @@ fn kernel_conv_1d_small_kern_back_filter_pf16(@builtin(global_invocation_id) glo
         for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
             // output = output + 
             //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
-            output.x += get_src0_lin_pf16(base_idx_src0 + isample) * get_src1_lin(base_idx_src1_1 + isample);
+            let src0val = get_src0_lin_pf16(base_idx_src0 + isample);
+            output.x += src0val * get_src1_lin_pf16(base_idx_src1_1 + isample);
             if (mult_idx + 1u < output_channels) {
-                output.y += get_src0_lin_pf16(base_idx_src0 + isample) * get_src1_lin(base_idx_src1_2 + isample);
+                output.y += src0val * get_src1_lin_pf16(base_idx_src1_2 + isample);
             }
         }
     }
@@ -3107,7 +3108,7 @@ void ggml_wgpu_graph_compute(
                 {
                     GGML_ASSERT(dst->ne[3] == 1);
                     if (dst->type == GGML_TYPE_F16) {
-                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter_pf16, CEIL_DIV(dst->ne[2], 2), dst->ne[0], dst->ne[1])
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter_pf16, dst->ne[2], CEIL_DIV(dst->ne[0], 2), dst->ne[1])
                     } else {
 #if 0
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
