@@ -1164,14 +1164,19 @@ fn kernel_conv_1d_small_kern_back_filter_pf16(@builtin(global_invocation_id) glo
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2] + global_id.z * tensor_dimension_params.src[0].nb[1];
-        let base_idx_src1_1 = ir * tensor_dimension_params.src[1].nb[2] + (mult_idx + 0u) * tensor_dimension_params.src[1].nb[1];
-        let base_idx_src1_2 = ir * tensor_dimension_params.src[1].nb[2] + (mult_idx + 1u) * tensor_dimension_params.src[1].nb[1];
-        for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
+        let base_idx_src1_x = ir * tensor_dimension_params.src[1].nb[2] + (mult_idx + 0u) * tensor_dimension_params.src[1].nb[1];
+        let base_idx_src1_y = ir * tensor_dimension_params.src[1].nb[2] + (mult_idx + 1u) * tensor_dimension_params.src[1].nb[1];
+        for (var isample = (2u*local_id.x); isample < output_len; isample = isample + 512u) {
             // output = output + 
             //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
-            let src0val = get_src0_lin_pf16(base_idx_src0 + isample);
-            output.x += src0val * get_src1_lin_pf16(base_idx_src1_1 + isample);
-            output.y += src0val * get_src1_lin_pf16(base_idx_src1_2 + isample);
+            let src0val1 = get_src0_lin_pf16(base_idx_src0 + isample);
+            let src0val2 = get_src0_lin_pf16(base_idx_src0 + isample + 1u);
+            let src1valx = unpack2x16float(bitcast<u32>(get_src1_lin((base_idx_src1_x + isample)/2u)));
+            let src1valy = unpack2x16float(bitcast<u32>(get_src1_lin((base_idx_src1_y + isample)/2u)));
+            output.x += src0val1 * src1valx.x;
+            output.y += src0val1 * src1valy.x;
+            output.x += src0val2 * src1valx.y;
+            output.y += src0val2 * src1valy.y;
         }
     }
 
