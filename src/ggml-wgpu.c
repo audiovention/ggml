@@ -1100,10 +1100,17 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2] + global_id.z * tensor_dimension_params.src[0].nb[1];
         let base_idx_src1 = ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
-        for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
+        for (var isample = (4u*local_id.x); isample < output_len; isample = isample + 1024u) {
             // output = output + 
             //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
-            output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+            let src0val = vec4f(
+                get_src0_lin(base_idx_src0 + isample), 
+                get_src0_lin(base_idx_src0 + isample + 1u), 
+                get_src0_lin(base_idx_src0 + isample + 2u), 
+                get_src0_lin(base_idx_src0 + isample + 3u)
+            );
+            let src1val = src1_v4[(base_idx_src1 + isample)/4u];
+            output = output + dot(src0val, src1val);
         }
     }
 
@@ -1215,8 +1222,15 @@ fn kernel_conv_1d_small_kern_back_filter_nk1(@builtin(global_invocation_id) glob
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2];
         let base_idx_src1 = ir * tensor_dimension_params.src[1].nb[2] + wg_id.x * tensor_dimension_params.src[1].nb[1];
-        for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-            output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+        for (var isample = (4u*local_id.x); isample < output_len; isample = isample + 1024u) {
+            let src0val = vec4f(
+                get_src0_lin(base_idx_src0 + isample), 
+                get_src0_lin(base_idx_src0 + isample + 1u), 
+                get_src0_lin(base_idx_src0 + isample + 2u), 
+                get_src0_lin(base_idx_src0 + isample + 3u)
+            );
+            let src1val = src1_v4[(base_idx_src1 + isample)/4u];
+            output = output + dot(src0val, src1val);
         }
     }
 
@@ -1270,8 +1284,15 @@ fn kernel_conv_1d_small_kern_back_filter_stage1(@builtin(global_invocation_id) g
 
     let base_idx_src0 = base_offset + idx_ir * tensor_dimension_params.src[0].nb[2] + idx_ic * tensor_dimension_params.src[0].nb[1];
     let base_idx_src1 = idx_ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
-    for (var isample = local_id.x; isample < output_len; isample = isample + 256u) {
-        output = output + get_src0_lin(base_idx_src0 + isample) * get_src1_lin(base_idx_src1 + isample);
+    for (var isample = (4u*local_id.x); isample < output_len; isample = isample + 1024u) {
+        let src0val = vec4f(
+            get_src0_lin(base_idx_src0 + isample), 
+            get_src0_lin(base_idx_src0 + isample + 1u), 
+            get_src0_lin(base_idx_src0 + isample + 2u), 
+            get_src0_lin(base_idx_src0 + isample + 3u)
+        );
+        let src1val = src1_v4[(base_idx_src1 + isample)/4u];
+        output = output + dot(src0val, src1val);
     }
 
     workgroup_data[local_id.x] = output;
