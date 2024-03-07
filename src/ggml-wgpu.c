@@ -1171,9 +1171,7 @@ fn kernel_conv_1d_small_kern_back_filter_pf16(@builtin(global_invocation_id) glo
             //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
             let src0val = get_src0_lin_pf16(base_idx_src0 + isample);
             output.x += src0val * get_src1_lin_pf16(base_idx_src1_1 + isample);
-            if (mult_idx + 1u < output_channels) {
-                output.y += src0val * get_src1_lin_pf16(base_idx_src1_2 + isample);
-            }
+            output.y += src0val * get_src1_lin_pf16(base_idx_src1_2 + isample);
         }
     }
 
