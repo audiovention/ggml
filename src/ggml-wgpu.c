@@ -1185,6 +1185,53 @@ fn kernel_conv_1d_small_kern_back_filter_pf16(@builtin(global_invocation_id) glo
             output.x += src0val2 * src1valx.y;
             output.y += src0val2 * src1valy.y;
         }
+        // for (var isample = (8u*local_id.x); isample < output_len; isample = isample + 2048u) {
+        //     let src1_vecvalsx = src1_v4[(base_idx_src1_x + isample)/8u];
+        //     let src1_vecvalsy = src1_v4[(base_idx_src1_y + isample)/8u];
+
+        //     var src0val1 = get_src0_lin_pf16(base_idx_src0 + isample);
+        //     var src0val2 = get_src0_lin_pf16(base_idx_src0 + isample + 1u);
+        //     var src1valx = unpack2x16float(bitcast<u32>(src1_vecvalsx.x));
+        //     var src1valy = unpack2x16float(bitcast<u32>(src1_vecvalsy.x));
+
+        //     output.x += src0val1 * src1valx.x;
+        //     output.y += src0val1 * src1valy.x;
+        //     output.x += src0val2 * src1valx.y;
+        //     output.y += src0val2 * src1valy.y;
+
+
+        //     src0val1 = get_src0_lin_pf16(base_idx_src0 + isample + 2u);
+        //     src0val2 = get_src0_lin_pf16(base_idx_src0 + isample + 3u);
+        //     src1valx = unpack2x16float(bitcast<u32>(src1_vecvalsx.y));
+        //     src1valy = unpack2x16float(bitcast<u32>(src1_vecvalsy.y));
+
+        //     output.x += src0val1 * src1valx.x;
+        //     output.y += src0val1 * src1valy.x;
+        //     output.x += src0val2 * src1valx.y;
+        //     output.y += src0val2 * src1valy.y;
+
+
+        //     src0val1 = get_src0_lin_pf16(base_idx_src0 + isample + 4u);
+        //     src0val2 = get_src0_lin_pf16(base_idx_src0 + isample + 5u);
+        //     src1valx = unpack2x16float(bitcast<u32>(src1_vecvalsx.z));
+        //     src1valy = unpack2x16float(bitcast<u32>(src1_vecvalsy.z));
+
+        //     output.x += src0val1 * src1valx.x;
+        //     output.y += src0val1 * src1valy.x;
+        //     output.x += src0val2 * src1valx.y;
+        //     output.y += src0val2 * src1valy.y;
+
+
+        //     src0val1 = get_src0_lin_pf16(base_idx_src0 + isample + 6u);
+        //     src0val2 = get_src0_lin_pf16(base_idx_src0 + isample + 7u);
+        //     src1valx = unpack2x16float(bitcast<u32>(src1_vecvalsx.w));
+        //     src1valy = unpack2x16float(bitcast<u32>(src1_vecvalsy.w));
+
+        //     output.x += src0val1 * src1valx.x;
+        //     output.y += src0val1 * src1valy.x;
+        //     output.x += src0val2 * src1valx.y;
+        //     output.y += src0val2 * src1valy.y;
+        // }        
     }
 
     workgroup_data[local_id.x] = output;
