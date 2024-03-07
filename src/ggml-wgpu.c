@@ -1880,10 +1880,10 @@ fn kernel_conv_1d_small_kern_back_bias_pf16(@builtin(global_invocation_id) globa
         // TODO: handle output_len not being a multiple of 4
         for (var isample = 4u*local_id.x; isample < output_len; isample = isample + 4u*256u) {
             let base_idx_src0 = base_idx_src0_base + isample;
-            output = output + get_src0_lin_pf16(base_idx_src0);
-            output = output + get_src0_lin_pf16(base_idx_src0+1u);
-            output = output + get_src0_lin_pf16(base_idx_src0+2u);
-            output = output + get_src0_lin_pf16(base_idx_src0+3u);
+            let src0val1 = unpack2x16float(bitcast<u32>(get_src0_lin(base_idx_src0/2u)));
+            output += src0val1.x + src0val1.y;
+            let src0val2 = unpack2x16float(bitcast<u32>(get_src0_lin(base_idx_src0/2u+1u)));
+            output += src0val2.x + src0val2.y;
         }
     }
 
