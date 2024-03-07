@@ -1460,8 +1460,7 @@ fn kernel_conv_1d_small_kern_back_input_pf16(@builtin(global_invocation_id) glob
     var output = vec2f();
 
     if (accumulate) {
-        output.x = get_src2_pf16(mult_idx + 0u, global_id.y, global_id.z);
-        output.y = get_src2_pf16(mult_idx + 1u, global_id.y, global_id.z);
+        output = unpack2x16float(bitcast<u32>(get_src2_lin(calc_src_idx(mult_idx, global_id.y, global_id.z, 2)/2u)));
     }
 
     for (var ik = 0u; ik < nk; ik = ik + 1u) {
