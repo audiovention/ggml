@@ -98,6 +98,14 @@ kernel void kernel_mul(
     dst[tpig] = src0[tpig] * src1[tpig];
 }
 
+kernel void kernel_sub(
+        device const float4 * src0,
+        device const float4 * src1,
+        device       float4 * dst,
+        uint tpig[[thread_position_in_grid]]) {
+    dst[tpig] = src0[tpig] - src1[tpig];
+}
+
 // assumption: src1 is a row
 // broadcast src1 into src0
 kernel void kernel_mul_row(
