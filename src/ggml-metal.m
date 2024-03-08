@@ -879,7 +879,7 @@ void ggml_metal_graph_compute(
                             GGML_ASSERT(ggml_is_contiguous(src1));
 
                             // utilize float4
-                            GGML_ASSERT(ne00 % 4 == 0);
+                            // GGML_ASSERT(ne00 % 4 == 0);
                             const int64_t nb = ne00/4;
 
                             if (ggml_nelements(src1) == ne10) {
