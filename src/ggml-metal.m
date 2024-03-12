@@ -899,7 +899,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                             [encoder setBytes:&nb     length:sizeof(nb) atIndex:3];
 
-                            const int64_t n = CEIL_DIV(ggml_nelements(dst), 4);
+                            const int64_t n = CEIL_DIV(ggml_nelements_padded(dst), 4);
 
                             [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
@@ -914,7 +914,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
 
-                            const int64_t n = CEIL_DIV(ggml_nelements(dst), 4);
+                            const int64_t n = CEIL_DIV(ggml_nelements_padded(dst), 4);
 
                             [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
@@ -929,7 +929,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
                             [encoder setBytes:&scale length:sizeof(scale) atIndex:2];
 
-                            const int64_t n = CEIL_DIV(ggml_nelements(dst), 4);
+                            const int64_t n = CEIL_DIV(ggml_nelements_padded(dst), 4);
 
                             [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
@@ -941,7 +941,7 @@ void ggml_metal_graph_compute(
                                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
 
-                                    const int64_t n = CEIL_DIV(ggml_nelements(dst), 4);
+                                    const int64_t n = CEIL_DIV(ggml_nelements_padded(dst), 4);
 
                                     [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                                 } break;
@@ -961,7 +961,7 @@ void ggml_metal_graph_compute(
                                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
 
-                                    const int64_t n = CEIL_DIV(ggml_nelements(dst), 4);
+                                    const int64_t n = CEIL_DIV(ggml_nelements_padded(dst), 4);
 
                                     [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                                 } break;
@@ -979,7 +979,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst atIndex:1];
 
-                            const int64_t n = ggml_nelements(dst);
+                            const int64_t n = ggml_nelements_padded(dst);
                             [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
                     case GGML_OP_SOFT_MAX:
