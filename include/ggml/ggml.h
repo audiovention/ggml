@@ -1442,6 +1442,9 @@ extern "C" {
             int                   d0,  // dilation
             int                   output_len); // output length if we want it reduced
 
+    GGML_API int64_t ggml_calc_conv_output_size(int64_t ins, int64_t ks, int s, int p, int d);
+    GGML_API int64_t ggml_calc_conv_input_size(int64_t outs, int64_t ks, int s, int p, int d);
+
     GGML_API struct ggml_tensor * ggml_conv_1d_small_kern_back_input(
             struct ggml_context * ctx,
             struct ggml_tensor  * filter,

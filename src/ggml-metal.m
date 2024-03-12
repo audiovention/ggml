@@ -114,6 +114,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(concat);
     GGML_METAL_DECL_KERNEL(sqr);
     GGML_METAL_DECL_KERNEL(sub);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern);
 
 #undef GGML_METAL_DECL_KERNEL
 };
@@ -298,6 +299,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(concat);
         GGML_METAL_ADD_KERNEL(sqr);
         GGML_METAL_ADD_KERNEL(sub);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern);
 
 #undef GGML_METAL_ADD_KERNEL
     }
@@ -391,6 +393,8 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(concat);
     GGML_METAL_DEL_KERNEL(sqr);
     GGML_METAL_DEL_KERNEL(sub);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern);
+    
 
 #undef GGML_METAL_DEL_KERNEL
 
@@ -699,6 +703,8 @@ void ggml_metal_graph_compute(
         dispatch_async(ctx->d_queue, ^{
             size_t offs_src0 = 0;
             size_t offs_src1 = 0;
+            size_t offs_src2 = 0;
+            size_t offs_src3 = 0;
             size_t offs_dst  = 0;
 
             id<MTLCommandBuffer> command_buffer  = ctx->command_buffers[cb_idx];
@@ -719,6 +725,8 @@ void ggml_metal_graph_compute(
 
                 struct ggml_tensor * src0 = gf->nodes[i]->src[0];
                 struct ggml_tensor * src1 = gf->nodes[i]->src[1];
+                struct ggml_tensor * src2 = gf->nodes[i]->src[2];
+                struct ggml_tensor * src3 = gf->nodes[i]->src[3];
                 struct ggml_tensor * dst  = gf->nodes[i];
 
                 const int64_t  ne00 = src0 ? src0->ne[0] : 0;
@@ -741,6 +749,26 @@ void ggml_metal_graph_compute(
                 const uint64_t nb12 = src1 ? src1->nb[2] : 0;
                 const uint64_t nb13 = src1 ? src1->nb[3] : 0; UNUSED(nb13);
 
+                const int64_t  ne20 = src2 ? src2->ne[0] : 0;
+                const int64_t  ne21 = src2 ? src2->ne[1] : 0;
+                const int64_t  ne22 = src2 ? src2->ne[2] : 0;
+                const int64_t  ne23 = src2 ? src2->ne[3] : 0;
+
+                const uint64_t nb20 = src2 ? src2->nb[0] : 0;
+                const uint64_t nb21 = src2 ? src2->nb[1] : 0;
+                const uint64_t nb22 = src2 ? src2->nb[2] : 0;
+                const uint64_t nb23 = src2 ? src2->nb[3] : 0;
+
+                const int64_t  ne30 = src3 ? src3->ne[0] : 0;
+                const int64_t  ne31 = src3 ? src3->ne[1] : 0;
+                const int64_t  ne32 = src3 ? src3->ne[2] : 0;
+                const int64_t  ne33 = src3 ? src3->ne[3] : 0;
+
+                const uint64_t nb30 = src3 ? src3->nb[0] : 0;
+                const uint64_t nb31 = src3 ? src3->nb[1] : 0;
+                const uint64_t nb32 = src3 ? src3->nb[2] : 0;
+                const uint64_t nb33 = src3 ? src3->nb[3] : 0;
+
                 const int64_t  ne0  = dst ? dst->ne[0] : 0;
                 const int64_t  ne1  = dst ? dst->ne[1] : 0;
                 const int64_t  ne2  = dst ? dst->ne[2] : 0;
@@ -753,10 +781,14 @@ void ggml_metal_graph_compute(
 
                 const enum ggml_type src0t = src0 ? src0->type : GGML_TYPE_COUNT;
                 const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
+                const enum ggml_type src2t = src2 ? src2->type : GGML_TYPE_COUNT;
+                const enum ggml_type src3t = src3 ? src3->type : GGML_TYPE_COUNT;
                 const enum ggml_type dstt  = dst  ? dst->type  : GGML_TYPE_COUNT;
 
                 id<MTLBuffer> id_src0 = src0 ? ggml_metal_get_buffer(ctx, src0, &offs_src0) : nil;
                 id<MTLBuffer> id_src1 = src1 ? ggml_metal_get_buffer(ctx, src1, &offs_src1) : nil;
+                id<MTLBuffer> id_src2 = src2 ? ggml_metal_get_buffer(ctx, src2, &offs_src2) : nil;
+                id<MTLBuffer> id_src3 = src3 ? ggml_metal_get_buffer(ctx, src3, &offs_src3) : nil;
                 id<MTLBuffer> id_dst  = dst  ? ggml_metal_get_buffer(ctx, dst,  &offs_dst)  : nil;
 
                 //GGML_METAL_LOG_INFO("%s: op - %s\n", __func__, ggml_op_name(dst->op));
@@ -877,6 +909,61 @@ void ggml_metal_graph_compute(
 
                                 [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                             }
+                        } break;
+                    case GGML_OP_CONV_1D_SMALL_KERN:
+                        {
+                            const int64_t s0 = ((const int32_t*)(dst->op_params))[0];
+                            const int64_t p0 = ((const int32_t*)(dst->op_params))[1];
+                            const int64_t d0 = ((const int32_t*)(dst->op_params))[2];
+                            const bool apply_tanh = (bool) ((int32_t *) dst->op_params)[3];
+                            const bool has_bias = (src2 != NULL);
+                            const bool has_inject_signal = (src3 != NULL);
+                            const int64_t output_len = dst->ne[0];
+                            const int nk = ne02; // kernel size
+                            const int64_t real_input_len = ggml_calc_conv_input_size(output_len, nk, s0, p0, d0);
+
+                            const int32_t dispatch_y = dst->ne[1];
+                            const int32_t dispatch_z = dst->ne[2];
+
+                            [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern];
+
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                            [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
+                            [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
+                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
+
+                            [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:5];
+                            [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:6];
+                            [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:7];
+                            [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:8];
+
+                            [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:9];
+                            [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:10];
+                            [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:11];
+
+                            [encoder setBytes:&nb21 length:sizeof(nb21) atIndex:12];
+                            [encoder setBytes:&nb22 length:sizeof(nb22) atIndex:13];
+
+                            [encoder setBytes:&ne30 length:sizeof(ne30) atIndex:14];
+                            [encoder setBytes:&nb31 length:sizeof(nb31) atIndex:15];
+                            [encoder setBytes:&nb32 length:sizeof(nb32) atIndex:16];
+
+                            [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:17];
+                            [encoder setBytes:&nb1  length:sizeof(nb1)  atIndex:18];
+                            [encoder setBytes:&nb2  length:sizeof(nb2)  atIndex:19];
+
+                            [encoder setBytes:&apply_tanh  length:sizeof(apply_tanh)  atIndex:20];
+                            [encoder setBytes:&has_bias  length:sizeof(has_bias)  atIndex:21];
+                            [encoder setBytes:&has_inject_signal  length:sizeof(has_inject_signal)  atIndex:22];
+
+                            [encoder setBytes:&d0  length:sizeof(d0)  atIndex:23];
+                            [encoder setBytes:&real_input_len  length:sizeof(real_input_len)  atIndex:24];
+
+
+                            const int32_t dispatch_x = CEIL_DIV(output_len, 256);
+
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
                     case GGML_OP_MUL:
                         {

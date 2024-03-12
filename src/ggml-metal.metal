@@ -147,6 +147,79 @@ kernel void kernel_sqr(
     dst[tpig] = src0[tpig] * src0[tpig];
 }
 
+
+kernel void kernel_conv_1d_small_kern(
+        device const float * src0,
+        device const float * src1,
+        device const float * src2,
+        device const float * src3,
+        device       float * dst,
+
+        constant  int64_t & ne01,
+        constant  int64_t & ne02,
+        constant  int64_t & nb01,
+        constant  int64_t & nb02,
+
+        constant  int64_t & ne10,
+        constant  int64_t & nb11,
+        constant  int64_t & nb12,
+
+        constant  int64_t & nb21,
+        constant  int64_t & nb22,
+
+        constant  int64_t & ne30,
+        constant  int64_t & nb31,
+        constant  int64_t & nb32,
+
+        constant  int64_t & ne0,
+        constant  int64_t & nb1,
+        constant  int64_t & nb2,
+
+        constant  bool & apply_tanh,
+        constant  bool & has_bias,
+        constant  bool & has_inject_signal,
+
+        constant int64_t & d0, 
+        constant int64_t & real_input_len, 
+        uint3 tpig[[thread_position_in_grid]]) {
+    float output = 0.0f;
+
+    if (tpig.x >= ne0) {
+        return;
+    }
+
+    if (has_bias) {
+        const int64_t bias_idx = tpig.y * nb21 / 4;
+        output += src2[bias_idx];
+    }
+
+    if (has_inject_signal) {
+        const int64_t inject_idx = ne30 - ne0 + tpig.x + tpig.y * nb31 / 4 + tpig.z * nb32 / 4;
+        output += src3[inject_idx];
+    }
+
+    const int64_t base_src1_offset = ne10 - real_input_len + tpig.x + tpig.z * nb12 / 4;
+
+    for (int ik = 0; ik < ne02; ik+=1) {
+        const int64_t in_idx_offset = ik * d0 + base_src1_offset;
+        const int64_t kernel_base_idx = tpig.y + ik * nb02/4;
+        for (int ic = 0; ic < ne01; ic+=1) {
+            float input_val = src1[in_idx_offset + ic * nb11/4];
+            float kernel_val = src0[kernel_base_idx + ic * nb01/4];
+            output = output + input_val * kernel_val;
+        }
+    }
+
+    if (apply_tanh) {
+        output = tanh(output);
+    }
+
+    const int64_t output_idx = tpig.x + tpig.y * nb1 / 4 + tpig.z * nb2 / 4;
+    dst[output_idx] = output;
+}
+
+
+
 constant float GELU_COEF_A    = 0.044715f;
 constant float SQRT_2_OVER_PI = 0.79788456080286535587989211986876f;
 

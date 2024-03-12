@@ -7987,11 +7987,11 @@ struct ggml_tensor * ggml_clamp(
 
 // ggml_conv_1d
 
-static int64_t ggml_calc_conv_output_size(int64_t ins, int64_t ks, int s, int p, int d) {
+int64_t ggml_calc_conv_output_size(int64_t ins, int64_t ks, int s, int p, int d) {
     return (ins + 2 * p - d * (ks - 1) - 1) / s + 1;
 }
 
-static int64_t ggml_calc_conv_input_size(int64_t outs, int64_t ks, int s, int p, int d) {
+int64_t ggml_calc_conv_input_size(int64_t outs, int64_t ks, int s, int p, int d) {
     return s*(outs-1) + d*(ks-1) + 1 - 2*p;
 }
 
