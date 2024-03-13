@@ -281,6 +281,27 @@ kernel void kernel_add_and_trim(
         src1[get_linear_index(tensor_dimension_params.src[1], global_id.x + tensor_dimension_params.src[1].ne[0] - output_len, global_id.y, global_id.z)];
 }
 
+
+kernel void kernel_repeat(
+        device const float * src0,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    if (global_id.x >= tensor_dimension_params.dst.ne[0]) {
+        return;
+    }
+
+    let idx0 = global_id.x * tensor_dimension_params.src[0].ne[0] / tensor_dimension_params.dst.ne[0];
+    let idx1 = global_id.y * tensor_dimension_params.src[0].ne[1] / tensor_dimension_params.dst.ne[1];
+    let idx2 = global_id.z * tensor_dimension_params.src[0].ne[2] / tensor_dimension_params.dst.ne[2];
+
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = 
+        src0[get_linear_index(tensor_dimension_params.src[0], idx0, idx1, idx2)];
+}
+
+
+
 constant float GELU_COEF_A    = 0.044715f;
 constant float SQRT_2_OVER_PI = 0.79788456080286535587989211986876f;
 
