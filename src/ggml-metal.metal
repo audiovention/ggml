@@ -470,17 +470,9 @@ kernel void kernel_add_and_tanh_back(
         uint3 wg_id[[threadgroup_position_in_grid]],
         uint3 wg_size[[threads_per_threadgroup]],
         uint3 local_id[[thread_position_in_threadgroup]]) {
-    let num_el_dst = get_num_padded_elements(tensor_dimension_params.dst);
-    let mult_idx = global_id.x * 4;
-
-    if (mult_idx >= num_el_dst) {
-        return;
-    }
-
     let x = src0_v4[global_id.x];
     let y = src1_v4[global_id.x];
     let z = (1.0 - x*x)*y;
-
     dst_v4[global_id.x] = z;
 }
 
