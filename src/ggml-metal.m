@@ -1102,28 +1102,20 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_MUL:
                         {
-                            GGML_ASSERT(ggml_is_contiguous(src0));
-                            GGML_ASSERT(ggml_is_contiguous(src1));
+                            const int64_t output_len = dst->ne[0];
+                            const int32_t dispatch_y = dst->ne[1];
+                            const int32_t dispatch_z = dst->ne[2];
 
-                            // utilize float4
-                            // GGML_ASSERT(ne00 % 4 == 0);
-                            const int64_t nb = ne00/4;
+                            [encoder setComputePipelineState:ctx->pipeline_mul];
 
-                            if (ggml_nelements(src1) == ne10) {
-                                // src1 is a row
-                                GGML_ASSERT(ne11 == 1);
-                                [encoder setComputePipelineState:ctx->pipeline_mul_row];
-                            } else {
-                                [encoder setComputePipelineState:ctx->pipeline_mul];
-                            }
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBytes:&nb     length:sizeof(nb) atIndex:3];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
 
-                            const int64_t n = CEIL_DIV(ggml_nelements_padded(dst), 4);
+                            const int32_t dispatch_x = CEIL_DIV(output_len, 256);
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
                     case GGML_OP_SUB:
                         {

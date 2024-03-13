@@ -119,11 +119,22 @@ kernel void kernel_add_row(
 }
 
 kernel void kernel_mul(
-        device const float4 * src0,
-        device const float4 * src1,
-        device       float4 * dst,
-        uint tpig[[thread_position_in_grid]]) {
-    dst[tpig] = src0[tpig] * src1[tpig];
+        device const float * src0,
+        device const float * src1,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]]) {
+    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
+        return;
+    }
+
+    let idx0 = global_id.x * u32(tensor_dimension_params.src[1].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+    let idx1 = global_id.y * u32(tensor_dimension_params.src[1].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
+    let idx2 = global_id.z * u32(tensor_dimension_params.src[1].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
+
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = 
+        src0[get_linear_index(tensor_dimension_params.src[0], global_id.x, global_id.y, global_id.z)] * 
+        src1[get_linear_index(tensor_dimension_params.src[1], idx0, idx1, idx2)];
 }
 
 kernel void kernel_sub(
@@ -394,7 +405,7 @@ kernel void kernel_conv_1d_small_kern_back_input(
         if (global_id.x >= idx_offset && (global_id.x < (idx_offset+output_len))) {
             let base_idx_src0 = global_id.y * tensor_dimension_params.src[0].nb[1] + ik * tensor_dimension_params.src[0].nb[2];
             let base_idx_src1 = global_id.z * tensor_dimension_params.src[1].nb[2] + (global_id.x - idx_offset);
-            for (int idx_oc = 0; idx_oc < output_channels; idx_oc+=1) {
+            for (uint idx_oc = 0; idx_oc < output_channels; idx_oc+=1) {
                 // output = output + 
                 //     get_src0(idx_oc, global_id.y, ik) * 
                 //     get_src1(global_id.x - idx_offset, idx_oc, global_id.z);
