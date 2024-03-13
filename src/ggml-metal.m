@@ -127,6 +127,8 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(add_and_tanh_back);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_bias);
     GGML_METAL_DECL_KERNEL(special_adam_step);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_no_offsets);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_simpl);
 
 #undef GGML_METAL_DECL_KERNEL
 };
@@ -321,6 +323,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(add_and_tanh_back);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_bias);
         GGML_METAL_ADD_KERNEL(special_adam_step);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_no_offsets);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_simpl);
 
 #undef GGML_METAL_ADD_KERNEL
     }
@@ -424,6 +428,8 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(add_and_tanh_back);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_bias);
     GGML_METAL_DEL_KERNEL(special_adam_step);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_no_offsets);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_simpl);
     
 
 #undef GGML_METAL_DEL_KERNEL
@@ -977,8 +983,27 @@ void ggml_metal_graph_compute(
                             const int64_t output_len = dst->ne[0];
                             const int32_t dispatch_y = dst->ne[1];
                             const int32_t dispatch_z = dst->ne[2];
+                            int32_t dispatch_x = output_len;
 
-                            [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern];
+                            const int32_t d0 = dst->op_params[2];
+                            const int64_t nk = dst->src[0]->ne[2];
+                            const int64_t real_input_len = output_len + d0*(nk-1);
+
+                            if (1 == nk) {
+                                GGML_ASSERT(0 == dst->op_params[3]);
+                                [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_simpl];
+                            } else {
+                                GGML_ASSERT(real_input_len == dst->src[1]->ne[0]);
+                                if (dst->src[3]) {
+                                    GGML_ASSERT(output_len == dst->src[3]->ne[0]);
+                                }
+                                if (d0>=4) {
+                                    dispatch_x /= 4;
+                                    [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_no_offsets];
+                                } else {
+                                    [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern];
+                                }
+                            }
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
@@ -987,7 +1012,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
 
-                            [encoder dispatchThreads:MTLSizeMake(output_len, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
                     case GGML_OP_SUM:
                         {

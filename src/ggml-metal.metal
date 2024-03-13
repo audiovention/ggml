@@ -241,6 +241,103 @@ kernel void kernel_conv_1d_small_kern(
 }
 
 
+kernel void kernel_conv_1d_small_kern_simpl(
+        device const float * src0,
+        device const float * src1,
+        device const float * src2,
+        device const float * src3,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let has_bias = bool(tensor_dimension_params.params[1][0]);
+    let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let input_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+
+    float output = 0.0;
+
+    if (has_bias) {
+        output += src2[get_linear_index(tensor_dimension_params.src[2], 0u, global_id.y, 0u)];
+    }
+
+    if (has_inject_signal) {
+        output += src3[get_linear_index(tensor_dimension_params.src[3], u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z)];
+    }
+
+    let in_idx_offset = input_len - output_len + global_id.x;
+    for (uint ic = 0u; ic < input_channels; ic = ic + 1u) {
+        let input_val = src1[get_linear_index(tensor_dimension_params.src[1], in_idx_offset, ic, global_id.z)];
+        let kernel_val = src0[get_linear_index(tensor_dimension_params.src[0], global_id.y, ic, 0u)];
+        output = output + input_val * kernel_val;
+    }
+
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = output;
+}
+
+
+kernel void kernel_conv_1d_small_kern_no_offsets(
+        device const float * src0,
+        device const float4 * src1_v4,
+        device const float * src2,
+        device const float4 * src3_v4,
+        device       float4 * dst_v4,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let apply_tanh = bool(tensor_dimension_params.params[0][3]);
+    let has_bias = bool(tensor_dimension_params.params[1][0]);
+    let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+
+    let mult_idx = global_id.x * 4u;
+
+    float4 output = 0.0;
+
+    if (has_bias) {
+        output += src2[get_linear_index(tensor_dimension_params.src[2], 0u, global_id.y, 0u)];
+    }
+
+    if (has_inject_signal) {
+        let src3_idx = global_id.x + global_id.y * tensor_dimension_params.src[3].nb[1]/4u + global_id.z * tensor_dimension_params.src[3].nb[2]/4u;
+        output += src3_v4[src3_idx];
+    }
+
+    let base_src1_offset = mult_idx + global_id.z * tensor_dimension_params.src[1].nb[2];
+
+    for (uint ik = 0u; ik < nk; ik = ik + 1u) {
+        let in_idx_offset = ik * d0 + base_src1_offset;
+        let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
+        for (uint ic = 0u; ic < input_channels; ic = ic + 1u) {
+            let input_idx = (in_idx_offset + ic * tensor_dimension_params.src[1].nb[1])/4u;
+            let input_val = src1_v4[input_idx];
+            let kernel_val = src0[kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1]];
+            output = output + input_val * kernel_val;
+        }
+    }
+
+    if (apply_tanh) {
+        output = tanh(output);
+    }
+
+    let dst_idx = global_id.x + global_id.y * tensor_dimension_params.dst.nb[1]/4u + global_id.z * tensor_dimension_params.dst.nb[2]/4u;
+    dst_v4[dst_idx] = output;
+}
+
+
 kernel void kernel_sum(
         device const float * src0,
         device       float * dst,
