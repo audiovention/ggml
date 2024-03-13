@@ -46,6 +46,10 @@ uint64_t get_linear_index(constant TensorDimensionParam& param, uint x, uint y, 
     return z * param.nb[2] + y * param.nb[1] + x;
 }
 
+void workgroupBarrier() {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+}
+
 // general-purpose kernel for addition of two tensors
 // pros: works for non-contiguous tensors, supports broadcast across dims 1, 2 and 3
 // cons: not very efficient
@@ -298,6 +302,68 @@ kernel void kernel_repeat(
 
     dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = 
         src0[get_linear_index(tensor_dimension_params.src[0], idx0, idx1, idx2)];
+}
+
+
+kernel void kernel_conv_1d_small_kern_back_filter(
+        device const float * src0,
+        device const float * src1,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup float  * workgroup_data [[threadgroup(0)]],
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let s0 = tensor_dimension_params.params[0][0];
+    let p0 = tensor_dimension_params.params[0][1];
+    let d0 = tensor_dimension_params.params[0][2];
+    let nk = tensor_dimension_params.dst.ne[2];
+
+
+    let input_channels = tensor_dimension_params.src[0].ne[1];
+    let output_channels = tensor_dimension_params.dst.ne[0];
+    let input_len = tensor_dimension_params.src[0].ne[0];
+    let output_len = tensor_dimension_params.src[1].ne[0];
+    let num_batches = tensor_dimension_params.src[0].ne[2];
+
+
+    let real_input_len = s0*(output_len - 1) + d0*(nk - 1) + 1 - 2*p0;
+
+    float output = 0.0;
+
+    let base_offset = wg_id.x * d0 + input_len - real_input_len;
+
+    for (int ir = 0; ir < num_batches; ir+=1) {
+        let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2] + global_id.z * tensor_dimension_params.src[0].nb[1];
+        let base_idx_src1 = ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
+        for (int isample = local_id.x; isample < output_len; isample+=wg_size.x) {
+            // output = output + 
+            //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
+            output = output + src0[base_idx_src0 + isample] * src1[base_idx_src1 + isample];
+        }
+    }
+
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0 == local_id.x) {
+        output = 0.0;
+        for (int i = 0; i < wg_size.x; i+=1) {
+            output = output + workgroup_data[i];
+        }
+        dst[get_linear_index(tensor_dimension_params.dst, global_id.y, global_id.z, wg_id.x)] = output;
+    }
+
+
+
+    if (global_id.x >= output_len) {
+        return;
+    }
+
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = 
+        src0[get_linear_index(tensor_dimension_params.src[0], global_id.x + tensor_dimension_params.src[0].ne[0] - output_len, global_id.y, global_id.z)] + 
+        src1[get_linear_index(tensor_dimension_params.src[1], global_id.x + tensor_dimension_params.src[1].ne[0] - output_len, global_id.y, global_id.z)];
 }
 
 
