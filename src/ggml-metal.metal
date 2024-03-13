@@ -180,8 +180,8 @@ kernel void kernel_relu(
 }
 
 kernel void kernel_sqr(
-        device const float * src0,
-        device       float * dst,
+        device const float4 * src0,
+        device       float4 * dst,
         uint tpig[[thread_position_in_grid]]) {
     dst[tpig] = src0[tpig] * src0[tpig];
 }

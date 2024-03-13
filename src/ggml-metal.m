@@ -1127,6 +1127,8 @@ void ggml_metal_graph_compute(
                         {
                             GGML_ASSERT(ggml_is_contiguous(src0));
                             GGML_ASSERT(ggml_is_contiguous(src1));
+                            const int threadgroupSize = 256;
+                            // const int dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), (4*threadgroupSize));
 
                             // utilize float4
                             [encoder setComputePipelineState:ctx->pipeline_sub];
@@ -1134,22 +1136,19 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
 
-                            const int64_t n = CEIL_DIV(ggml_nelements_padded(dst), 4);
-
-                            [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(ggml_nelements_padded(dst)/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_SCALE:
                         {
                             GGML_ASSERT(ggml_is_contiguous(src0));
+                            const int threadgroupSize = 256;
 
                             [encoder setComputePipelineState:ctx->pipeline_scale];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
 
-                            const int64_t n = CEIL_DIV(ggml_nelements_padded(dst), 4);
-
-                            [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(ggml_nelements_padded(dst)/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_UNARY:
                         switch (ggml_get_unary_op(gf->nodes[i])) {
@@ -1192,13 +1191,13 @@ void ggml_metal_graph_compute(
                     case GGML_OP_SQR:
                         {
                             GGML_ASSERT(ggml_is_contiguous(src0));
+                            const int threadgroupSize = 256;
 
                             [encoder setComputePipelineState:ctx->pipeline_sqr];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst atIndex:1];
 
-                            const int64_t n = ggml_nelements_padded(dst);
-                            [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(ggml_nelements_padded(dst)/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_SOFT_MAX:
                         {
