@@ -468,6 +468,45 @@ kernel void kernel_add_and_tanh_back(
 }
 
 
+kernel void kernel_conv_1d_small_kern_back_bias(
+        device const float * src0,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup float  * workgroup_data [[threadgroup(0)]],
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let output_len = u32(tensor_dimension_params.src[0].ne[0]);
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+
+    float output = 0.0;
+
+    for (int ir = 0; ir < num_batches; ir+=1) {
+        let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2];
+        // TODO: handle output_len not being a multiple of 4
+        for (int isample = 4*local_id.x; isample < output_len; isample += 4*wg_size.x) {
+            let base_idx_src0 = base_idx_src0_base + isample;
+            output = output + get_src0_lin(base_idx_src0);
+            output = output + get_src0_lin(base_idx_src0+1u);
+            output = output + get_src0_lin(base_idx_src0+2u);
+            output = output + get_src0_lin(base_idx_src0+3u);
+        }
+    }
+
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        output = 0.0;
+        for (int i = 0; i < wg_size.x; i+=1) {
+            output = output + workgroup_data[i];
+        }   
+        dst[get_linear_index(tensor_dimension_params.dst, 0, wg_id.x, 0)] = output;
+    }
+}
+
 
 constant float GELU_COEF_A    = 0.044715f;
 constant float SQRT_2_OVER_PI = 0.79788456080286535587989211986876f;
