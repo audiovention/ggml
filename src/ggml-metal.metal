@@ -483,15 +483,15 @@ kernel void kernel_conv_1d_small_kern_back_bias(
 
     float output = 0.0;
 
-    for (int ir = 0; ir < num_batches; ir+=1) {
+    for (uint ir = 0; ir < num_batches; ir+=1) {
         let base_idx_src0_base = wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2];
         // TODO: handle output_len not being a multiple of 4
-        for (int isample = 4*local_id.x; isample < output_len; isample += 4*wg_size.x) {
+        for (uint isample = 4*local_id.x; isample < output_len; isample += 4*wg_size.x) {
             let base_idx_src0 = base_idx_src0_base + isample;
-            output = output + get_src0_lin(base_idx_src0);
-            output = output + get_src0_lin(base_idx_src0+1u);
-            output = output + get_src0_lin(base_idx_src0+2u);
-            output = output + get_src0_lin(base_idx_src0+3u);
+            output = output + src0[base_idx_src0];
+            output = output + src0[base_idx_src0+1u];
+            output = output + src0[base_idx_src0+2u];
+            output = output + src0[base_idx_src0+3u];
         }
     }
 
@@ -500,7 +500,7 @@ kernel void kernel_conv_1d_small_kern_back_bias(
 
     if (0u == local_id.x) {
         output = 0.0;
-        for (int i = 0; i < wg_size.x; i+=1) {
+        for (uint i = 0; i < wg_size.x; i+=1) {
             output = output + workgroup_data[i];
         }   
         dst[get_linear_index(tensor_dimension_params.dst, 0, wg_id.x, 0)] = output;
@@ -524,12 +524,12 @@ kernel void kernel_special_adam_step(
         return;
     }
 
-    let beta1 = *((float*)(&(tensor_dimension_params.params[0][0])));
-    let beta2 = *((float*)(&(tensor_dimension_params.params[0][1])));
-    let beta1h = *((float*)(&(tensor_dimension_params.params[0][2])));
-    let beta2h = *((float*)(&(tensor_dimension_params.params[0][3])));
-    let eps = *((float*)(&(tensor_dimension_params.params[1][0])));
-    let gradient_scale = *((float*)(&(tensor_dimension_params.params[1][1])));
+    let beta1 = as_type<float>(tensor_dimension_params.params[0][0]);
+    let beta2 = as_type<float>(tensor_dimension_params.params[0][1]);
+    let beta1h = as_type<float>(tensor_dimension_params.params[0][2]);
+    let beta2h = as_type<float>(tensor_dimension_params.params[0][3]);
+    let eps = as_type<float>(tensor_dimension_params.params[1][0]);
+    let gradient_scale = as_type<float>(tensor_dimension_params.params[1][1]);
 
     auto x = src0[global_id.x];
     auto g = src1[global_id.x] * gradient_scale;
