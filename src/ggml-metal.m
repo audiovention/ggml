@@ -119,6 +119,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(add_and_trim);
     GGML_METAL_DECL_KERNEL(repeat);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input);
 
 #undef GGML_METAL_DECL_KERNEL
 };
@@ -308,6 +309,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(add_and_trim);
         GGML_METAL_ADD_KERNEL(repeat);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input);
 
 #undef GGML_METAL_ADD_KERNEL
     }
@@ -406,6 +408,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(add_and_trim);
     GGML_METAL_DEL_KERNEL(repeat);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input);
     
 
 #undef GGML_METAL_DEL_KERNEL
