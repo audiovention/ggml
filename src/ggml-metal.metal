@@ -35,8 +35,10 @@ typedef struct {
         int4 params[3];
 } TensorDimensionParams;
 
+#define let const auto
+
 uint64_t get_num_padded_elements(const TensorDimensionParam& param) {
-    const auto ne0 = param.nb[1] / param.nb[0];
+    let ne0 = param.nb[1] / param.nb[0];
     return ne0 * param.ne[1] * param.ne[2] * param.ne[3];
 }
 
