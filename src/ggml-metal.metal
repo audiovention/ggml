@@ -386,7 +386,7 @@ kernel void kernel_conv_1d_small_kern_back_input(
     float output = 0.0;
 
     if (accumulate) {
-        output = src2[get_linear_index(global_id.x, global_id.y, global_id.z)];
+        output = src2[get_linear_index(tensor_dimension_params.src[2], global_id.x, global_id.y, global_id.z)];
     }
 
     for (int ik = 0; ik < nk; ik+=1) {
@@ -405,7 +405,7 @@ kernel void kernel_conv_1d_small_kern_back_input(
         }
     }
 
-    dst[get_linear_index(global_id.x, global_id.y, global_id.z)] = output;
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = output;
 }
 
 
@@ -432,15 +432,15 @@ kernel void kernel_acc(
 
     float output = 0.0;
     if (!zero_out_accumulator) {
-        output = src0[get_linear_index(global_id.x, global_id.y, global_id.z)];
+        output = src0[get_linear_index(tensor_dimension_params.src[0], global_id.x, global_id.y, global_id.z)];
     }
 
     if (global_id.x >= offset_ne && global_id.x < nc_limit) {
         let idx0 = global_id.x - offset_ne;
-        output = output + src[get_linear_index(idx0, global_id.y, global_id.z)];
+        output = output + src1[get_linear_index(tensor_dimension_params.src[1], idx0, global_id.y, global_id.z)];
     }
 
-    dst[get_linear_index(global_id.x, global_id.y, global_id.z)] = output;
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = output;
 }
 
 
