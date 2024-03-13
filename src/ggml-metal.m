@@ -1077,7 +1077,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_CONV_1D_SMALL_KERN_BACK_BIAS:
                         {
@@ -1699,8 +1699,8 @@ void ggml_metal_graph_compute(
 #if GGML_PERF
     for (int i = 0; i < gf->n_nodes; ++i) {
         gf->nodes[i]->perf_runs++;
-        gf->nodes[i]->perf_cycles += ctx->perf_counters_gpu[i + 1] - ctx->perf_counters_gpu[i];
-        gf->nodes[i]->perf_time_us += (ctx->perf_counters_cpu[i + 1] - ctx->perf_counters_cpu[i]) / 1;
+        gf->nodes[i]->perf_cycles += ctx->perf_counters_cpu[i + 1] - ctx->perf_counters_cpu[i];
+        gf->nodes[i]->perf_time_us += (ctx->perf_counters_gpu[i + 1] - ctx->perf_counters_gpu[i]) / 1;
     }
 #endif
 
