@@ -292,10 +292,6 @@ kernel void kernel_repeat(
         constant  TensorDimensionParams & tensor_dimension_params,
         uint3 global_id[[thread_position_in_grid]],
         uint3 local_id[[thread_position_in_threadgroup]]) {
-    if (global_id.x >= tensor_dimension_params.dst.ne[0]) {
-        return;
-    }
-
     let idx0 = global_id.x * tensor_dimension_params.src[0].ne[0] / tensor_dimension_params.dst.ne[0];
     let idx1 = global_id.y * tensor_dimension_params.src[0].ne[1] / tensor_dimension_params.dst.ne[1];
     let idx2 = global_id.z * tensor_dimension_params.src[0].ne[2] / tensor_dimension_params.dst.ne[2];

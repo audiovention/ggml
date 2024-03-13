@@ -1014,14 +1014,13 @@ void ggml_metal_graph_compute(
                     case GGML_OP_REPEAT:
                         {
                             const int threadgroupSize = 256;
-                            const int dispatch_x = CEIL_DIV(dst->ne[0], threadgroupSize);
                             [encoder setComputePipelineState:ctx->pipeline_repeat];
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:2];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(dst->ne[0], dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                         {
