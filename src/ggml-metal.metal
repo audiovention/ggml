@@ -444,6 +444,31 @@ kernel void kernel_acc(
 }
 
 
+kernel void kernel_add_and_tanh_back(
+        device const float4 * src0_v4,
+        device const float4 * src1_v4,
+        device       float4 * dst_v4,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let num_el_dst = get_num_padded_elements(tensor_dimension_params.dst);
+    let mult_idx = global_id.x * 4;
+
+    if (mult_idx >= num_el_dst) {
+        return;
+    }
+
+    let x = src0_v4[global_id.x];
+    let y = src1_v4[global_id.x];
+    let z = (1.0 - x*x)*y;
+
+    dst_v4[global_id.x] = z;
+}
+
+
+
 constant float GELU_COEF_A    = 0.044715f;
 constant float SQRT_2_OVER_PI = 0.79788456080286535587989211986876f;
 
