@@ -191,7 +191,7 @@ kernel void kernel_conv_1d_small_kern(
     }
 
     if (has_bias) {
-        const int64_t bias_idx = tpig.y * nb21 / 4;
+        const int64_t bias_idx = tpig.y * tensor_dimension_params.src[2].nb[1];
         output += src2[bias_idx];
     }
 
