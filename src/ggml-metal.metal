@@ -35,6 +35,10 @@ typedef struct {
         int4 params[3];
 } TensorDimensionParams;
 
+uint64_t get_num_padded_elements(const TensorDimensionParam& param) {
+    const auto ne0 = param.nb[1] / param.nb[0];
+    return ne0 * param.ne[1] * param.ne[2] * param.ne[3];
+}
 
 // general-purpose kernel for addition of two tensors
 // pros: works for non-contiguous tensors, supports broadcast across dims 1, 2 and 3
@@ -228,8 +232,7 @@ kernel void kernel_sum(
         constant  TensorDimensionParams & tensor_dimension_params,
         uint3 global_id[[thread_position_in_grid]],
         uint3 local_id[[thread_position_in_threadgroup]]) {
-    const auto ne00 = tensor_dimension_params.src[0].nb[1] / tensor_dimension_params.src[0].nb[0];
-    const auto num_el_src0 = ne00 * tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3];
+    const auto num_el_src0 = get_num_padded_elements(tensor_dimension_params.src[0]);
 
     threadgroup float workgroup_data[256];
     float sum = 0.0;
