@@ -995,6 +995,31 @@ void ggml_metal_graph_compute(
 
                             [encoder dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
+                    case GGML_OP_ADD_AND_TRIM:
+                        {
+                            const int threadgroupSize = 256;
+                            const int dispatch_x = CEIL_DIV(dst->ne[0], threadgroupSize);
+                            [encoder setComputePipelineState:ctx->add_and_trim];
+
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
+
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                        } break;
+                    case GGML_OP_REPEAT:
+                        {
+                            const int threadgroupSize = 256;
+                            const int dispatch_x = CEIL_DIV(dst->ne[0], threadgroupSize);
+                            [encoder setComputePipelineState:ctx->repeat];
+
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:2];
+
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                        } break;
                     case GGML_OP_MUL:
                         {
                             GGML_ASSERT(ggml_is_contiguous(src0));
