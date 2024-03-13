@@ -1038,7 +1038,6 @@ void ggml_metal_graph_compute(
                     case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                         {
                             const int threadgroupSize = 256;
-                            const int dispatch_x = CEIL_DIV(dst->ne[0], threadgroupSize);
                             [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_back_input];
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
@@ -1047,7 +1046,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:4];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(dst->ne[0], dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_ACC:
                         {

@@ -370,12 +370,7 @@ kernel void kernel_conv_1d_small_kern_back_input(
     let nk = u32(tensor_dimension_params.src[0].ne[2]);
 
     let output_channels = u32(tensor_dimension_params.src[0].ne[0]);
-    let input_len = u32(tensor_dimension_params.dst.ne[0]);
     let output_len = u32(tensor_dimension_params.src[1].ne[0]);
-
-    if (global_id.x >= input_len) {
-        return;
-    }
 
     float output = 0.0;
 
