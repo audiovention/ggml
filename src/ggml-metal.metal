@@ -194,46 +194,55 @@ kernel void kernel_conv_1d_small_kern(
         device const float * src3,
         device       float * dst,
         constant  TensorDimensionParams & tensor_dimension_params,
-        uint3 global_id[[thread_position_in_grid]]) {
-
-    let s0 = tensor_dimension_params.params[0][0];
-    let p0 = tensor_dimension_params.params[0][1];
-    let d0 = tensor_dimension_params.params[0][2];
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
     let apply_tanh = bool(tensor_dimension_params.params[0][3]);
     let has_bias = bool(tensor_dimension_params.params[1][0]);
     let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
-    let nk = tensor_dimension_params.src[0].ne[2];
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
 
 
-    let input_channels = tensor_dimension_params.src[0].ne[1];
-    let output_channels = tensor_dimension_params.dst.ne[1];
-    let input_len = tensor_dimension_params.src[1].ne[0];
-    let output_len = tensor_dimension_params.dst.ne[0];
-    let num_batches = tensor_dimension_params.dst.ne[2];
-
-    float output = 0.0f;
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let input_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+    let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
     if (global_id.x >= output_len) {
         return;
     }
+    if (global_id.y >= output_channels) {
+        return;
+    }
+    if (global_id.z >= num_batches) {
+        return;
+    }
+
+    let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
+
+    float output = 0.0;
 
     if (has_bias) {
-        output += src2[get_linear_index(tensor_dimension_params.src[2], 0, global_id.y, 0)];
+        output += src2[get_linear_index(tensor_dimension_params.src[2], 0u, global_id.y, 0u)];
     }
 
     if (has_inject_signal) {
-        output += src3[get_linear_index(tensor_dimension_params.src[3], tensor_dimension_params.src[3].ne[0] - output_len + global_id.x, global_id.y, global_id.z)];
+        output += src3[get_linear_index(tensor_dimension_params.src[3], u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, global_id.y, global_id.z)];
     }
 
-    let real_input_len = s0*(output_len - 1) + d0*(nk - 1) + 1 - 2*p0;
-    let base_src1_offset = get_linear_index(tensor_dimension_params.src[1], input_len - real_input_len + global_id.x, 0, global_id.z);
+    let base_src1_offset = input_len - real_input_len + global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
 
-    for (int ik = 0; ik < nk; ik+=1) {
+    for (uint ik = 0u; ik < nk; ik = ik + 1u) {
         let in_idx_offset = ik * d0 + base_src1_offset;
         let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
-        for (int ic = 0; ic < input_channels; ic+=1) {
-            float input_val = src1[in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]];
-            float kernel_val = src0[kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1]];
+        for (uint ic = 0u; ic < input_channels; ic = ic + 1u) {
+            let input_val = src1[in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]];
+            let kernel_val = src0[kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1]];
             output = output + input_val * kernel_val;
         }
     }
