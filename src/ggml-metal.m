@@ -1006,7 +1006,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_REPEAT:
                         {
