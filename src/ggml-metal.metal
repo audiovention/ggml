@@ -24,6 +24,18 @@ typedef struct {
     int8_t  qs[QK8_0]; // quants
 } block_q8_0;
 
+typedef struct {
+    long4 ne;
+    ulong4 nb;
+} TensorDimensionParam;
+
+typedef struct {
+        TensorDimensionParam src[6];
+        TensorDimensionParam dst;
+        int4 params[3];
+} TensorDimensionParams;
+
+
 // general-purpose kernel for addition of two tensors
 // pros: works for non-contiguous tensors, supports broadcast across dims 1, 2 and 3
 // cons: not very efficient
