@@ -1020,6 +1020,19 @@ void ggml_metal_graph_compute(
 
                             [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
+                    case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
+                        {
+                            const int threadgroupSize = 256;
+                            [encoder setComputePipelineState:ctx->repeat];
+
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
+                            [encoder setThreadgroupMemoryLength:threadgroupSize*sizeof(float) atIndex:0];
+
+                            [encoder dispatchThreadgroups:MTLSizeMake(dst->ne[2], dst->ne[0], dst->ne[1]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                        } break;
                     case GGML_OP_MUL:
                         {
                             GGML_ASSERT(ggml_is_contiguous(src0));
