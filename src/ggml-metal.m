@@ -46,6 +46,9 @@ struct ggml_metal_context {
     id<MTLCommandBuffer>         command_buffers [GGML_METAL_MAX_COMMAND_BUFFERS];
     id<MTLComputeCommandEncoder> command_encoders[GGML_METAL_MAX_COMMAND_BUFFERS];
 
+    MTLTimestamp        perf_counters_cpu[GGML_MAX_NODES+1];
+    MTLTimestamp        perf_counters_gpu[GGML_MAX_NODES+1];
+
     dispatch_queue_t d_queue;
 
     int n_buffers;
@@ -860,6 +863,9 @@ void ggml_metal_graph_compute(
                 //    GGML_METAL_LOG_INFO("%s: dst  - %4s [%5lld, %5lld, %5lld], 1, %s\n",  __func__, ggml_type_name(dstt),  ne0,  ne1,  ne2,
                 //            dst->name);
                 //}
+#if GGML_PERF
+                [ctx->device sampleTimestamps:&ctx->perf_counters_cpu[i] gpuTimestamp:&ctx->perf_counters_gpu[i]];
+#endif
 
                 switch (dst->op) {
                     case GGML_OP_NONE:
@@ -1661,6 +1667,10 @@ void ggml_metal_graph_compute(
                         }
                 }
             }
+#if GGML_PERF
+            [ctx->device sampleTimestamps:&ctx->perf_counters_cpu[node_end] gpuTimestamp:&ctx->perf_counters_gpu[node_end]];
+#endif
+
 
             if (encoder != nil) {
                 [encoder endEncoding];
@@ -1685,6 +1695,14 @@ void ggml_metal_graph_compute(
             GGML_ASSERT(false);
         }
     }
+
+#if GGML_PERF
+    for (int i = 0; i < gf->n_nodes; ++i) {
+        gf->nodes[i]->perf_runs++;
+        gf->nodes[i]->perf_cycles += ctx->perf_counters_gpu[i + 1] - ctx->perf_counters_gpu[i];
+        gf->nodes[i]->perf_time_us += (ctx->perf_counters_cpu[i + 1] - ctx->perf_counters_cpu[i]) / 1;
+    }
+#endif
 
     }
 }
