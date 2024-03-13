@@ -42,6 +42,10 @@ uint64_t get_num_padded_elements(constant TensorDimensionParam& param) {
     return ne0 * param.ne[1] * param.ne[2] * param.ne[3];
 }
 
+uint64_t get_linear_index(constant TensorDimensionParam& param, uint x, uint y, uint z) {
+    return z * param.nb[2] + y * param.nb[1] + x;
+}
+
 // general-purpose kernel for addition of two tensors
 // pros: works for non-contiguous tensors, supports broadcast across dims 1, 2 and 3
 // cons: not very efficient
@@ -258,6 +262,24 @@ kernel void kernel_sum(
     
 }
 
+
+kernel void kernel_add_and_trim(
+        device const float * src0,
+        device const float * src1,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let output_len = tensor_dimension_params.dst.ne[0];
+
+    if (global_id.x >= output_len) {
+        return;
+    }
+
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = 
+        src0[get_linear_index(tensor_dimension_params.src[0], global_id.x + tensor_dimension_params.src[0].ne[0] - output_len, global_id.y, global_id.z)] + 
+        src1[get_linear_index(tensor_dimension_params.src[1], global_id.x + tensor_dimension_params.src[1].ne[0] - output_len, global_id.y, global_id.z)];
+}
 
 constant float GELU_COEF_A    = 0.044715f;
 constant float SQRT_2_OVER_PI = 0.79788456080286535587989211986876f;
