@@ -1023,7 +1023,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                         {
                             const int threadgroupSize = 256;
-                            [encoder setComputePipelineState:ctx->repeat];
+                            [encoder setComputePipelineState:ctx->conv_1d_small_kern_back_filter];
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
@@ -1032,6 +1032,20 @@ void ggml_metal_graph_compute(
                             [encoder setThreadgroupMemoryLength:threadgroupSize*sizeof(float) atIndex:0];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(dst->ne[2], dst->ne[0], dst->ne[1]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                        } break;
+                    case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
+                        {
+                            const int threadgroupSize = 256;
+                            const int dispatch_x = CEIL_DIV(dst->ne[0], threadgroupSize);
+                            [encoder setComputePipelineState:ctx->conv_1d_small_kern_back_input];
+
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                            [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
+                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:4];
+
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_MUL:
                         {
