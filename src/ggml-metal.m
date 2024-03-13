@@ -987,9 +987,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
 
-                            const int32_t dispatch_x = CEIL_DIV(output_len, 256);
-
-                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(output_len, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
                     case GGML_OP_SUM:
                         {
@@ -1093,7 +1091,6 @@ void ggml_metal_graph_compute(
                     case GGML_OP_SPECIAL_ADAM_STEP:
                         {
                             const int threadgroupSize = 256;
-                            const int dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), threadgroupSize);
                             [encoder setComputePipelineState:ctx->pipeline_special_adam_step];
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
@@ -1103,7 +1100,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(ggml_nelements_padded(dst), 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_MUL:
                         {
@@ -1118,9 +1115,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
 
-                            const int32_t dispatch_x = CEIL_DIV(output_len, 256);
-
-                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(output_len, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
                     case GGML_OP_SUB:
                         {

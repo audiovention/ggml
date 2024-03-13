@@ -124,10 +124,6 @@ kernel void kernel_mul(
         device       float * dst,
         constant  TensorDimensionParams & tensor_dimension_params,
         uint3 global_id[[thread_position_in_grid]]) {
-    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
-        return;
-    }
-
     let idx0 = global_id.x * u32(tensor_dimension_params.src[1].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
     let idx1 = global_id.y * u32(tensor_dimension_params.src[1].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
     let idx2 = global_id.z * u32(tensor_dimension_params.src[1].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
@@ -212,16 +208,6 @@ kernel void kernel_conv_1d_small_kern(
     let input_len = u32(tensor_dimension_params.src[1].ne[0]);
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
-
-    if (global_id.x >= output_len) {
-        return;
-    }
-    if (global_id.y >= output_channels) {
-        return;
-    }
-    if (global_id.z >= num_batches) {
-        return;
-    }
 
     let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
 
@@ -528,11 +514,6 @@ kernel void kernel_special_adam_step(
         uint3 wg_id[[threadgroup_position_in_grid]],
         uint3 wg_size[[threads_per_threadgroup]],
         uint3 local_id[[thread_position_in_threadgroup]]) {
-    let num_el_dst = get_num_padded_elements(tensor_dimension_params.dst);
-    if (global_id.x >= num_el_dst) {
-        return;
-    }
-
     let beta1 = as_type<float>(tensor_dimension_params.params[0][0]);
     let beta2 = as_type<float>(tensor_dimension_params.params[0][1]);
     let beta1h = as_type<float>(tensor_dimension_params.params[0][2]);
