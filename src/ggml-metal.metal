@@ -194,7 +194,7 @@ kernel void kernel_conv_1d_small_kern(
         device const float * src3,
         device       float * dst,
         constant  TensorDimensionParams & tensor_dimension_params,
-        uint3 tpig[[thread_position_in_grid]]) {
+        uint3 global_id[[thread_position_in_grid]]) {
 
     let s0 = tensor_dimension_params.params[0][0];
     let p0 = tensor_dimension_params.params[0][1];
@@ -213,26 +213,24 @@ kernel void kernel_conv_1d_small_kern(
 
     float output = 0.0f;
 
-    if (tpig.x >= output_len) {
+    if (global_id.x >= output_len) {
         return;
     }
 
     if (has_bias) {
-        let bias_idx = tpig.y * tensor_dimension_params.src[2].nb[1];
-        output += src2[bias_idx];
+        output += src2[get_linear_index(tensor_dimension_params.src[2], 0, global_id.y, 0)];
     }
 
     if (has_inject_signal) {
-        let inject_idx = tensor_dimension_params.src[3].ne[0] - output_len + tpig.x + tpig.y * tensor_dimension_params.src[3].nb[1] + tpig.z * tensor_dimension_params.src[3].nb[2];
-        output += src3[inject_idx];
+        output += src3[get_linear_index(tensor_dimension_params.src[3], tensor_dimension_params.src[3].ne[0] - output_len + global_id.x, global_id.y, global_id.z)];
     }
 
     let real_input_len = s0*(output_len - 1) + d0*(nk - 1) + 1 - 2*p0;
-    let base_src1_offset = input_len - real_input_len + tpig.x + tpig.z * tensor_dimension_params.src[1].nb[2];
+    let base_src1_offset = get_linear_index(tensor_dimension_params.src[1], input_len - real_input_len + global_id.x, 0, global_id.z);
 
     for (int ik = 0; ik < nk; ik+=1) {
         let in_idx_offset = ik * d0 + base_src1_offset;
-        let kernel_base_idx = tpig.y + ik * tensor_dimension_params.src[0].nb[2];
+        let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
         for (int ic = 0; ic < input_channels; ic+=1) {
             float input_val = src1[in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]];
             float kernel_val = src0[kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1]];
@@ -244,8 +242,7 @@ kernel void kernel_conv_1d_small_kern(
         output = tanh(output);
     }
 
-    let output_idx = tpig.x + tpig.y * tensor_dimension_params.dst.nb[1] + tpig.z * tensor_dimension_params.dst.nb[2];
-    dst[output_idx] = output;
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = output;
 }
 
 
