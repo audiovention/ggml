@@ -508,6 +508,47 @@ kernel void kernel_conv_1d_small_kern_back_bias(
 }
 
 
+kernel void kernel_special_adam_step(
+        device const float * src0,
+        device const float * src1,
+        device       float * src2,
+        device       float * src3,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let num_el_dst = get_num_padded_elements(tensor_dimension_params.dst);
+    if (global_id.x >= num_el_dst) {
+        return;
+    }
+
+    let beta1 = *((float*)(&(tensor_dimension_params.params[0][0])));
+    let beta2 = *((float*)(&(tensor_dimension_params.params[0][1])));
+    let beta1h = *((float*)(&(tensor_dimension_params.params[0][2])));
+    let beta2h = *((float*)(&(tensor_dimension_params.params[0][3])));
+    let eps = *((float*)(&(tensor_dimension_params.params[1][0])));
+    let gradient_scale = *((float*)(&(tensor_dimension_params.params[1][1])));
+
+    auto x = src0[global_id.x];
+    auto g = src1[global_id.x] * gradient_scale;
+    auto m = src2[global_id.x];
+    auto v = src3[global_id.x];
+
+    m = m*beta1 +   g*(1.0 - beta1);
+    v = v*beta2 + g*g*(1.0 - beta2);
+    let mh = m*beta1h;
+    let vh = sqrt(v*beta2h) + eps;
+    x = x - mh/vh;
+
+    src2[global_id.x] = m;
+    src3[global_id.x] = v;
+    dst[global_id.x] = x;
+}
+
+
+
 constant float GELU_COEF_A    = 0.044715f;
 constant float SQRT_2_OVER_PI = 0.79788456080286535587989211986876f;
 
