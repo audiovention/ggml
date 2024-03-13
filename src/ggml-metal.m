@@ -1085,6 +1085,21 @@ void ggml_metal_graph_compute(
 
                             [encoder dispatchThreadgroups:MTLSizeMake(dst->ne[1], 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
+                    case GGML_OP_SPECIAL_ADAM_STEP:
+                        {
+                            const int threadgroupSize = 256;
+                            const int dispatch_x = CEIL_DIV(ggml_nelements_padded(dst), threadgroupSize);
+                            [encoder setComputePipelineState:ctx->special_adam_step];
+
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                            [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
+                            [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
+                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
+
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                        } break;
                     case GGML_OP_MUL:
                         {
                             GGML_ASSERT(ggml_is_contiguous(src0));
