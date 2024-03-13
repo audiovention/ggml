@@ -407,15 +407,15 @@ kernel void kernel_conv_1d_small_kern_back_filter(
         uint3 global_id[[thread_position_in_grid]],
         uint3 wg_id[[threadgroup_position_in_grid]],
         uint3 wg_size[[threads_per_threadgroup]],
-        uint3 local_id[[thread_position_in_threadgroup]]) {
+        uint3 local_id[[thread_position_in_threadgroup]],
+        ushort simd_id[[thread_index_in_simdgroup]],
+        ushort simd_size[[threads_per_simdgroup]]) {
     let s0 = tensor_dimension_params.params[0][0];
     let p0 = tensor_dimension_params.params[0][1];
     let d0 = tensor_dimension_params.params[0][2];
     let nk = tensor_dimension_params.dst.ne[2];
 
 
-    let input_channels = tensor_dimension_params.src[0].ne[1];
-    let output_channels = tensor_dimension_params.dst.ne[0];
     let input_len = tensor_dimension_params.src[0].ne[0];
     let output_len = tensor_dimension_params.src[1].ne[0];
     let num_batches = tensor_dimension_params.src[0].ne[2];
