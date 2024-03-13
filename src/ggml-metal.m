@@ -669,6 +669,18 @@ void ggml_metal_graph_find_concurrency(
     }
 }
 
+struct ggml_metal_dim_param {
+    int64_t ne[4];
+    uint64_t nb[4];
+};
+
+struct ggml_metal_operator_params {
+    struct ggml_metal_dim_param src[6];
+    struct ggml_metal_dim_param dst;
+    int32_t op_params[12];
+};
+
+
 void ggml_metal_graph_compute(
         struct ggml_metal_context * ctx,
                struct ggml_cgraph * gf) {
@@ -722,6 +734,8 @@ void ggml_metal_graph_compute(
                 }
 
                 //GGML_METAL_LOG_INFO("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+
+                struct ggml_metal_operator_params this_op_params = {0};
 
                 struct ggml_tensor * src0 = gf->nodes[i]->src[0];
                 struct ggml_tensor * src1 = gf->nodes[i]->src[1];
@@ -778,6 +792,21 @@ void ggml_metal_graph_compute(
                 const uint64_t nb1  = dst ? dst->nb[1] : 0;
                 const uint64_t nb2  = dst ? dst->nb[2] : 0;
                 const uint64_t nb3  = dst ? dst->nb[3] : 0;
+
+                for (int dim_idx=0; dim_idx<4; dim_idx++) {
+                    this_op_params.dst.ne[dim_idx] = dst->ne[dim_idx];
+                    this_op_params.dst.nb[dim_idx] = dst->nb[dim_idx] / ggml_element_size(dst);
+                    for (int src_idx=0; src_idx<GGML_MAX_SRC; src_idx++) {
+                        if (dst->src[src_idx]) {
+                            this_op_params.src[src_idx].ne[dim_idx] = dst->src[src_idx]->ne[dim_idx];
+                            this_op_params.src[src_idx].nb[dim_idx] = dst->src[src_idx]->nb[dim_idx] / ggml_element_size(dst->src[src_idx]);
+                        }
+                    }
+                }
+
+                for (int op_par_idx=0; op_par_idx < (GGML_MAX_OP_PARAMS/sizeof(int32_t)); ++op_par_idx) {
+                    this_op_params.op_params[op_par_idx] = dst->op_params[op_par_idx];
+                }
 
                 const enum ggml_type src0t = src0 ? src0->type : GGML_TYPE_COUNT;
                 const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
@@ -912,16 +941,7 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_CONV_1D_SMALL_KERN:
                         {
-                            const int64_t s0 = ((const int32_t*)(dst->op_params))[0];
-                            const int64_t p0 = ((const int32_t*)(dst->op_params))[1];
-                            const int64_t d0 = ((const int32_t*)(dst->op_params))[2];
-                            const bool apply_tanh = (bool) ((int32_t *) dst->op_params)[3];
-                            const bool has_bias = (src2 != NULL);
-                            const bool has_inject_signal = (src3 != NULL);
                             const int64_t output_len = dst->ne[0];
-                            const int nk = ne02; // kernel size
-                            const int64_t real_input_len = ggml_calc_conv_input_size(output_len, nk, s0, p0, d0);
-
                             const int32_t dispatch_y = dst->ne[1];
                             const int32_t dispatch_z = dst->ne[2];
 
@@ -932,34 +952,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
                             [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
-
-                            [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:5];
-                            [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:6];
-                            [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:7];
-                            [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:8];
-
-                            [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:9];
-                            [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:10];
-                            [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:11];
-
-                            [encoder setBytes:&nb21 length:sizeof(nb21) atIndex:12];
-                            [encoder setBytes:&nb22 length:sizeof(nb22) atIndex:13];
-
-                            [encoder setBytes:&ne30 length:sizeof(ne30) atIndex:14];
-                            [encoder setBytes:&nb31 length:sizeof(nb31) atIndex:15];
-                            [encoder setBytes:&nb32 length:sizeof(nb32) atIndex:16];
-
-                            [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:17];
-                            [encoder setBytes:&nb1  length:sizeof(nb1)  atIndex:18];
-                            [encoder setBytes:&nb2  length:sizeof(nb2)  atIndex:19];
-
-                            [encoder setBytes:&apply_tanh  length:sizeof(apply_tanh)  atIndex:20];
-                            [encoder setBytes:&has_bias  length:sizeof(has_bias)  atIndex:21];
-                            [encoder setBytes:&has_inject_signal  length:sizeof(has_inject_signal)  atIndex:22];
-
-                            [encoder setBytes:&d0  length:sizeof(d0)  atIndex:23];
-                            [encoder setBytes:&real_input_len  length:sizeof(real_input_len)  atIndex:24];
-
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
 
                             const int32_t dispatch_x = CEIL_DIV(output_len, 256);
 

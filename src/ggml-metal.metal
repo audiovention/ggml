@@ -166,37 +166,27 @@ kernel void kernel_conv_1d_small_kern(
         device const float * src2,
         device const float * src3,
         device       float * dst,
-
-        constant  int64_t & ne01,
-        constant  int64_t & ne02,
-        constant  int64_t & nb01,
-        constant  int64_t & nb02,
-
-        constant  int64_t & ne10,
-        constant  int64_t & nb11,
-        constant  int64_t & nb12,
-
-        constant  int64_t & nb21,
-        constant  int64_t & nb22,
-
-        constant  int64_t & ne30,
-        constant  int64_t & nb31,
-        constant  int64_t & nb32,
-
-        constant  int64_t & ne0,
-        constant  int64_t & nb1,
-        constant  int64_t & nb2,
-
-        constant  bool & apply_tanh,
-        constant  bool & has_bias,
-        constant  bool & has_inject_signal,
-
-        constant int64_t & d0, 
-        constant int64_t & real_input_len, 
+        constant  TensorDimensionParams & tensor_dimension_params,
         uint3 tpig[[thread_position_in_grid]]) {
+
+    int s0 = tensor_dimension_params.params[0][0];
+    int p0 = tensor_dimension_params.params[0][1];
+    int d0 = tensor_dimension_params.params[0][2];
+    bool apply_tanh = bool(tensor_dimension_params.params[0][3]);
+    bool has_bias = bool(tensor_dimension_params.params[1][0]);
+    bool has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+    long nk = tensor_dimension_params.src[0].ne[2];
+
+
+    long input_channels = tensor_dimension_params.src[0].ne[1];
+    long output_channels = tensor_dimension_params.dst.ne[1];
+    long input_len = tensor_dimension_params.src[1].ne[0];
+    long output_len = tensor_dimension_params.dst.ne[0];
+    long num_batches = tensor_dimension_params.dst.ne[2];
+
     float output = 0.0f;
 
-    if (tpig.x >= ne0) {
+    if (tpig.x >= output_len) {
         return;
     }
 
@@ -206,18 +196,19 @@ kernel void kernel_conv_1d_small_kern(
     }
 
     if (has_inject_signal) {
-        const int64_t inject_idx = ne30 - ne0 + tpig.x + tpig.y * nb31 / 4 + tpig.z * nb32 / 4;
+        const int64_t inject_idx = tensor_dimension_params.src[3].ne[0] - output_len + tpig.x + tpig.y * tensor_dimension_params.src[3].nb[1] + tpig.z * tensor_dimension_params.src[3].nb[2];
         output += src3[inject_idx];
     }
 
-    const int64_t base_src1_offset = ne10 - real_input_len + tpig.x + tpig.z * nb12 / 4;
+    const int64_t real_input_len = s0*(output_len - 1) + d0*(nk - 1) + 1 - 2*p0;
+    const int64_t base_src1_offset = input_len - real_input_len + tpig.x + tpig.z * tensor_dimension_params.src[1].nb[2];
 
-    for (int ik = 0; ik < ne02; ik+=1) {
+    for (int ik = 0; ik < nk; ik+=1) {
         const int64_t in_idx_offset = ik * d0 + base_src1_offset;
-        const int64_t kernel_base_idx = tpig.y + ik * nb02/4;
-        for (int ic = 0; ic < ne01; ic+=1) {
-            float input_val = src1[in_idx_offset + ic * nb11/4];
-            float kernel_val = src0[kernel_base_idx + ic * nb01/4];
+        const int64_t kernel_base_idx = tpig.y + ik * tensor_dimension_params.src[0].nb[2];
+        for (int ic = 0; ic < input_channels; ic+=1) {
+            float input_val = src1[in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]];
+            float kernel_val = src0[kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1]];
             output = output + input_val * kernel_val;
         }
     }
@@ -226,7 +217,7 @@ kernel void kernel_conv_1d_small_kern(
         output = tanh(output);
     }
 
-    const int64_t output_idx = tpig.x + tpig.y * nb1 / 4 + tpig.z * nb2 / 4;
+    const int64_t output_idx = tpig.x + tpig.y * tensor_dimension_params.dst.nb[1] + tpig.z * tensor_dimension_params.dst.nb[2];
     dst[output_idx] = output;
 }
 
