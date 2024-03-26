@@ -2338,7 +2338,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
 
 #ifdef WEBGPU_BACKEND_WGPU
     wgpuSetLogCallback(wgpu_log_callback, NULL);
-    wgpuSetLogLevel(WGPULogLevel_Info);
+    wgpuSetLogLevel(WGPULogLevel_Warn);
 #endif
 
 
@@ -3446,6 +3446,8 @@ void ggml_wgpu_graph_compute(
 #ifdef WEBGPU_BACKEND_WGPU
     wgpuDevicePoll(ctx->device, true, NULL);
 #endif
+
+#if GGML_PERF
     // performance stats (graph)
     {
         int64_t perf_cycles_cur  = ggml_perf_cycles()  - perf_start_cycles;
@@ -3462,7 +3464,7 @@ void ggml_wgpu_graph_compute(
                 (double) perf_time_us_cur     / 1000.0,
                 (double) gf->perf_time_us / 1000.0 / gf->perf_runs);
     }
-
+#endif
 }
 
 
