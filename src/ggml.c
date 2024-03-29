@@ -8126,7 +8126,7 @@ struct ggml_tensor * ggml_conv_1d_small_kern(
     GGML_ASSERT(p0==0);
 
     // This special case is actually implemented, but not tested yet, TODO: just test and delete the assert
-    GGML_ASSERT(signal->grad == NULL || output_len == -1 || output_len == OL);
+    // GGML_ASSERT(signal->grad == NULL || output_len == -1 || output_len == OL);
 
     if (filter->grad || signal->grad || (bias && bias->grad) || (inject_signal && inject_signal->grad)) {
         is_node = true;
@@ -19399,6 +19399,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 }
 
                 if (src1->grad) {
+#if 0
                     const bool accumulate = !hash_contains(zero_table, src1->grad);
                     src1->grad = ggml_conv_1d_small_kern_back_input(ctx,
                             src0,
@@ -19407,6 +19408,23 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                             s0,
                             p0,
                             d0);
+#else
+                    struct ggml_tensor* this_grad = ggml_conv_1d_small_kern_back_input(ctx,
+                            src0,
+                            interim_tensor,
+                            NULL,
+                            s0,
+                            p0,
+                            d0);
+                    size_t offset = (src1->ne[0] - this_grad->ne[0]) * src1->nb[0];
+                    if (offset > 0) {
+                        src1->grad = ggml_acc_or_set(ctx, src1->grad, this_grad, 
+                            src1->nb[1], src1->nb[2], src1->nb[3],
+                            offset, zero_table);
+                    } else {
+                        src1->grad = ggml_add_or_set(ctx, src1->grad, this_grad, zero_table);
+                    }
+#endif
                 }
 
                 if (tensor->src[2] && tensor->src[2]->grad) {
