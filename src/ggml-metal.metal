@@ -933,6 +933,39 @@ kernel void kernel_conv_1d_small_kern_back_bias(
 }
 
 
+kernel void kernel_conv_1d_small_kern_back_bias_f16(
+        device const half4 * src0,
+        device       half * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup float  * workgroup_data [[threadgroup(0)]],
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let output_len = u32(tensor_dimension_params.src[0].ne[0]);
+    let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
+
+    float4 output = 0.0;
+
+    for (uint ir = 0; ir < num_batches; ir+=1) {
+        let base_idx_src0_base = (wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2])/4;
+        for (uint isample = local_id.x; isample < (output_len+3)/4; isample += wg_size.x) {
+            output = output + src0[base_idx_src0_base + isample];
+        }
+    }
+
+    workgroup_data[local_id.x] = output.x+output.y+output.z+output.w;
+    workgroupBarrier();
+
+    if (0u == local_id.x) {
+        float output1 = 0.0;
+        for (uint i = 0; i < wg_size.x; i+=1) {
+            output1 = output1 + workgroup_data[i];
+        }   
+        dst[get_linear_index(tensor_dimension_params.dst, 0, wg_id.x, 0)] = output1;
+    }
+}
+
 kernel void kernel_special_adam_step(
         device const float * src0,
         device const float * src1,
