@@ -132,6 +132,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input_f16);
     GGML_METAL_DECL_KERNEL(acc);
     GGML_METAL_DECL_KERNEL(acc_f16);
     GGML_METAL_DECL_KERNEL(add_and_tanh_back);
@@ -342,6 +343,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input_f16);
         GGML_METAL_ADD_KERNEL(acc);
         GGML_METAL_ADD_KERNEL(acc_f16);
         GGML_METAL_ADD_KERNEL(add_and_tanh_back);
@@ -461,6 +463,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input_f16);
     GGML_METAL_DEL_KERNEL(acc);
     GGML_METAL_DEL_KERNEL(acc_f16);
     GGML_METAL_DEL_KERNEL(add_and_tanh_back);
@@ -1114,7 +1117,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                         {
                             const int threadgroupSize = 256;
-                            [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_back_input];
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_input)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];

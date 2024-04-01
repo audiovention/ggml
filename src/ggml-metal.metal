@@ -797,6 +797,51 @@ kernel void kernel_conv_1d_small_kern_back_input(
 }
 
 
+kernel void kernel_conv_1d_small_kern_back_input_f16(
+        device const half * src0,
+        device const half * src1,
+        device const half * src2,
+        device       half * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let accumulate = bool(tensor_dimension_params.params[0][3]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+    let output_channels = u32(tensor_dimension_params.src[0].ne[0]);
+    let output_len = u32(tensor_dimension_params.src[1].ne[0]);
+
+    float output = 0.0;
+
+    if (accumulate) {
+        output = src2[get_linear_index(tensor_dimension_params.src[2], global_id.x, global_id.y, global_id.z)];
+    }
+
+    for (int ik = 0; ik < nk; ik+=1) {
+        let idx_offset = ik * d0;
+        if (global_id.x >= idx_offset && (global_id.x < (idx_offset+output_len))) {
+            let base_idx_src0 = global_id.y * tensor_dimension_params.src[0].nb[1] + ik * tensor_dimension_params.src[0].nb[2];
+            let base_idx_src1 = global_id.z * tensor_dimension_params.src[1].nb[2] + (global_id.x - idx_offset);
+            for (uint idx_oc = 0; idx_oc < output_channels; idx_oc+=1) {
+                // output = output + 
+                //     get_src0(idx_oc, global_id.y, ik) * 
+                //     get_src1(global_id.x - idx_offset, idx_oc, global_id.z);
+                output = output + 
+                    src0[base_idx_src0 + idx_oc] * 
+                    src1[base_idx_src1 + idx_oc * tensor_dimension_params.src[1].nb[1]];
+            }
+        }
+    }
+
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = output;
+}
+
+
 kernel void kernel_acc(
         device const float * src0,
         device const float * src1,
