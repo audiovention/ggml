@@ -1229,7 +1229,6 @@ void ggml_metal_graph_compute(
                             
                             GGML_METAL_SET_F32_OR_F16_PIPELINE(sub)
 
-                            [encoder setComputePipelineState:ctx->pipeline_sub];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
