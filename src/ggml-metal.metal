@@ -1046,6 +1046,43 @@ kernel void kernel_special_adam_step(
 }
 
 
+kernel void kernel_special_adam_step_f16(
+        device const half * src0,
+        device const half * src1,
+        device       float * src2,
+        device       float * src3,
+        device       float * src4,
+        device       half * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let beta1 = as_type<float>(tensor_dimension_params.params[0][0]);
+    let beta2 = as_type<float>(tensor_dimension_params.params[0][1]);
+    let beta1h = as_type<float>(tensor_dimension_params.params[0][2]);
+    let beta2h = as_type<float>(tensor_dimension_params.params[0][3]);
+    let eps = as_type<float>(tensor_dimension_params.params[1][0]);
+    let gradient_scale = as_type<float>(tensor_dimension_params.params[1][1]);
+
+    float x = src4[global_id.x];
+    float g = src1[global_id.x] * gradient_scale;
+    float m = src2[global_id.x];
+    float v = src3[global_id.x];
+
+    m = m*beta1 +   g*(1.0 - beta1);
+    v = v*beta2 + g*g*(1.0 - beta2);
+    let mh = m*beta1h;
+    let vh = sqrt(v*beta2h) + eps;
+    x = x - mh/vh;
+
+    src2[global_id.x] = m;
+    src3[global_id.x] = v;
+    src4[global_id.x] = x;
+    dst[global_id.x] = x;
+}
+
+
 
 constant float GELU_COEF_A    = 0.044715f;
 constant float SQRT_2_OVER_PI = 0.79788456080286535587989211986876f;

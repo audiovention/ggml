@@ -140,6 +140,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_bias);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_bias_f16);
     GGML_METAL_DECL_KERNEL(special_adam_step);
+    GGML_METAL_DECL_KERNEL(special_adam_step_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_no_offsets);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_no_offsets_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_simpl);
@@ -351,6 +352,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_bias);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_bias_f16);
         GGML_METAL_ADD_KERNEL(special_adam_step);
+        GGML_METAL_ADD_KERNEL(special_adam_step_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_no_offsets);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_no_offsets_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_simpl);
@@ -471,6 +473,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_bias);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_bias_f16);
     GGML_METAL_DEL_KERNEL(special_adam_step);
+    GGML_METAL_DEL_KERNEL(special_adam_step_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_no_offsets);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_no_offsets_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_simpl);
@@ -798,6 +801,7 @@ void ggml_metal_graph_compute(
             size_t offs_src1 = 0;
             size_t offs_src2 = 0;
             size_t offs_src3 = 0;
+            size_t offs_src4 = 0;
             size_t offs_dst  = 0;
 
             id<MTLCommandBuffer> command_buffer  = ctx->command_buffers[cb_idx];
@@ -822,6 +826,7 @@ void ggml_metal_graph_compute(
                 struct ggml_tensor * src1 = gf->nodes[i]->src[1];
                 struct ggml_tensor * src2 = gf->nodes[i]->src[2];
                 struct ggml_tensor * src3 = gf->nodes[i]->src[3];
+                struct ggml_tensor * src4 = gf->nodes[i]->src[4];
                 struct ggml_tensor * dst  = gf->nodes[i];
 
                 const int64_t  ne00 = src0 ? src0->ne[0] : 0;
@@ -899,6 +904,7 @@ void ggml_metal_graph_compute(
                 id<MTLBuffer> id_src1 = src1 ? ggml_metal_get_buffer(ctx, src1, &offs_src1) : nil;
                 id<MTLBuffer> id_src2 = src2 ? ggml_metal_get_buffer(ctx, src2, &offs_src2) : nil;
                 id<MTLBuffer> id_src3 = src3 ? ggml_metal_get_buffer(ctx, src3, &offs_src3) : nil;
+                id<MTLBuffer> id_src4 = src4 ? ggml_metal_get_buffer(ctx, src4, &offs_src4) : nil;
                 id<MTLBuffer> id_dst  = dst  ? ggml_metal_get_buffer(ctx, dst,  &offs_dst)  : nil;
 
                 //GGML_METAL_LOG_INFO("%s: op - %s\n", __func__, ggml_op_name(dst->op));
@@ -1167,14 +1173,26 @@ void ggml_metal_graph_compute(
                     case GGML_OP_SPECIAL_ADAM_STEP:
                         {
                             const int threadgroupSize = 256;
-                            [encoder setComputePipelineState:ctx->pipeline_special_adam_step];
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(special_adam_step)
 
-                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
-                            [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
-                            [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
-                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
-                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
+                            if (dst->type == GGML_TYPE_F32) {
+                                [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                                [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                                [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
+                                [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
+                                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
+                                [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
+                            } else if (dst->type == GGML_TYPE_F16) {
+                                [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                                [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                                [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
+                                [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
+                                [encoder setBuffer:id_src4 offset:offs_src4 atIndex:4];
+                                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:5];
+                                [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:6];
+                            } else {
+                                GGML_ASSERT(false);
+                            }                            
 
                             [encoder dispatchThreads:MTLSizeMake(ggml_nelements_padded(dst), 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
