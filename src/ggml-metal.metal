@@ -831,6 +831,22 @@ kernel void kernel_add_and_tanh_back(
 }
 
 
+kernel void kernel_add_and_tanh_back_f16(
+        device const half4 * src0_v4,
+        device const half4 * src1_v4,
+        device       half4 * dst_v4,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let x = src0_v4[global_id.x];
+    let y = src1_v4[global_id.x];
+    let z = (1.0 - x*x)*y;
+    dst_v4[global_id.x] = z;
+}
+
+
 kernel void kernel_conv_1d_small_kern_back_bias(
         device const float4 * src0,
         device       float * dst,
