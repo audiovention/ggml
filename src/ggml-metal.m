@@ -65,6 +65,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(add);
     GGML_METAL_DECL_KERNEL(add_row); // TODO: avoid this extra kernel, instead extend the "add" kernel to support broadcast
     GGML_METAL_DECL_KERNEL(mul);
+    GGML_METAL_DECL_KERNEL(mul_f16);
     GGML_METAL_DECL_KERNEL(mul_row); // TODO: avoid this extra kernel, instead extend the "mul" kernel to support broadcast
     GGML_METAL_DECL_KERNEL(scale);
     GGML_METAL_DECL_KERNEL(scale_f16);
@@ -262,6 +263,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(add);
         GGML_METAL_ADD_KERNEL(add_row);
         GGML_METAL_ADD_KERNEL(mul);
+        GGML_METAL_ADD_KERNEL(mul_f16);
         GGML_METAL_ADD_KERNEL(mul_row);
         GGML_METAL_ADD_KERNEL(scale);
         GGML_METAL_ADD_KERNEL(scale_f16);
@@ -370,6 +372,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(add);
     GGML_METAL_DEL_KERNEL(add_row);
     GGML_METAL_DEL_KERNEL(mul);
+    GGML_METAL_DEL_KERNEL(mul_f16);
     GGML_METAL_DEL_KERNEL(mul_row);
     GGML_METAL_DEL_KERNEL(scale);
     GGML_METAL_DEL_KERNEL(scale_f16);
@@ -1148,7 +1151,7 @@ void ggml_metal_graph_compute(
                             const int32_t dispatch_y = dst->ne[1];
                             const int32_t dispatch_z = dst->ne[2];
 
-                            [encoder setComputePipelineState:ctx->pipeline_mul];
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(mul)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];

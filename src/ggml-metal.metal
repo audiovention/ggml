@@ -133,6 +133,21 @@ kernel void kernel_mul(
         src1[get_linear_index(tensor_dimension_params.src[1], idx0, idx1, idx2)];
 }
 
+kernel void kernel_mul_f16(
+        device const half * src0,
+        device const half * src1,
+        device       half * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]]) {
+    let idx0 = global_id.x * u32(tensor_dimension_params.src[1].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+    let idx1 = global_id.y * u32(tensor_dimension_params.src[1].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
+    let idx2 = global_id.z * u32(tensor_dimension_params.src[1].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
+
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = 
+        src0[get_linear_index(tensor_dimension_params.src[0], global_id.x, global_id.y, global_id.z)] * 
+        src1[get_linear_index(tensor_dimension_params.src[1], idx0, idx1, idx2)];
+}
+
 kernel void kernel_sub(
         device const float4 * src0,
         device const float4 * src1,
