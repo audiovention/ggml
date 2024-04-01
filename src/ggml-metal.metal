@@ -141,6 +141,14 @@ kernel void kernel_sub(
     dst[tpig] = src0[tpig] - src1[tpig];
 }
 
+kernel void kernel_sub_f16(
+        device const half4 * src0,
+        device const half4 * src1,
+        device       half4 * dst,
+        uint tpig[[thread_position_in_grid]]) {
+    dst[tpig] = src0[tpig] - src1[tpig];
+}
+
 // assumption: src1 is a row
 // broadcast src1 into src0
 kernel void kernel_mul_row(
@@ -156,6 +164,14 @@ kernel void kernel_scale(
         device const float4 * src0,
         device const float  * src1,
         device       float4 * dst,
+        uint tpig[[thread_position_in_grid]]) {
+    dst[tpig] = src0[tpig] * src1[0];
+}
+
+kernel void kernel_scale_f16(
+        device const half4 * src0,
+        device const half  * src1,
+        device       half4 * dst,
         uint tpig[[thread_position_in_grid]]) {
     dst[tpig] = src0[tpig] * src1[0];
 }
