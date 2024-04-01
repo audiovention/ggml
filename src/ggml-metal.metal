@@ -780,6 +780,41 @@ kernel void kernel_acc(
 }
 
 
+kernel void kernel_acc_f16(
+        device const half * src0,
+        device const half * src1,
+        device       half * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let offset_bytes = u32(tensor_dimension_params.params[0][3]);
+    let zero_out_accumulator = bool(tensor_dimension_params.params[1][1]);
+
+    let nc = u32(tensor_dimension_params.src[1].ne[0]);
+    let nc_out = u32(tensor_dimension_params.dst.ne[0]);
+    let offset_ne = offset_bytes / u32(2);
+    let nc_limit = nc + offset_ne;
+
+    if (global_id.x >= nc_out) {
+        return;
+    }
+
+    half output = 0.0;
+    if (!zero_out_accumulator) {
+        output = src0[get_linear_index(tensor_dimension_params.src[0], global_id.x, global_id.y, global_id.z)];
+    }
+
+    if (global_id.x >= offset_ne && global_id.x < nc_limit) {
+        let idx0 = global_id.x - offset_ne;
+        output = output + src1[get_linear_index(tensor_dimension_params.src[1], idx0, global_id.y, global_id.z)];
+    }
+
+    dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = output;
+}
+
+
 kernel void kernel_add_and_tanh_back(
         device const float4 * src0_v4,
         device const float4 * src1_v4,
