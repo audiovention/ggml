@@ -928,7 +928,7 @@ void ggml_metal_graph_compute(
         if (dst->type == GGML_TYPE_F32) {                           \
             [encoder setComputePipelineState:ctx->pipeline_##name]; \
         } else if (dst->type == GGML_TYPE_F16) {                    \
-            [encoder setComputePipelineState:ctx->pipeline_##name_f16]; \
+            [encoder setComputePipelineState:ctx->pipeline_##name##_f16]; \
         } else {                                                    \
             GGML_ASSERT(false);                                     \
         }

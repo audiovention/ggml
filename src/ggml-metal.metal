@@ -504,7 +504,7 @@ kernel void kernel_conv_1d_small_kern_no_offsets_f16(
 
     if (has_inject_signal) {
         let src3_idx = global_id.x + global_id.y * tensor_dimension_params.src[3].nb[1]/4u + global_id.z * tensor_dimension_params.src[3].nb[2]/4u;
-        output += src3_v4[src3_idx];
+        output += float4(src3_v4[src3_idx]);
     }
 
     let base_src1_offset = mult_idx + global_id.z * tensor_dimension_params.src[1].nb[2];
@@ -516,7 +516,7 @@ kernel void kernel_conv_1d_small_kern_no_offsets_f16(
             let input_idx = (in_idx_offset + ic * tensor_dimension_params.src[1].nb[1])/4u;
             let input_val = src1_v4[input_idx];
             let kernel_val = src0[kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1]];
-            output = output + input_val * kernel_val;
+            output = output + float4(input_val * kernel_val);
         }
     }
 
@@ -525,7 +525,7 @@ kernel void kernel_conv_1d_small_kern_no_offsets_f16(
     }
 
     let dst_idx = global_id.x + global_id.y * tensor_dimension_params.dst.nb[1]/4u + global_id.z * tensor_dimension_params.dst.nb[2]/4u;
-    dst_v4[dst_idx] = output;
+    dst_v4[dst_idx] = half4(output);
 }
 
 
@@ -995,7 +995,7 @@ kernel void kernel_conv_1d_small_kern_back_bias_f16(
     for (uint ir = 0; ir < num_batches; ir+=1) {
         let base_idx_src0_base = (wg_id.x * tensor_dimension_params.src[0].nb[1] + ir * tensor_dimension_params.src[0].nb[2])/4;
         for (uint isample = local_id.x; isample < (output_len+3)/4; isample += wg_size.x) {
-            output = output + src0[base_idx_src0_base + isample];
+            output = output + float4(src0[base_idx_src0_base + isample]);
         }
     }
 
