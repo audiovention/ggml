@@ -700,6 +700,58 @@ kernel void kernel_conv_1d_small_kern_back_filter(
 }
 
 
+kernel void kernel_conv_1d_small_kern_back_filter_f16(
+        device const half * src0,
+        device const half * src1,
+        device       half * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup float  * workgroup_data [[threadgroup(0)]],
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]],
+        ushort simd_id[[thread_index_in_simdgroup]],
+        ushort simd_size[[threads_per_simdgroup]]) {
+    let s0 = tensor_dimension_params.params[0][0];
+    let p0 = tensor_dimension_params.params[0][1];
+    let d0 = tensor_dimension_params.params[0][2];
+    let nk = tensor_dimension_params.dst.ne[2];
+
+
+    let input_len = tensor_dimension_params.src[0].ne[0];
+    let output_len = tensor_dimension_params.src[1].ne[0];
+    let num_batches = tensor_dimension_params.src[0].ne[2];
+
+
+    let real_input_len = s0*(output_len - 1) + d0*(nk - 1) + 1 - 2*p0;
+
+    float output = 0.0;
+
+    let base_offset = wg_id.x * d0 + input_len - real_input_len;
+
+    for (int ir = 0; ir < num_batches; ir+=1) {
+        let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2] + global_id.z * tensor_dimension_params.src[0].nb[1];
+        let base_idx_src1 = ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
+        for (int isample = local_id.x; isample < output_len; isample+=wg_size.x) {
+            // output = output + 
+            //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
+            output = output + src0[base_idx_src0 + isample] * src1[base_idx_src1 + isample];
+        }
+    }
+
+    workgroup_data[local_id.x] = output;
+    workgroupBarrier();
+
+    if (0 == local_id.x) {
+        output = 0.0;
+        for (int i = 0; i < wg_size.x; i+=1) {
+            output = output + workgroup_data[i];
+        }
+        dst[get_linear_index(tensor_dimension_params.dst, global_id.y, global_id.z, wg_id.x)] = output;
+    }
+}
+
+
 kernel void kernel_conv_1d_small_kern_back_input(
         device const float * src0,
         device const float * src1,
