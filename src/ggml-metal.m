@@ -124,8 +124,11 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_f16);
     GGML_METAL_DECL_KERNEL(sum);
+    GGML_METAL_DECL_KERNEL(sum_f16);
     GGML_METAL_DECL_KERNEL(add_and_trim);
+    GGML_METAL_DECL_KERNEL(add_and_trim_f16);
     GGML_METAL_DECL_KERNEL(repeat);
+    GGML_METAL_DECL_KERNEL(repeat_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input);
     GGML_METAL_DECL_KERNEL(acc);
@@ -327,8 +330,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_f16);
         GGML_METAL_ADD_KERNEL(sum);
+        GGML_METAL_ADD_KERNEL(sum_f16);
         GGML_METAL_ADD_KERNEL(add_and_trim);
+        GGML_METAL_ADD_KERNEL(add_and_trim_f16);
         GGML_METAL_ADD_KERNEL(repeat);
+        GGML_METAL_ADD_KERNEL(repeat_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input);
         GGML_METAL_ADD_KERNEL(acc);
@@ -439,8 +445,11 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_f16);
     GGML_METAL_DEL_KERNEL(sum);
+    GGML_METAL_DEL_KERNEL(sum_f16);
     GGML_METAL_DEL_KERNEL(add_and_trim);
+    GGML_METAL_DEL_KERNEL(add_and_trim_f16);
     GGML_METAL_DEL_KERNEL(repeat);
+    GGML_METAL_DEL_KERNEL(repeat_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input);
     GGML_METAL_DEL_KERNEL(acc);
@@ -1046,7 +1055,7 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_SUM:
                         {
-                            [encoder setComputePipelineState:ctx->pipeline_sum];
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(sum)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
@@ -1057,7 +1066,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_ADD_AND_TRIM:
                         {
                             const int threadgroupSize = 256;
-                            [encoder setComputePipelineState:ctx->pipeline_add_and_trim];
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(add_and_trim)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
@@ -1069,7 +1078,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_REPEAT:
                         {
                             const int threadgroupSize = 256;
-                            [encoder setComputePipelineState:ctx->pipeline_repeat];
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(repeat)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
