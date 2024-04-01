@@ -198,6 +198,13 @@ kernel void kernel_sqr(
     dst[tpig] = src0[tpig] * src0[tpig];
 }
 
+kernel void kernel_sqr_f16(
+        device const half4 * src0,
+        device       half4 * dst,
+        uint tpig[[thread_position_in_grid]]) {
+    dst[tpig] = src0[tpig] * src0[tpig];
+}
+
 
 kernel void kernel_conv_1d_small_kern(
         device const float * src0,

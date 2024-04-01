@@ -117,6 +117,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(cpy_f16_f16);
     GGML_METAL_DECL_KERNEL(concat);
     GGML_METAL_DECL_KERNEL(sqr);
+    GGML_METAL_DECL_KERNEL(sqr_f16);
     GGML_METAL_DECL_KERNEL(sub);
     GGML_METAL_DECL_KERNEL(sub_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern);
@@ -315,6 +316,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(cpy_f16_f16);
         GGML_METAL_ADD_KERNEL(concat);
         GGML_METAL_ADD_KERNEL(sqr);
+        GGML_METAL_ADD_KERNEL(sqr_f16);
         GGML_METAL_ADD_KERNEL(sub);
         GGML_METAL_ADD_KERNEL(sub_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern);
@@ -422,6 +424,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(cpy_f16_f16);
     GGML_METAL_DEL_KERNEL(concat);
     GGML_METAL_DEL_KERNEL(sqr);
+    GGML_METAL_DEL_KERNEL(sqr_f16);
     GGML_METAL_DEL_KERNEL(sub);
     GGML_METAL_DEL_KERNEL(sub_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern);
@@ -1231,7 +1234,14 @@ void ggml_metal_graph_compute(
                             GGML_ASSERT(ggml_is_contiguous(src0));
                             const int threadgroupSize = 256;
 
-                            [encoder setComputePipelineState:ctx->pipeline_sqr];
+                            if (dst->type == GGML_TYPE_F32) {
+                                [encoder setComputePipelineState:ctx->pipeline_sqr];
+                            } else if (dst->type == GGML_TYPE_F16) {
+                                [encoder setComputePipelineState:ctx->pipeline_sqr_f16];
+                            } else {
+                                GGML_ASSERT(false);
+                            }
+
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst atIndex:1];
 
