@@ -882,6 +882,15 @@ void ggml_metal_graph_compute(
                 [ctx->device sampleTimestamps:&ctx->perf_counters_cpu[i] gpuTimestamp:&ctx->perf_counters_gpu[i]];
 #endif
 
+#define GGML_METAL_SET_F32_OR_F16_PIPELINE(name) \
+        if (dst->type == GGML_TYPE_F32) {                           \
+            [encoder setComputePipelineState:ctx->pipeline_##name]; \
+        } else if (dst->type == GGML_TYPE_F16) {                    \
+            [encoder setComputePipelineState:ctx->pipeline_##name_f16]; \
+        } else {                                                    \
+            GGML_ASSERT(false);                                     \
+        }
+
                 switch (dst->op) {
                     case GGML_OP_NONE:
                     case GGML_OP_RESHAPE:
@@ -1157,13 +1166,7 @@ void ggml_metal_graph_compute(
 
                             // utilize float4
                             
-                            if (dst->type == GGML_TYPE_F32) {
-                                [encoder setComputePipelineState:ctx->pipeline_sub];
-                            } else if (dst->type == GGML_TYPE_F16) {
-                                [encoder setComputePipelineState:ctx->pipeline_sub_f16];
-                            } else {
-                                GGML_ASSERT(false);
-                            }
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(sub)
 
                             [encoder setComputePipelineState:ctx->pipeline_sub];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
@@ -1177,13 +1180,7 @@ void ggml_metal_graph_compute(
                             GGML_ASSERT(ggml_is_contiguous(src0));
                             const int threadgroupSize = 256;
 
-                            if (dst->type == GGML_TYPE_F32) {
-                                [encoder setComputePipelineState:ctx->pipeline_scale];
-                            } else if (dst->type == GGML_TYPE_F16) {
-                                [encoder setComputePipelineState:ctx->pipeline_scale_f16];
-                            } else {
-                                GGML_ASSERT(false);
-                            }
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(scale)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
@@ -1234,13 +1231,7 @@ void ggml_metal_graph_compute(
                             GGML_ASSERT(ggml_is_contiguous(src0));
                             const int threadgroupSize = 256;
 
-                            if (dst->type == GGML_TYPE_F32) {
-                                [encoder setComputePipelineState:ctx->pipeline_sqr];
-                            } else if (dst->type == GGML_TYPE_F16) {
-                                [encoder setComputePipelineState:ctx->pipeline_sqr_f16];
-                            } else {
-                                GGML_ASSERT(false);
-                            }
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(sqr)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst atIndex:1];
@@ -1714,6 +1705,7 @@ void ggml_metal_graph_compute(
                         }
                 }
             }
+#undef GGML_METAL_SET_F32_OR_F16_PIPELINE
 #if GGML_PERF
             [ctx->device sampleTimestamps:&ctx->perf_counters_cpu[node_end] gpuTimestamp:&ctx->perf_counters_gpu[node_end]];
 #endif
