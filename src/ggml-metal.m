@@ -63,7 +63,9 @@ struct ggml_metal_context {
     id<MTLComputePipelineState> pipeline_##name
 
     GGML_METAL_DECL_KERNEL(add);
+    GGML_METAL_DECL_KERNEL(add_f16);
     GGML_METAL_DECL_KERNEL(add_row); // TODO: avoid this extra kernel, instead extend the "add" kernel to support broadcast
+    GGML_METAL_DECL_KERNEL(add_row_f16); // TODO: avoid this extra kernel, instead extend the "add" kernel to support broadcast
     GGML_METAL_DECL_KERNEL(mul);
     GGML_METAL_DECL_KERNEL(mul_f16);
     GGML_METAL_DECL_KERNEL(mul_row); // TODO: avoid this extra kernel, instead extend the "mul" kernel to support broadcast
@@ -273,7 +275,9 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         }
 
         GGML_METAL_ADD_KERNEL(add);
+        GGML_METAL_ADD_KERNEL(add_f16);
         GGML_METAL_ADD_KERNEL(add_row);
+        GGML_METAL_ADD_KERNEL(add_row_f16);
         GGML_METAL_ADD_KERNEL(mul);
         GGML_METAL_ADD_KERNEL(mul_f16);
         GGML_METAL_ADD_KERNEL(mul_row);
@@ -394,7 +398,9 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     [ctx->pipeline_##name release];
 
     GGML_METAL_DEL_KERNEL(add);
+    GGML_METAL_DEL_KERNEL(add_f16);
     GGML_METAL_DEL_KERNEL(add_row);
+    GGML_METAL_DEL_KERNEL(add_row_f16);
     GGML_METAL_DEL_KERNEL(mul);
     GGML_METAL_DEL_KERNEL(mul_f16);
     GGML_METAL_DEL_KERNEL(mul_row);
@@ -993,11 +999,12 @@ void ggml_metal_graph_compute(
                                 GGML_ASSERT(ne11 == 1);
 
                                 nb = ne00 / 4;
-                                [encoder setComputePipelineState:ctx->pipeline_add_row];
+                                GGML_ASSERT(dst->type == GGML_TYPE_F32);
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(add_row)
 
                                 bcast_row = true;
                             } else {
-                                [encoder setComputePipelineState:ctx->pipeline_add];
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(add)
                             }
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
