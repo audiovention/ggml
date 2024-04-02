@@ -784,27 +784,6 @@ void ggml_metal_graph_find_concurrency(
 void ggml_metal_graph_compute(
         struct ggml_metal_context * ctx,
                struct ggml_cgraph * gf) {
-    for (int ind=0; ind < gf->n_nodes; ind++) {
-        struct ggml_tensor * dst  = gf->nodes[ind];
-
-        for (int dim_idx=0; dim_idx<4; dim_idx++) {
-            ctx->tensor_dimension_operation_params_host[ind].dst.ne[dim_idx] = dst->ne[dim_idx];
-            ctx->tensor_dimension_operation_params_host[ind].dst.nb[dim_idx] = dst->nb[dim_idx] / ggml_element_size(dst);
-            for (int src_idx=0; src_idx<GGML_MAX_SRC; src_idx++) {
-                if (dst->src[src_idx]) {
-                    ctx->tensor_dimension_operation_params_host[ind].src[src_idx].ne[dim_idx] = dst->src[src_idx]->ne[dim_idx];
-                    ctx->tensor_dimension_operation_params_host[ind].src[src_idx].nb[dim_idx] = dst->src[src_idx]->nb[dim_idx] / ggml_element_size(dst->src[src_idx]);
-                }
-            }
-        }
-
-        for (int op_par_idx=0; op_par_idx < (GGML_MAX_OP_PARAMS/sizeof(int32_t)); ++op_par_idx) {
-            ctx->tensor_dimension_operation_params_host[ind].op_params[op_par_idx] = dst->op_params[op_par_idx];
-        }
-
-        memcpy((void *) ((uint8_t *) ctx->tensor_dimension_operation_params.contents + ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL), &(ctx->tensor_dimension_operation_params_host[ind]), GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL);
-    }
-
     @autoreleasepool {
 
     // if there is ctx->concur_list, dispatch concurrently
@@ -856,6 +835,8 @@ void ggml_metal_graph_compute(
                 }
 
                 //GGML_METAL_LOG_INFO("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+
+                struct ggml_metal_operator_params this_op_params = {0};
 
                 struct ggml_tensor * src0 = gf->nodes[i]->src[0];
                 struct ggml_tensor * src1 = gf->nodes[i]->src[1];
@@ -913,6 +894,21 @@ void ggml_metal_graph_compute(
                 const uint64_t nb1  = dst ? dst->nb[1] : 0;
                 const uint64_t nb2  = dst ? dst->nb[2] : 0;
                 const uint64_t nb3  = dst ? dst->nb[3] : 0;
+
+                for (int dim_idx=0; dim_idx<4; dim_idx++) {
+                    this_op_params.dst.ne[dim_idx] = dst->ne[dim_idx];
+                    this_op_params.dst.nb[dim_idx] = dst->nb[dim_idx] / ggml_element_size(dst);
+                    for (int src_idx=0; src_idx<GGML_MAX_SRC; src_idx++) {
+                        if (dst->src[src_idx]) {
+                            this_op_params.src[src_idx].ne[dim_idx] = dst->src[src_idx]->ne[dim_idx];
+                            this_op_params.src[src_idx].nb[dim_idx] = dst->src[src_idx]->nb[dim_idx] / ggml_element_size(dst->src[src_idx]);
+                        }
+                    }
+                }
+
+                for (int op_par_idx=0; op_par_idx < (GGML_MAX_OP_PARAMS/sizeof(int32_t)); ++op_par_idx) {
+                    this_op_params.op_params[op_par_idx] = dst->op_params[op_par_idx];
+                }
 
                 const enum ggml_type src0t = src0 ? src0->type : GGML_TYPE_COUNT;
                 const enum ggml_type src1t = src1 ? src1->type : GGML_TYPE_COUNT;
@@ -1091,7 +1087,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
                             [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:5];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
 
                             [encoder dispatchThreads:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
@@ -1101,7 +1097,7 @@ void ggml_metal_graph_compute(
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:2];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:2];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
@@ -1113,7 +1109,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:3];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
 
                             [encoder dispatchThreads:MTLSizeMake(dst->ne[0], dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
@@ -1124,7 +1120,7 @@ void ggml_metal_graph_compute(
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:2];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:2];
 
                             [encoder dispatchThreads:MTLSizeMake(dst->ne[0], dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
@@ -1136,7 +1132,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:3];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
                             [encoder setThreadgroupMemoryLength:threadgroupSize*sizeof(float) atIndex:0];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(dst->ne[2], dst->ne[0], dst->ne[1]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
@@ -1150,7 +1146,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:4];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:4];
 
                             [encoder dispatchThreads:MTLSizeMake(dst->ne[0], dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
@@ -1163,7 +1159,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:3];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
@@ -1175,7 +1171,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:3];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
 
                             [encoder dispatchThreads:MTLSizeMake(ggml_nelements_padded(dst)/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
@@ -1186,7 +1182,7 @@ void ggml_metal_graph_compute(
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:2];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:2];
                             [encoder setThreadgroupMemoryLength:threadgroupSize*sizeof(float) atIndex:0];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(dst->ne[1], 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
@@ -1202,7 +1198,7 @@ void ggml_metal_graph_compute(
                                 [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
                                 [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
                                 [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
-                                [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:5];
+                                [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
                             } else if (dst->type == GGML_TYPE_F16) {
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                 [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
@@ -1210,7 +1206,7 @@ void ggml_metal_graph_compute(
                                 [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
                                 [encoder setBuffer:id_src4 offset:offs_src4 atIndex:4];
                                 [encoder setBuffer:id_dst  offset:offs_dst  atIndex:5];
-                                [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:6];
+                                [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:6];
                             } else {
                                 GGML_ASSERT(false);
                             }                            
@@ -1228,7 +1224,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBuffer:ctx->tensor_dimension_operation_params offset:ind*GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL atIndex:3];
+                            [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
 
                             [encoder dispatchThreads:MTLSizeMake(output_len, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
                         } break;
