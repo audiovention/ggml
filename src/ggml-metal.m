@@ -768,6 +768,7 @@ struct ggml_metal_operator_params {
     struct ggml_metal_dim_param src[6];
     struct ggml_metal_dim_param dst;
     int32_t op_params[12];
+    int32_t placeholder[32];
 };
 
 
