@@ -36,6 +36,22 @@ struct ggml_metal_buffer {
     id<MTLBuffer> metal;
 };
 
+
+struct ggml_metal_dim_param {
+    int64_t ne[4];
+    uint64_t nb[4];
+};
+
+struct ggml_metal_operator_params {
+    struct ggml_metal_dim_param src[6];
+    struct ggml_metal_dim_param dst;
+    int32_t op_params[12];
+    int32_t placeholder[32];
+};
+
+const size_t GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL = 512;
+
+
 struct ggml_metal_context {
     int n_cb;
 
@@ -50,6 +66,9 @@ struct ggml_metal_context {
     MTLTimestamp        perf_counters_gpu[GGML_MAX_NODES+1];
 
     dispatch_queue_t d_queue;
+
+    id<MTLBuffer> tensor_dimension_operation_params;
+    struct ggml_metal_operator_params tensor_dimension_operation_params_host[GGML_MAX_NODES];
 
     int n_buffers;
     struct ggml_metal_buffer buffers[GGML_METAL_MAX_BUFFERS];
@@ -220,6 +239,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     ctx->concur_list_len = 0;
 
     ctx->d_queue = dispatch_queue_create("ggml-metal", DISPATCH_QUEUE_CONCURRENT);
+
+    ctx->tensor_dimension_operation_params = [ctx->device newBufferWithBytesNoCopy:&(ctx->tensor_dimension_operation_params_host) length:GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL*GGML_MAX_NODES options:MTLResourceStorageModeShared deallocator:nil];
 
     // load library
     {
@@ -488,6 +509,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
 
 #undef GGML_METAL_DEL_KERNEL
 
+    [ctx->tensor_dimension_operation_params release];
     for (int i = 0; i < ctx->n_buffers; ++i) {
         [ctx->buffers[i].metal release];
     }
@@ -758,19 +780,6 @@ void ggml_metal_graph_find_concurrency(
         GGML_METAL_LOG_WARN("%s: too many elements for metal ctx->concur_list!\n", __func__);
     }
 }
-
-struct ggml_metal_dim_param {
-    int64_t ne[4];
-    uint64_t nb[4];
-};
-
-struct ggml_metal_operator_params {
-    struct ggml_metal_dim_param src[6];
-    struct ggml_metal_dim_param dst;
-    int32_t op_params[12];
-    int32_t placeholder[32];
-};
-
 
 void ggml_metal_graph_compute(
         struct ggml_metal_context * ctx,
