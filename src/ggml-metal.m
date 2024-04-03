@@ -1092,7 +1092,9 @@ void ggml_metal_graph_compute(
                             const int32_t d0 = dst->op_params[2];
                             const int64_t nk = dst->src[0]->ne[2];
                             const int64_t real_input_len = output_len + d0*(nk-1);
-
+#if 0
+                            GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern)
+#else
                             if (1 == nk) {
                                 GGML_ASSERT(0 == dst->op_params[3]);
                                 GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_simpl)
@@ -1102,12 +1104,13 @@ void ggml_metal_graph_compute(
                                     GGML_ASSERT(output_len == dst->src[3]->ne[0]);
                                 }
                                 if (d0>=4) {
-                                    dispatch_x /= 4;
+                                    dispatch_x = CEIL_DIV(dispatch_x, 4);
                                     GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_no_offsets)
                                 } else {
                                     GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_no_offset_small_dil)
                                 }
                             }
+#endif
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];

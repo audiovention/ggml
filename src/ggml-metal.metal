@@ -357,7 +357,8 @@ kernel void kernel_conv_1d_small_kern(
         let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
         for (uint ic = 0u; ic < input_channels; ic = ic + 1u) {
             let input_val = src1[in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]];
-            let kernel_val = src0[kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1]];
+            let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
+            let kernel_val = src0[kernel_idx];
             output = output + input_val * kernel_val;
         }
     }

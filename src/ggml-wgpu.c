@@ -3176,6 +3176,10 @@ void ggml_wgpu_graph_compute(
                             GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_pf16, dispatch_x, dispatch_y, dispatch_z)
                         }
                     } else {
+#if 0
+                        const int32_t dispatch_x = CEIL_DIV(output_len, 256);
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern, dispatch_x, dispatch_y, dispatch_z)
+#else
                         if (1 == nk) {
                             const int32_t dispatch_x = CEIL_DIV(output_len, 256);
                             GGML_ASSERT(0 == dst->op_params[3]);
@@ -3193,6 +3197,7 @@ void ggml_wgpu_graph_compute(
                                 GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offset_small_dil, dispatch_x, dispatch_y, dispatch_z)
                             }
                         }
+#endif
                     }
                 } break;
             case GGML_OP_ADD_AND_TRIM:
