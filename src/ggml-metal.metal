@@ -920,7 +920,7 @@ kernel void kernel_conv_1d_small_kern_back_filter_f16(
     for (int ir = 0; ir < num_batches; ir+=1) {
         let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2] + global_id.z * tensor_dimension_params.src[0].nb[1];
         let base_idx_src1 = ir * tensor_dimension_params.src[1].nb[2] + global_id.y * tensor_dimension_params.src[1].nb[1];
-        for (int isample = local_id.x; isample < output_len; isample+=wg_size.x) {
+        for (int isample = local_id.x; isample < output_len; isample+=256) {
             // output = output + 
             //     get_src0(base_offset + isample, global_id.z, ir) * get_src1(isample, global_id.y, ir);
             output = output + src0[base_idx_src0 + isample] * src1[base_idx_src1 + isample];
@@ -932,7 +932,7 @@ kernel void kernel_conv_1d_small_kern_back_filter_f16(
 
     if (0 == local_id.x) {
         output = 0.0;
-        for (int i = 0; i < wg_size.x; i+=1) {
+        for (int i = 0; i < 256; i+=1) {
             output = output + workgroup_data[i];
         }
         dst[get_linear_index(tensor_dimension_params.dst, global_id.y, global_id.z, wg_id.x)] = output;
