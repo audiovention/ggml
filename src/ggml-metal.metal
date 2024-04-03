@@ -719,14 +719,15 @@ kernel void kernel_sum(
         device const float * src0,
         device       float * dst,
         constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup float  * workgroup_data [[threadgroup(0)]],
         uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
         uint3 local_id[[thread_position_in_threadgroup]]) {
     let num_el_src0 = get_num_padded_elements(tensor_dimension_params.src[0]);
 
-    threadgroup float workgroup_data[256];
     float sum = 0.0;
     
-    for (uint i = local_id.x; i < num_el_src0; i += 256) {
+    for (uint i = local_id.x; i < num_el_src0; i += wg_size.x) {
         if ((i % tensor_dimension_params.src[0].nb[1]) < tensor_dimension_params.src[0].ne[0]) {
             sum = sum + src0[i];
         }
@@ -737,7 +738,7 @@ kernel void kernel_sum(
 
     if (0 == local_id.x) {
         sum = 0.0;
-        for (int i = 0; i < 256; i += 1) {
+        for (int i = 0; i < wg_size.x; i += 1) {
             sum = sum + workgroup_data[i];
         }
         dst[0] = sum;
@@ -749,14 +750,15 @@ kernel void kernel_sum_f16(
         device const half * src0,
         device       half * dst,
         constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup float  * workgroup_data [[threadgroup(0)]],
         uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
         uint3 local_id[[thread_position_in_threadgroup]]) {
     let num_el_src0 = get_num_padded_elements(tensor_dimension_params.src[0]);
 
-    threadgroup float workgroup_data[256];
     float sum = 0.0;
     
-    for (uint i = local_id.x; i < num_el_src0; i += 256) {
+    for (uint i = local_id.x; i < num_el_src0; i += wg_size.x) {
         if ((i % tensor_dimension_params.src[0].nb[1]) < tensor_dimension_params.src[0].ne[0]) {
             sum = sum + src0[i];
         }
@@ -767,7 +769,7 @@ kernel void kernel_sum_f16(
 
     if (0 == local_id.x) {
         sum = 0.0;
-        for (int i = 0; i < 256; i += 1) {
+        for (int i = 0; i < wg_size.x; i += 1) {
             sum = sum + workgroup_data[i];
         }
         dst[0] = sum;

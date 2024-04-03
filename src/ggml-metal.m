@@ -1120,13 +1120,15 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_SUM:
                         {
+                            const int threadgroupSize = 256;
                             GGML_METAL_SET_F32_OR_F16_PIPELINE(sum)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:2];
+                            [encoder setThreadgroupMemoryLength:threadgroupSize*sizeof(float) atIndex:0];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_ADD_AND_TRIM:
                         {
