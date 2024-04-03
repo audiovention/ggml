@@ -3315,6 +3315,10 @@ void ggml_wgpu_graph_compute(
                         const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 512);
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_input_pf16, dispatch_x, dst->ne[1], dst->ne[2])
                     } else {
+#if 0
+                        const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
+                        GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_input, dispatch_x, dst->ne[1], dst->ne[2])
+#else
                         if (d0 >= 4) {
                             const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 4*256);
                             GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_input_large_dil, dispatch_x, dst->ne[1], dst->ne[2])
@@ -3322,6 +3326,7 @@ void ggml_wgpu_graph_compute(
                             const int32_t dispatch_x = CEIL_DIV(dst->ne[0], 256);
                             GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_input, dispatch_x, dst->ne[1], dst->ne[2])
                         }
+#endif
                     }
                 } break;
             case GGML_OP_ACC:
