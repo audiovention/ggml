@@ -1156,6 +1156,7 @@ void ggml_metal_graph_compute(
                     case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                         {
                             const int threadgroupSize = 256;
+                            GGML_ASSERT(threadgroupSize == 256); // Hardcoding it in the kernel provides huge speedup
                             GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_filter)
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
