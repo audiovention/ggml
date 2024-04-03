@@ -933,6 +933,122 @@ kernel void kernel_conv_1d_small_kern_back_input_f16(
 }
 
 
+kernel void kernel_conv_1d_small_kern_back_input_large_dil(
+        device const float * src0,
+        device const float4 * src1_v4,
+        device const float4 * src2_v4,
+        device       float4 * dst_v4,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let accumulate = bool(tensor_dimension_params.params[0][3]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+    let output_channels = u32(tensor_dimension_params.src[0].ne[0]);
+    let output_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let input_len = u32(tensor_dimension_params.dst.ne[0]);
+
+    let mult_idx = global_id.x * 4u;
+
+    if (mult_idx >= input_len) {
+        return;
+    }
+
+    float4 output = 0.0;
+
+    if (accumulate) {
+        output = src2_v4[get_linear_index(tensor_dimension_params.src[2], mult_idx, global_id.y, global_id.z)/4u];
+    }
+
+    for (int ik = 0; ik < nk; ik+=1) {
+        let idx_offset = ik * d0;
+        if (mult_idx >= idx_offset && (mult_idx < (idx_offset+output_len))) {
+            let base_idx_src0 = global_id.y * tensor_dimension_params.src[0].nb[1] + ik * tensor_dimension_params.src[0].nb[2];
+            let base_idx_src1 = global_id.z * tensor_dimension_params.src[1].nb[2] + (mult_idx - idx_offset);
+            let mult1 = float4(
+                float((mult_idx - idx_offset) < output_len),
+                float((mult_idx - idx_offset + 1u) < output_len),
+                float((mult_idx - idx_offset + 2u) < output_len),
+                float((mult_idx - idx_offset + 3u) < output_len)
+            );
+            for (int idx_oc = 0; idx_oc < output_channels; idx_oc = idx_oc + 1) {
+                // output = output + 
+                //     get_src0(idx_oc, global_id.y, ik) * 
+                //     get_src1(mult_idx - idx_offset, idx_oc, global_id.z);
+                let val_src0 = src0[base_idx_src0 + idx_oc];
+                let idx_src1 = (base_idx_src1 + idx_oc * tensor_dimension_params.src[1].nb[1]) / 4u;
+                output = output + val_src0 * mult1 * src1_v4[idx_src1];
+            }
+        }
+    }
+
+    dst_v4[get_linear_index(tensor_dimension_params.dst, mult_idx, global_id.y, global_id.z)/4u] = output;
+}
+
+
+kernel void kernel_conv_1d_small_kern_back_input_large_dil_f16(
+        device const half * src0,
+        device const half4 * src1_v4,
+        device const half4 * src2_v4,
+        device       half4 * dst_v4,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let accumulate = bool(tensor_dimension_params.params[0][3]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+    let output_channels = u32(tensor_dimension_params.src[0].ne[0]);
+    let output_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let input_len = u32(tensor_dimension_params.dst.ne[0]);
+
+    let mult_idx = global_id.x * 4u;
+
+    if (mult_idx >= input_len) {
+        return;
+    }
+
+    float4 output = 0.0;
+
+    if (accumulate) {
+        output = float4(src2_v4[get_linear_index(tensor_dimension_params.src[2], mult_idx, global_id.y, global_id.z)/4u]);
+    }
+
+    for (int ik = 0; ik < nk; ik+=1) {
+        let idx_offset = ik * d0;
+        if (mult_idx >= idx_offset && (mult_idx < (idx_offset+output_len))) {
+            let base_idx_src0 = global_id.y * tensor_dimension_params.src[0].nb[1] + ik * tensor_dimension_params.src[0].nb[2];
+            let base_idx_src1 = global_id.z * tensor_dimension_params.src[1].nb[2] + (mult_idx - idx_offset);
+            let mult1 = half4(
+                half((mult_idx - idx_offset) < output_len),
+                half((mult_idx - idx_offset + 1u) < output_len),
+                half((mult_idx - idx_offset + 2u) < output_len),
+                half((mult_idx - idx_offset + 3u) < output_len)
+            );
+            for (int idx_oc = 0; idx_oc < output_channels; idx_oc = idx_oc + 1) {
+                // output = output + 
+                //     get_src0(idx_oc, global_id.y, ik) * 
+                //     get_src1(mult_idx - idx_offset, idx_oc, global_id.z);
+                let val_src0 = src0[base_idx_src0 + idx_oc];
+                let idx_src1 = (base_idx_src1 + idx_oc * tensor_dimension_params.src[1].nb[1]) / 4u;
+                output = output + float4(val_src0 * mult1 * src1_v4[idx_src1]);
+            }
+        }
+    }
+
+    dst_v4[get_linear_index(tensor_dimension_params.dst, mult_idx, global_id.y, global_id.z)/4u] = half4(output);
+}
+
+
 kernel void kernel_acc(
         device const float * src0,
         device const float * src1,

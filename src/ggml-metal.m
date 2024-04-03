@@ -155,6 +155,8 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input_large_dil);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input_large_dil_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input_f16);
     GGML_METAL_DECL_KERNEL(acc);
     GGML_METAL_DECL_KERNEL(acc_f16);
@@ -373,6 +375,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input_large_dil);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input_large_dil_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input_f16);
         GGML_METAL_ADD_KERNEL(acc);
         GGML_METAL_ADD_KERNEL(acc_f16);
@@ -498,6 +502,8 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input_large_dil);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input_large_dil_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input_f16);
     GGML_METAL_DEL_KERNEL(acc);
     GGML_METAL_DEL_KERNEL(acc_f16);
@@ -1155,7 +1161,14 @@ void ggml_metal_graph_compute(
                     case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                         {
                             const int threadgroupSize = 256;
-                            GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_input)
+                            const int32_t d0 = dst->op_params[2];
+                            int dispatch_x = dst->ne[0];
+                            if (d0>=4) {
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_input_large_dil)
+                                dispatch_x = CEIL_DIV(dst->ne[0], 4);
+                            } else {
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_input)
+                            }
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
@@ -1163,7 +1176,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:4];
 
-                            [encoder dispatchThreads:MTLSizeMake(dst->ne[0], dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(dispatch_x, dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_ACC:
                         {
