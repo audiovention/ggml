@@ -370,6 +370,79 @@ kernel void kernel_conv_1d_small_kern(
     dst[get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z)] = output;
 }
 
+
+kernel void kernel_conv_1d_small_kern_1x8x8_simdgr(
+        device const float * src0,
+        device const float * src1,
+        device const float * src2,
+        device const float * src3,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup float  * workgroup_data [[threadgroup(0)]],
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let apply_tanh = bool(tensor_dimension_params.params[0][3]);
+    let has_bias = bool(tensor_dimension_params.params[1][0]);
+    let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let input_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+
+    let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
+
+    simdgroup_float8x8 sgMatIn[4];
+    simdgroup_float8x8 sgMatKern;
+    simdgroup_float8x8 sgMatOut[4];
+
+    let base_src1_offset = input_len - real_input_len + global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
+    let base_src1_offset_simdgroup = input_len - real_input_len + 32u*(global_id.x / 32u) + global_id.z * tensor_dimension_params.src[1].nb[2];
+    let local_offset = 32u*(local_id.x % 32u);
+
+    simdgroup_load(sgMatKern, src0, tensor_dimension_params.src[0].nb[1], 0, true);
+    simdgroup_load(sgMatIn[0], src1+base_src1_offset_simdgroup+0, tensor_dimension_params.src[1].nb[1]);
+    simdgroup_load(sgMatIn[1], src1+base_src1_offset_simdgroup+8, tensor_dimension_params.src[1].nb[1]);
+    simdgroup_load(sgMatIn[2], src1+base_src1_offset_simdgroup+16, tensor_dimension_params.src[1].nb[1]);
+    simdgroup_load(sgMatIn[3], src1+base_src1_offset_simdgroup+24, tensor_dimension_params.src[1].nb[1]);
+    simdgroup_multiply(sgMatOut[0], sgMatIn[0], sgMatKern);
+    simdgroup_multiply(sgMatOut[1], sgMatIn[1], sgMatKern);
+    simdgroup_multiply(sgMatOut[2], sgMatIn[2], sgMatKern);
+    simdgroup_multiply(sgMatOut[3], sgMatIn[3], sgMatKern);
+    simdgroup_store(sgMatOut[0], workgroup_data + local_offset+0*8, wg_size.x);
+    simdgroup_store(sgMatOut[1], workgroup_data + local_offset+1*8, wg_size.x);
+    simdgroup_store(sgMatOut[2], workgroup_data + local_offset+2*8, wg_size.x);
+    simdgroup_store(sgMatOut[3], workgroup_data + local_offset+3*8, wg_size.x);
+
+    workgroupBarrier();
+
+    float output[8] = {0.0};
+
+    for (uint oc = 0u; oc < output_channels; oc = oc + 1u) {
+        if (has_bias) {
+            output[oc] += src2[get_linear_index(tensor_dimension_params.src[2], 0u, oc, 0u)];
+        }
+
+        if (has_inject_signal) {
+            output[oc] += src3[get_linear_index(tensor_dimension_params.src[3], u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, oc, global_id.z)];
+        }
+
+        if (apply_tanh) {
+            output[oc] = tanh(output[oc]);
+        }
+
+        dst[get_linear_index(tensor_dimension_params.dst, global_id.x, oc, global_id.z)] = output[oc];
+    }
+}
+
+
 kernel void kernel_conv_1d_small_kern_f16(
         device const half * src0,
         device const half * src1,

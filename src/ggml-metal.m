@@ -148,6 +148,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_no_offset_small_dil);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_no_offset_small_dil_f16);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_1x8x8_simdgr);
     GGML_METAL_DECL_KERNEL(sum);
     GGML_METAL_DECL_KERNEL(sum_f16);
     GGML_METAL_DECL_KERNEL(add_and_trim);
@@ -370,6 +371,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_no_offset_small_dil);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_no_offset_small_dil_f16);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_1x8x8_simdgr);
         GGML_METAL_ADD_KERNEL(sum);
         GGML_METAL_ADD_KERNEL(sum_f16);
         GGML_METAL_ADD_KERNEL(add_and_trim);
@@ -499,6 +501,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_no_offset_small_dil);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_no_offset_small_dil_f16);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_1x8x8_simdgr);
     GGML_METAL_DEL_KERNEL(sum);
     GGML_METAL_DEL_KERNEL(sum_f16);
     GGML_METAL_DEL_KERNEL(add_and_trim);
@@ -1084,9 +1087,12 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_CONV_1D_SMALL_KERN:
                         {
+                            const int threadgroupSize = 256;
                             const int64_t output_len = dst->ne[0];
-                            const int32_t dispatch_y = dst->ne[1];
+                            const int64_t input_channels = dst->src[0]->ne[1];
+                            const int32_t output_channels = dst->ne[1];
                             const int32_t dispatch_z = dst->ne[2];
+                            int32_t dispatch_y = output_channels;
                             int32_t dispatch_x = output_len;
 
                             const int32_t d0 = dst->op_params[2];
@@ -1096,8 +1102,15 @@ void ggml_metal_graph_compute(
                             GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern)
 #else
                             if (1 == nk) {
-                                GGML_ASSERT(0 == dst->op_params[3]);
-                                GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_simpl)
+                                if (input_channels == 8 && output_channels == 8 ) {
+                                    dispatch_y = 1;
+                                    // GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_1x8x8_simdgr)
+                                    [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_1x8x8_simdgr];
+                                    [encoder setThreadgroupMemoryLength:threadgroupSize*sizeof(float) atIndex:0];
+                                } else {
+                                    GGML_ASSERT(0 == dst->op_params[3]);
+                                    GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_simpl)
+                                }
                             } else {
                                 GGML_ASSERT(real_input_len == dst->src[1]->ne[0]);
                                 if (dst->src[3]) {
@@ -1119,7 +1132,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
 
-                            [encoder dispatchThreads:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_SUM:
                         {
