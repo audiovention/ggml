@@ -405,17 +405,17 @@ kernel void kernel_conv_1d_small_kern_1x8x8_simdgr(
 
     let base_src1_offset = input_len - real_input_len + global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
     let base_src1_offset_simdgroup = input_len - real_input_len + 32u*(global_id.x / 32u) + global_id.z * tensor_dimension_params.src[1].nb[2];
-    let local_offset = 32u*(local_id.x % 32u);
+    let local_offset = 32u*(local_id.x / 32u);
 
     simdgroup_load(sgMatKern, src0, tensor_dimension_params.src[0].nb[1], 0, true);
     simdgroup_load(sgMatIn[0], src1+base_src1_offset_simdgroup+0, tensor_dimension_params.src[1].nb[1]);
     simdgroup_load(sgMatIn[1], src1+base_src1_offset_simdgroup+8, tensor_dimension_params.src[1].nb[1]);
     simdgroup_load(sgMatIn[2], src1+base_src1_offset_simdgroup+16, tensor_dimension_params.src[1].nb[1]);
     simdgroup_load(sgMatIn[3], src1+base_src1_offset_simdgroup+24, tensor_dimension_params.src[1].nb[1]);
-    simdgroup_multiply(sgMatOut[0], sgMatIn[0], sgMatKern);
-    simdgroup_multiply(sgMatOut[1], sgMatIn[1], sgMatKern);
-    simdgroup_multiply(sgMatOut[2], sgMatIn[2], sgMatKern);
-    simdgroup_multiply(sgMatOut[3], sgMatIn[3], sgMatKern);
+    simdgroup_multiply(sgMatOut[0], sgMatKern, sgMatIn[0]);
+    simdgroup_multiply(sgMatOut[1], sgMatKern, sgMatIn[1]);
+    simdgroup_multiply(sgMatOut[2], sgMatKern, sgMatIn[2]);
+    simdgroup_multiply(sgMatOut[3], sgMatKern, sgMatIn[3]);
     simdgroup_store(sgMatOut[0], workgroup_data + local_offset+0*8, wg_size.x);
     simdgroup_store(sgMatOut[1], workgroup_data + local_offset+1*8, wg_size.x);
     simdgroup_store(sgMatOut[2], workgroup_data + local_offset+2*8, wg_size.x);
@@ -423,22 +423,21 @@ kernel void kernel_conv_1d_small_kern_1x8x8_simdgr(
 
     workgroupBarrier();
 
-    float output[8] = {0.0};
-
     for (uint oc = 0u; oc < output_channels; oc = oc + 1u) {
+        float output = workgroup_data[local_id.x+wg_size.x*oc];
         if (has_bias) {
-            output[oc] += src2[get_linear_index(tensor_dimension_params.src[2], 0u, oc, 0u)];
+            output += src2[get_linear_index(tensor_dimension_params.src[2], 0u, oc, 0u)];
         }
 
         if (has_inject_signal) {
-            output[oc] += src3[get_linear_index(tensor_dimension_params.src[3], u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, oc, global_id.z)];
+            output += src3[get_linear_index(tensor_dimension_params.src[3], u32(tensor_dimension_params.src[3].ne[0]) - output_len + global_id.x, oc, global_id.z)];
         }
 
         if (apply_tanh) {
-            output[oc] = tanh(output[oc]);
+            output = tanh(output);
         }
 
-        dst[get_linear_index(tensor_dimension_params.dst, global_id.x, oc, global_id.z)] = output[oc];
+        dst[get_linear_index(tensor_dimension_params.dst, global_id.x, oc, global_id.z)] = output;
     }
 }
 

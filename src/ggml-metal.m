@@ -1106,7 +1106,7 @@ void ggml_metal_graph_compute(
                                     dispatch_y = 1;
                                     // GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_1x8x8_simdgr)
                                     [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_1x8x8_simdgr];
-                                    [encoder setThreadgroupMemoryLength:threadgroupSize*sizeof(float) atIndex:0];
+                                    [encoder setThreadgroupMemoryLength:8*threadgroupSize*sizeof(float) atIndex:0];
                                 } else {
                                     GGML_ASSERT(0 == dst->op_params[3]);
                                     GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_simpl)
