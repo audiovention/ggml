@@ -1107,45 +1107,27 @@ void ggml_metal_graph_compute(
 #if 0
                             GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern)
 #else
+#if 1
+                            if ((8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels)) {
+                                dispatch_y = 1;
+                                // GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_nx8kx8m_simdgr)
+                                [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_nx8kx8m_simdgr];
+                                [encoder setThreadgroupMemoryLength:output_channels*threadgroupSize*sizeof(float) atIndex:0];
+                            } else
+#endif
                             if (1 == nk) {
-#if 1
-                                if (input_channels == 8 && output_channels == 8 ) {
-                                    dispatch_y = 1;
-                                    // GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_1x8x8_simdgr)
-                                    [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_1x8x8_simdgr];
-                                    [encoder setThreadgroupMemoryLength:8*threadgroupSize*sizeof(float) atIndex:0];
-                                } else 
-#endif
-                                {
-                                    GGML_ASSERT(0 == dst->op_params[3]);
-                                    GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_simpl)
-                                }
+                                GGML_ASSERT(0 == dst->op_params[3]);
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_simpl)
                             } else {
-#if 1
-                                if (input_channels == 8 && output_channels == 8 && 3 == nk) {
-                                    dispatch_y = 1;
-                                    // GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_1x8x8_simdgr)
-                                    [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_3x8x8_simdgr];
-                                    [encoder setThreadgroupMemoryLength:8*threadgroupSize*sizeof(float) atIndex:0];
-                                } else 
-                                if (input_channels == 16 && output_channels == 16 && 3 == nk) {
-                                    dispatch_y = 1;
-                                    // GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_1x8x8_simdgr)
-                                    [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_nx8kx8m_simdgr];
-                                    [encoder setThreadgroupMemoryLength:16*threadgroupSize*sizeof(float) atIndex:0];
-                                } else 
-#endif
-                                {
-                                    GGML_ASSERT(real_input_len == dst->src[1]->ne[0]);
-                                    if (dst->src[3]) {
-                                        GGML_ASSERT(output_len == dst->src[3]->ne[0]);
-                                    }
-                                    if (d0>=4) {
-                                        dispatch_x = CEIL_DIV(dispatch_x, 4);
-                                        GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_no_offsets)
-                                    } else {
-                                        GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_no_offset_small_dil)
-                                    }
+                                GGML_ASSERT(real_input_len == dst->src[1]->ne[0]);
+                                if (dst->src[3]) {
+                                    GGML_ASSERT(output_len == dst->src[3]->ne[0]);
+                                }
+                                if (d0>=4) {
+                                    dispatch_x = CEIL_DIV(dispatch_x, 4);
+                                    GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_no_offsets)
+                                } else {
+                                    GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_no_offset_small_dil)
                                 }
                             }
 #endif
