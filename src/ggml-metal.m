@@ -1110,6 +1110,7 @@ void ggml_metal_graph_compute(
                                 if (input_channels > threadGroupMemMult) {
                                     threadGroupMemMult = input_channels;
                                 }
+                                dispatch_x = 32 * CEIL_DIV(dispatch_x, 32); // so we have a full number of simdgroups 
                                 dispatch_y = 1;
                                 GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_nx8kx8m_simdgr)
                                 [encoder setThreadgroupMemoryLength:threadGroupMemMult*threadgroupSize*ggml_element_size(dst) atIndex:0];
