@@ -557,17 +557,28 @@ kernel void kernel_conv_1d_small_kern_nx8kx8m_simdgr_f16(
         }
     }
 
-    let base_src1_offset = input_len - real_input_len + global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
-    let base_src1_offset_simdgroup = input_len - real_input_len + 32u*(global_id.x / 32u) + global_id.z * tensor_dimension_params.src[1].nb[2];
+    let base_src1_offset_x = input_len - real_input_len + global_id.x;
+    let base_src1_offset = base_src1_offset_x + global_id.z * tensor_dimension_params.src[1].nb[2];
     let local_offset = 32u*(local_id.x / 32u);
 
     for (uint ik=0; ik < nk; ik++) {
         simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2], tensor_dimension_params.src[0].nb[1], 0, true);
 
-        simdgroup_load(sgMatIn[0], src1+ik*d0+base_src1_offset_simdgroup+0, tensor_dimension_params.src[1].nb[1]);
-        simdgroup_load(sgMatIn[1], src1+ik*d0+base_src1_offset_simdgroup+8, tensor_dimension_params.src[1].nb[1]);
-        simdgroup_load(sgMatIn[2], src1+ik*d0+base_src1_offset_simdgroup+16, tensor_dimension_params.src[1].nb[1]);
-        simdgroup_load(sgMatIn[3], src1+ik*d0+base_src1_offset_simdgroup+24, tensor_dimension_params.src[1].nb[1]);
+        if ((base_src1_offset_x + ik*d0) < tensor_dimension_params.src[1].ne[0]) {
+            for (uint ic=0; ic<8; ic++) {
+                workgroup_data[local_id.x+wg_size.x*ic] = src1[base_src1_offset + ik*d0 + ic*tensor_dimension_params.src[1].nb[1]];
+            }
+        } else {
+            for (uint ic=0; ic<8; ic++) {
+                workgroup_data[local_id.x+wg_size.x*ic] = 0;
+            }
+        }
+        workgroupBarrier();
+
+        simdgroup_load(sgMatIn[0], workgroup_data + local_offset + 0, wg_size.x);
+        simdgroup_load(sgMatIn[1], workgroup_data + local_offset + 8, wg_size.x);
+        simdgroup_load(sgMatIn[2], workgroup_data + local_offset + 16, wg_size.x);
+        simdgroup_load(sgMatIn[3], workgroup_data + local_offset + 24, wg_size.x);
 
         simdgroup_multiply_accumulate(sgMatOut[0][0], sgMatKern, sgMatIn[0], sgMatOut[0][0]);
         simdgroup_multiply_accumulate(sgMatOut[1][0], sgMatKern, sgMatIn[1], sgMatOut[1][0]);
@@ -585,10 +596,22 @@ kernel void kernel_conv_1d_small_kern_nx8kx8m_simdgr_f16(
 
         if (dual_input) {
             simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2]+8*tensor_dimension_params.src[0].nb[1], tensor_dimension_params.src[0].nb[1], 0, true);
-            simdgroup_load(sgMatIn[0], src1+ik*d0+base_src1_offset_simdgroup+0  +8*tensor_dimension_params.src[1].nb[1], tensor_dimension_params.src[1].nb[1]);
-            simdgroup_load(sgMatIn[1], src1+ik*d0+base_src1_offset_simdgroup+8  +8*tensor_dimension_params.src[1].nb[1], tensor_dimension_params.src[1].nb[1]);
-            simdgroup_load(sgMatIn[2], src1+ik*d0+base_src1_offset_simdgroup+16 +8*tensor_dimension_params.src[1].nb[1], tensor_dimension_params.src[1].nb[1]);
-            simdgroup_load(sgMatIn[3], src1+ik*d0+base_src1_offset_simdgroup+24 +8*tensor_dimension_params.src[1].nb[1], tensor_dimension_params.src[1].nb[1]);
+
+            if ((base_src1_offset_x + ik*d0) < tensor_dimension_params.src[1].ne[0]) {
+                for (uint ic=8; ic<16; ic++) {
+                    workgroup_data[local_id.x+wg_size.x*ic] = src1[base_src1_offset + ik*d0 + ic*tensor_dimension_params.src[1].nb[1]];
+                }
+            } else {
+                for (uint ic=8; ic<16; ic++) {
+                    workgroup_data[local_id.x+wg_size.x*ic] = 0;
+                }
+            }
+
+            workgroupBarrier();
+            simdgroup_load(sgMatIn[0], workgroup_data + 8*wg_size.x + local_offset + 0, wg_size.x);
+            simdgroup_load(sgMatIn[1], workgroup_data + 8*wg_size.x + local_offset + 8, wg_size.x);
+            simdgroup_load(sgMatIn[2], workgroup_data + 8*wg_size.x + local_offset + 16, wg_size.x);
+            simdgroup_load(sgMatIn[3], workgroup_data + 8*wg_size.x + local_offset + 24, wg_size.x);
 
             simdgroup_multiply_accumulate(sgMatOut[0][0], sgMatKern, sgMatIn[0], sgMatOut[0][0]);
             simdgroup_multiply_accumulate(sgMatOut[1][0], sgMatKern, sgMatIn[1], sgMatOut[1][0]);
@@ -605,7 +628,7 @@ kernel void kernel_conv_1d_small_kern_nx8kx8m_simdgr_f16(
             }
         }
     }
-
+    
 
     simdgroup_store(sgMatOut[0][0], workgroup_data + local_offset+0*8, wg_size.x);
     simdgroup_store(sgMatOut[1][0], workgroup_data + local_offset+1*8, wg_size.x);
