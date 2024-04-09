@@ -1105,7 +1105,7 @@ void ggml_metal_graph_compute(
                             GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern)
 #else
 #if 1
-                            if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels)) {
+                            if (0 && [ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels)) {
                                 dispatch_y = 1;
                                 GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_nx8kx8m_simdgr)
                                 [encoder setThreadgroupMemoryLength:output_channels*threadgroupSize*ggml_element_size(dst) atIndex:0];
@@ -1249,6 +1249,11 @@ void ggml_metal_graph_compute(
                             GGML_METAL_SET_F32_OR_F16_PIPELINE(special_adam_step)
 
                             if (dst->type == GGML_TYPE_F32) {
+                                GGML_ASSERT(src0->type == GGML_TYPE_F32);
+                                GGML_ASSERT(src1->type == GGML_TYPE_F32);
+                                GGML_ASSERT(src2->type == GGML_TYPE_F32);
+                                GGML_ASSERT(src3->type == GGML_TYPE_F32);
+                                GGML_ASSERT(src4 == NULL);
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                 [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                                 [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
@@ -1256,18 +1261,22 @@ void ggml_metal_graph_compute(
                                 [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
                                 [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
                             } else if (dst->type == GGML_TYPE_F16) {
-                                [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                                [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
-                                [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
-                                [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
-                                [encoder setBuffer:id_src4 offset:offs_src4 atIndex:4];
-                                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:5];
-                                [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:6];
+                                GGML_ASSERT(src0->type == GGML_TYPE_F16);
+                                GGML_ASSERT(src1->type == GGML_TYPE_F16);
+                                GGML_ASSERT(src2->type == GGML_TYPE_F32);
+                                GGML_ASSERT(src3->type == GGML_TYPE_F32);
+                                GGML_ASSERT(src4->type == GGML_TYPE_F32);
+                                [encoder setBuffer:id_src1 offset:offs_src1 atIndex:0];
+                                [encoder setBuffer:id_src2 offset:offs_src2 atIndex:1];
+                                [encoder setBuffer:id_src3 offset:offs_src3 atIndex:2];
+                                [encoder setBuffer:id_src4 offset:offs_src4 atIndex:3];
+                                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:4];
+                                [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:5];
                             } else {
                                 GGML_ASSERT(false);
                             }                            
 
-                            [encoder dispatchThreads:MTLSizeMake(ggml_nelements_padded(dst), 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(dst->ne[0], dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_MUL:
                         {

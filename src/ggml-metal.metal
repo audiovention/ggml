@@ -1581,10 +1581,12 @@ kernel void kernel_special_adam_step(
     let eps = as_type<float>(tensor_dimension_params.params[1][0]);
     let gradient_scale = as_type<float>(tensor_dimension_params.params[1][1]);
 
-    auto x = src0[global_id.x];
-    auto g = src1[global_id.x] * gradient_scale;
-    auto m = src2[global_id.x];
-    auto v = src3[global_id.x];
+    let idx_linear = get_linear_index(tensor_dimension_params.src[0], global_id.x, global_id.y, global_id.z);
+
+    auto x = src0[idx_linear];
+    auto g = src1[idx_linear] * gradient_scale;
+    auto m = src2[idx_linear];
+    auto v = src3[idx_linear];
 
     m = m*beta1 +   g*(1.0 - beta1);
     v = v*beta2 + g*g*(1.0 - beta2);
@@ -1592,14 +1594,13 @@ kernel void kernel_special_adam_step(
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    src2[global_id.x] = m;
-    src3[global_id.x] = v;
-    dst[global_id.x] = x;
+    src2[idx_linear] = m;
+    src3[idx_linear] = v;
+    dst[idx_linear] = x;
 }
 
 
 kernel void kernel_special_adam_step_f16(
-        device const half * src0,
         device const half * src1,
         device       float * src2,
         device       float * src3,
@@ -1617,10 +1618,13 @@ kernel void kernel_special_adam_step_f16(
     let eps = as_type<float>(tensor_dimension_params.params[1][0]);
     let gradient_scale = as_type<float>(tensor_dimension_params.params[1][1]);
 
-    float x = src4[global_id.x];
-    float g = src1[global_id.x] * gradient_scale;
-    float m = src2[global_id.x];
-    float v = src3[global_id.x];
+    let idx_linear_f32 = get_linear_index(tensor_dimension_params.src[2], global_id.x, global_id.y, global_id.z);
+    let idx_linear_f16 = get_linear_index(tensor_dimension_params.src[1], global_id.x, global_id.y, global_id.z);
+
+    float x = src4[idx_linear_f32];
+    float g = float(src1[idx_linear_f16]) * gradient_scale;
+    float m = src2[idx_linear_f32];
+    float v = src3[idx_linear_f32];
 
     m = m*beta1 +   g*(1.0 - beta1);
     v = v*beta2 + g*g*(1.0 - beta2);
@@ -1628,10 +1632,10 @@ kernel void kernel_special_adam_step_f16(
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
 
-    src2[global_id.x] = m;
-    src3[global_id.x] = v;
-    src4[global_id.x] = x;
-    dst[global_id.x] = x;
+    src2[idx_linear_f32] = m;
+    src3[idx_linear_f32] = v;
+    src4[idx_linear_f32] = x;
+    dst[idx_linear_f16] = half(x);
 }
 
 
