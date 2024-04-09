@@ -150,7 +150,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_no_offset_small_dil_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_1x8x8_simdgr);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_3x8x8_simdgr);
-    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_3x16x16_simdgr);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr);
     GGML_METAL_DECL_KERNEL(sum);
     GGML_METAL_DECL_KERNEL(sum_f16);
     GGML_METAL_DECL_KERNEL(add_and_trim);
@@ -375,7 +375,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_no_offset_small_dil_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_1x8x8_simdgr);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_3x8x8_simdgr);
-        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_3x16x16_simdgr);
+        GGML_METAL_ADD_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr);
         GGML_METAL_ADD_KERNEL(sum);
         GGML_METAL_ADD_KERNEL(sum_f16);
         GGML_METAL_ADD_KERNEL(add_and_trim);
@@ -507,7 +507,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_no_offset_small_dil_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_1x8x8_simdgr);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_3x8x8_simdgr);
-    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_3x16x16_simdgr);
+    GGML_METAL_DEL_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr);
     GGML_METAL_DEL_KERNEL(sum);
     GGML_METAL_DEL_KERNEL(sum_f16);
     GGML_METAL_DEL_KERNEL(add_and_trim);
@@ -1131,7 +1131,7 @@ void ggml_metal_graph_compute(
                                 if (input_channels == 16 && output_channels == 16 && 3 == nk) {
                                     dispatch_y = 1;
                                     // GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_1x8x8_simdgr)
-                                    [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_3x16x16_simdgr];
+                                    [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_nx8kx8m_simdgr];
                                     [encoder setThreadgroupMemoryLength:16*threadgroupSize*sizeof(float) atIndex:0];
                                 } else 
 #endif
