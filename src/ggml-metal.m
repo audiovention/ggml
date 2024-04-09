@@ -1106,9 +1106,13 @@ void ggml_metal_graph_compute(
 #else
 #if 1
                             if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels)) {
+                                int threadGroupMemMult = output_channels;
+                                if (input_channels > threadGroupMemMult) {
+                                    threadGroupMemMult = input_channels;
+                                }
                                 dispatch_y = 1;
                                 GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_nx8kx8m_simdgr)
-                                [encoder setThreadgroupMemoryLength:output_channels*threadgroupSize*ggml_element_size(dst) atIndex:0];
+                                [encoder setThreadgroupMemoryLength:threadGroupMemMult*threadgroupSize*ggml_element_size(dst) atIndex:0];
                             } else
 #endif
                             if (1 == nk) {
