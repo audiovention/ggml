@@ -1279,6 +1279,272 @@ kernel void kernel_conv_1d_small_kern_back_input(
 }
 
 
+kernel void kernel_conv_1d_small_kern_back_input_simdgr(
+        device const float * src0,
+        device const float * src1,
+        device const float * src2,
+        device       float * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup float  * workgroup_data [[threadgroup(0)]],
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let accumulate = bool(tensor_dimension_params.params[0][3]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+    let output_channels = u32(tensor_dimension_params.src[0].ne[0]);
+    let output_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+
+    let dual_input = input_channels > 8u;
+    let dual_output = output_channels > 8u;
+
+    simdgroup_float8x8 sgMatIn[4];
+    simdgroup_float8x8 sgMatKern;
+    simdgroup_float8x8 sgMatOut[4][2];  // OLxOC
+    for (uint i = 0; i < 4; i++) {
+        for (uint j = 0; j < 2; j++) {
+            sgMatOut[i][j] = simdgroup_float8x8(0);
+        }
+    }
+
+    let base_src1_offset_x = global_id.x;
+    let base_src1_offset = base_src1_offset_x + global_id.z * tensor_dimension_params.src[1].nb[2];
+    let local_offset = 32u*(local_id.x / 32u);
+
+    for (uint ik=0; ik < nk; ik++) {
+        simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2], tensor_dimension_params.src[0].nb[1], 0, false);
+        let idx_offset = ik * d0;
+
+        if (base_src1_offset_x >= idx_offset && (base_src1_offset_x < (idx_offset+output_len))) {
+            for (uint oc=0; oc<8; oc++) {
+                workgroup_data[local_id.x+wg_size.x*oc] = src1[base_src1_offset - idx_offset + oc*tensor_dimension_params.src[1].nb[1]];
+            }
+        } else {
+            for (uint oc=0; oc<8; oc++) {
+                workgroup_data[local_id.x+wg_size.x*oc] = 0;
+            }
+        }
+        workgroupBarrier();
+
+        simdgroup_load(sgMatIn[0], workgroup_data + local_offset + 0, wg_size.x);
+        simdgroup_load(sgMatIn[1], workgroup_data + local_offset + 8, wg_size.x);
+        simdgroup_load(sgMatIn[2], workgroup_data + local_offset + 16, wg_size.x);
+        simdgroup_load(sgMatIn[3], workgroup_data + local_offset + 24, wg_size.x);
+
+        simdgroup_multiply_accumulate(sgMatOut[0][0], sgMatKern, sgMatIn[0], sgMatOut[0][0]);
+        simdgroup_multiply_accumulate(sgMatOut[1][0], sgMatKern, sgMatIn[1], sgMatOut[1][0]);
+        simdgroup_multiply_accumulate(sgMatOut[2][0], sgMatKern, sgMatIn[2], sgMatOut[2][0]);
+        simdgroup_multiply_accumulate(sgMatOut[3][0], sgMatKern, sgMatIn[3], sgMatOut[3][0]);
+
+        if (dual_input) {
+            simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2]+8*tensor_dimension_params.src[0].nb[1], tensor_dimension_params.src[0].nb[1], 0, false);
+
+            simdgroup_multiply_accumulate(sgMatOut[0][1], sgMatKern, sgMatIn[0], sgMatOut[0][1]);
+            simdgroup_multiply_accumulate(sgMatOut[1][1], sgMatKern, sgMatIn[1], sgMatOut[1][1]);
+            simdgroup_multiply_accumulate(sgMatOut[2][1], sgMatKern, sgMatIn[2], sgMatOut[2][1]);
+            simdgroup_multiply_accumulate(sgMatOut[3][1], sgMatKern, sgMatIn[3], sgMatOut[3][1]);
+        }
+
+        if (dual_output) {
+            simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2]+8*tensor_dimension_params.src[0].nb[0], tensor_dimension_params.src[0].nb[1], 0, false);
+
+            if (base_src1_offset_x >= idx_offset && (base_src1_offset_x < (idx_offset+output_len))) {
+                for (uint oc=8; oc<16; oc++) {
+                    workgroup_data[local_id.x+wg_size.x*oc] = src1[base_src1_offset - idx_offset + oc*tensor_dimension_params.src[1].nb[1]];
+                }
+            } else {
+                for (uint oc=8; oc<16; oc++) {
+                    workgroup_data[local_id.x+wg_size.x*oc] = 0;
+                }
+            }
+
+            workgroupBarrier();
+            simdgroup_load(sgMatIn[0], workgroup_data + 8*wg_size.x + local_offset + 0, wg_size.x);
+            simdgroup_load(sgMatIn[1], workgroup_data + 8*wg_size.x + local_offset + 8, wg_size.x);
+            simdgroup_load(sgMatIn[2], workgroup_data + 8*wg_size.x + local_offset + 16, wg_size.x);
+            simdgroup_load(sgMatIn[3], workgroup_data + 8*wg_size.x + local_offset + 24, wg_size.x);
+
+            simdgroup_multiply_accumulate(sgMatOut[0][0], sgMatKern, sgMatIn[0], sgMatOut[0][0]);
+            simdgroup_multiply_accumulate(sgMatOut[1][0], sgMatKern, sgMatIn[1], sgMatOut[1][0]);
+            simdgroup_multiply_accumulate(sgMatOut[2][0], sgMatKern, sgMatIn[2], sgMatOut[2][0]);
+            simdgroup_multiply_accumulate(sgMatOut[3][0], sgMatKern, sgMatIn[3], sgMatOut[3][0]);
+
+            if (dual_input) {
+                simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2]+8*tensor_dimension_params.src[0].nb[0]+8*tensor_dimension_params.src[0].nb[1], tensor_dimension_params.src[0].nb[1], 0, false);
+
+                simdgroup_multiply_accumulate(sgMatOut[0][1], sgMatKern, sgMatIn[0], sgMatOut[0][1]);
+                simdgroup_multiply_accumulate(sgMatOut[1][1], sgMatKern, sgMatIn[1], sgMatOut[1][1]);
+                simdgroup_multiply_accumulate(sgMatOut[2][1], sgMatKern, sgMatIn[2], sgMatOut[2][1]);
+                simdgroup_multiply_accumulate(sgMatOut[3][1], sgMatKern, sgMatIn[3], sgMatOut[3][1]);
+            }
+        }
+    }
+
+
+    simdgroup_store(sgMatOut[0][0], workgroup_data + local_offset+0*8, wg_size.x);
+    simdgroup_store(sgMatOut[1][0], workgroup_data + local_offset+1*8, wg_size.x);
+    simdgroup_store(sgMatOut[2][0], workgroup_data + local_offset+2*8, wg_size.x);
+    simdgroup_store(sgMatOut[3][0], workgroup_data + local_offset+3*8, wg_size.x);
+
+    if (dual_input) {
+        simdgroup_store(sgMatOut[0][1], workgroup_data + local_offset+0*8 + 8*wg_size.x, wg_size.x);
+        simdgroup_store(sgMatOut[1][1], workgroup_data + local_offset+1*8 + 8*wg_size.x, wg_size.x);
+        simdgroup_store(sgMatOut[2][1], workgroup_data + local_offset+2*8 + 8*wg_size.x, wg_size.x);
+        simdgroup_store(sgMatOut[3][1], workgroup_data + local_offset+3*8 + 8*wg_size.x, wg_size.x);
+    }
+
+    workgroupBarrier();
+
+    for (uint ic = 0u; ic < input_channels; ic = ic + 1u) {
+        float output = workgroup_data[local_id.x+wg_size.x*ic];
+
+        if (accumulate) {
+            output += src2[get_linear_index(tensor_dimension_params.src[2], global_id.x, ic, global_id.z)];
+        }
+
+        dst[get_linear_index(tensor_dimension_params.dst, global_id.x, ic, global_id.z)] = output;
+    }
+}
+
+
+kernel void kernel_conv_1d_small_kern_back_input_simdgr_f16(
+        device const half * src0,
+        device const half * src1,
+        device const half * src2,
+        device       half * dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        threadgroup half  * workgroup_data [[threadgroup(0)]],
+        uint3 global_id[[thread_position_in_grid]],
+        uint3 wg_id[[threadgroup_position_in_grid]],
+        uint3 wg_size[[threads_per_threadgroup]],
+        uint3 local_id[[thread_position_in_threadgroup]]) {
+    let s0 = u32(tensor_dimension_params.params[0][0]);
+    let p0 = u32(tensor_dimension_params.params[0][1]);
+    let d0 = u32(tensor_dimension_params.params[0][2]);
+    let accumulate = bool(tensor_dimension_params.params[0][3]);
+    let nk = u32(tensor_dimension_params.src[0].ne[2]);
+
+    let output_channels = u32(tensor_dimension_params.src[0].ne[0]);
+    let output_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+
+    let dual_input = input_channels > 8u;
+    let dual_output = output_channels > 8u;
+
+    simdgroup_half8x8 sgMatIn[4];
+    simdgroup_half8x8 sgMatKern;
+    simdgroup_half8x8 sgMatOut[4][2];  // OLxOC
+    for (uint i = 0; i < 4; i++) {
+        for (uint j = 0; j < 2; j++) {
+            sgMatOut[i][j] = simdgroup_half8x8(0);
+        }
+    }
+
+    let base_src1_offset_x = global_id.x;
+    let base_src1_offset = base_src1_offset_x + global_id.z * tensor_dimension_params.src[1].nb[2];
+    let local_offset = 32u*(local_id.x / 32u);
+
+    for (uint ik=0; ik < nk; ik++) {
+        simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2], tensor_dimension_params.src[0].nb[1], 0, false);
+        let idx_offset = ik * d0;
+
+        if (base_src1_offset_x >= idx_offset && (base_src1_offset_x < (idx_offset+output_len))) {
+            for (uint oc=0; oc<8; oc++) {
+                workgroup_data[local_id.x+wg_size.x*oc] = src1[base_src1_offset - idx_offset + oc*tensor_dimension_params.src[1].nb[1]];
+            }
+        } else {
+            for (uint oc=0; oc<8; oc++) {
+                workgroup_data[local_id.x+wg_size.x*oc] = 0;
+            }
+        }
+        workgroupBarrier();
+
+        simdgroup_load(sgMatIn[0], workgroup_data + local_offset + 0, wg_size.x);
+        simdgroup_load(sgMatIn[1], workgroup_data + local_offset + 8, wg_size.x);
+        simdgroup_load(sgMatIn[2], workgroup_data + local_offset + 16, wg_size.x);
+        simdgroup_load(sgMatIn[3], workgroup_data + local_offset + 24, wg_size.x);
+
+        simdgroup_multiply_accumulate(sgMatOut[0][0], sgMatKern, sgMatIn[0], sgMatOut[0][0]);
+        simdgroup_multiply_accumulate(sgMatOut[1][0], sgMatKern, sgMatIn[1], sgMatOut[1][0]);
+        simdgroup_multiply_accumulate(sgMatOut[2][0], sgMatKern, sgMatIn[2], sgMatOut[2][0]);
+        simdgroup_multiply_accumulate(sgMatOut[3][0], sgMatKern, sgMatIn[3], sgMatOut[3][0]);
+
+        if (dual_input) {
+            simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2]+8*tensor_dimension_params.src[0].nb[1], tensor_dimension_params.src[0].nb[1], 0, false);
+
+            simdgroup_multiply_accumulate(sgMatOut[0][1], sgMatKern, sgMatIn[0], sgMatOut[0][1]);
+            simdgroup_multiply_accumulate(sgMatOut[1][1], sgMatKern, sgMatIn[1], sgMatOut[1][1]);
+            simdgroup_multiply_accumulate(sgMatOut[2][1], sgMatKern, sgMatIn[2], sgMatOut[2][1]);
+            simdgroup_multiply_accumulate(sgMatOut[3][1], sgMatKern, sgMatIn[3], sgMatOut[3][1]);
+        }
+
+        if (dual_output) {
+            simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2]+8*tensor_dimension_params.src[0].nb[0], tensor_dimension_params.src[0].nb[1], 0, false);
+
+            if (base_src1_offset_x >= idx_offset && (base_src1_offset_x < (idx_offset+output_len))) {
+                for (uint oc=8; oc<16; oc++) {
+                    workgroup_data[local_id.x+wg_size.x*oc] = src1[base_src1_offset - idx_offset + oc*tensor_dimension_params.src[1].nb[1]];
+                }
+            } else {
+                for (uint oc=8; oc<16; oc++) {
+                    workgroup_data[local_id.x+wg_size.x*oc] = 0;
+                }
+            }
+
+            workgroupBarrier();
+            simdgroup_load(sgMatIn[0], workgroup_data + 8*wg_size.x + local_offset + 0, wg_size.x);
+            simdgroup_load(sgMatIn[1], workgroup_data + 8*wg_size.x + local_offset + 8, wg_size.x);
+            simdgroup_load(sgMatIn[2], workgroup_data + 8*wg_size.x + local_offset + 16, wg_size.x);
+            simdgroup_load(sgMatIn[3], workgroup_data + 8*wg_size.x + local_offset + 24, wg_size.x);
+
+            simdgroup_multiply_accumulate(sgMatOut[0][0], sgMatKern, sgMatIn[0], sgMatOut[0][0]);
+            simdgroup_multiply_accumulate(sgMatOut[1][0], sgMatKern, sgMatIn[1], sgMatOut[1][0]);
+            simdgroup_multiply_accumulate(sgMatOut[2][0], sgMatKern, sgMatIn[2], sgMatOut[2][0]);
+            simdgroup_multiply_accumulate(sgMatOut[3][0], sgMatKern, sgMatIn[3], sgMatOut[3][0]);
+
+            if (dual_input) {
+                simdgroup_load(sgMatKern, src0+ik*tensor_dimension_params.src[0].nb[2]+8*tensor_dimension_params.src[0].nb[0]+8*tensor_dimension_params.src[0].nb[1], tensor_dimension_params.src[0].nb[1], 0, false);
+
+                simdgroup_multiply_accumulate(sgMatOut[0][1], sgMatKern, sgMatIn[0], sgMatOut[0][1]);
+                simdgroup_multiply_accumulate(sgMatOut[1][1], sgMatKern, sgMatIn[1], sgMatOut[1][1]);
+                simdgroup_multiply_accumulate(sgMatOut[2][1], sgMatKern, sgMatIn[2], sgMatOut[2][1]);
+                simdgroup_multiply_accumulate(sgMatOut[3][1], sgMatKern, sgMatIn[3], sgMatOut[3][1]);
+            }
+        }
+    }
+
+
+    simdgroup_store(sgMatOut[0][0], workgroup_data + local_offset+0*8, wg_size.x);
+    simdgroup_store(sgMatOut[1][0], workgroup_data + local_offset+1*8, wg_size.x);
+    simdgroup_store(sgMatOut[2][0], workgroup_data + local_offset+2*8, wg_size.x);
+    simdgroup_store(sgMatOut[3][0], workgroup_data + local_offset+3*8, wg_size.x);
+
+    if (dual_input) {
+        simdgroup_store(sgMatOut[0][1], workgroup_data + local_offset+0*8 + 8*wg_size.x, wg_size.x);
+        simdgroup_store(sgMatOut[1][1], workgroup_data + local_offset+1*8 + 8*wg_size.x, wg_size.x);
+        simdgroup_store(sgMatOut[2][1], workgroup_data + local_offset+2*8 + 8*wg_size.x, wg_size.x);
+        simdgroup_store(sgMatOut[3][1], workgroup_data + local_offset+3*8 + 8*wg_size.x, wg_size.x);
+    }
+
+    workgroupBarrier();
+
+    for (uint ic = 0u; ic < input_channels; ic = ic + 1u) {
+        float output = workgroup_data[local_id.x+wg_size.x*ic];
+
+        if (accumulate) {
+            output += src2[get_linear_index(tensor_dimension_params.src[2], global_id.x, ic, global_id.z)];
+        }
+
+        dst[get_linear_index(tensor_dimension_params.dst, global_id.x, ic, global_id.z)] = output;
+    }
+}
+
+
 kernel void kernel_conv_1d_small_kern_back_input_f16(
         device const half * src0,
         device const half * src1,

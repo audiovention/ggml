@@ -150,6 +150,8 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_no_offset_small_dil_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr_f16);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input_simdgr);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input_simdgr_f16);
     GGML_METAL_DECL_KERNEL(sum);
     GGML_METAL_DECL_KERNEL(sum_f16);
     GGML_METAL_DECL_KERNEL(add_and_trim);
@@ -358,6 +360,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             GGML_METAL_ADD_KERNEL(mul_mm_q6_K_f32);
             GGML_METAL_ADD_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr);
             GGML_METAL_ADD_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr_f16);
+            GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input_simdgr);
+            GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input_simdgr_f16);
         }
         GGML_METAL_ADD_KERNEL(rope_f32);
         GGML_METAL_ADD_KERNEL(rope_f16);
@@ -489,6 +493,8 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
         GGML_METAL_DEL_KERNEL(mul_mm_q6_K_f32);
         GGML_METAL_DEL_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr);
         GGML_METAL_DEL_KERNEL(conv_1d_small_kern_nx8kx8m_simdgr_f16);
+        GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input_simdgr);
+        GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input_simdgr_f16);
     }
     GGML_METAL_DEL_KERNEL(rope_f32);
     GGML_METAL_DEL_KERNEL(rope_f16);
@@ -1195,7 +1201,21 @@ void ggml_metal_graph_compute(
                         {
                             const int threadgroupSize = 256;
                             const int32_t d0 = dst->op_params[2];
+                            const int64_t input_channels = dst->src[0]->ne[1];
+                            const int32_t output_channels = dst->src[0]->ne[0];
                             int dispatch_x = dst->ne[0];
+#if 1
+                            if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels)) {
+                                int threadGroupMemMult = output_channels;
+                                if (input_channels > threadGroupMemMult) {
+                                    threadGroupMemMult = input_channels;
+                                }
+                                dispatch_x = 32 * CEIL_DIV(dispatch_x, 32); // so we have a full number of simdgroups 
+                                dispatch_y = 1;
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_input_simdgr)
+                                [encoder setThreadgroupMemoryLength:threadGroupMemMult*threadgroupSize*ggml_element_size(dst) atIndex:0];
+                            } else
+#endif
                             if (d0>=4) {
                                 GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_input_large_dil)
                                 dispatch_x = CEIL_DIV(dst->ne[0], 4);
