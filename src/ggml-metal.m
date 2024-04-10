@@ -1204,6 +1204,7 @@ void ggml_metal_graph_compute(
                             const int64_t input_channels = dst->src[0]->ne[1];
                             const int32_t output_channels = dst->src[0]->ne[0];
                             int dispatch_x = dst->ne[0];
+                            int32_t dispatch_y = input_channels;
 #if 1
                             if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels)) {
                                 int threadGroupMemMult = output_channels;
@@ -1229,7 +1230,7 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:4];
 
-                            [encoder dispatchThreads:MTLSizeMake(dispatch_x, dst->ne[1], dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreads:MTLSizeMake(dispatch_x, dispatch_y, dst->ne[2]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_ACC:
                         {
