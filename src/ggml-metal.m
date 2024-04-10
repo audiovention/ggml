@@ -1190,15 +1190,36 @@ void ggml_metal_graph_compute(
                         {
                             const int threadgroupSize = 256;
                             GGML_ASSERT(threadgroupSize == 256); // Hardcoding it in the kernel provides huge speedup
-                            GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_filter)
+
+                            const int64_t input_channels = dst->ne[1];
+                            const int32_t output_channels = dst->ne[0];
+                            const int nk = dst->ne[2];
+                            const int num_batches = dst->src[0]->ne[2];
+                            int dispatch_x = nk;
+                            int32_t dispatch_y = output_channels;
+                            int dispatch_z = input_channels;
+                            int smem_size = threadgroupSize*sizeof(float);
+
+#if 0
+                            if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels) && dst->type == GGML_TYPE_F32) {
+                                dispatch_x = 1;
+                                dispatch_y = 1;
+                                dispatch_z = num_batches;
+                                smem_size = 16*16*3*8*sizeof(float);
+                                [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_back_filter_simdgr];
+                            } else 
+#endif
+                            {
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_filter)
+                            }
 
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                             [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:3];
-                            [encoder setThreadgroupMemoryLength:threadgroupSize*sizeof(float) atIndex:0];
+                            [encoder setThreadgroupMemoryLength:smem_size atIndex:0];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(dst->ne[2], dst->ne[0], dst->ne[1]) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
                         } break;
                     case GGML_OP_CONV_1D_SMALL_KERN_BACK_INPUT:
                         {
