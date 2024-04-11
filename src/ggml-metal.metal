@@ -239,6 +239,13 @@ kernel void kernel_mul_f16(
         src1[get_linear_index(tensor_dimension_params.src[1], idx0, idx1, idx2)];
 }
 
+kernel void kernel_set_val(
+        device       float4 * dst,
+        constant     float & val,
+        uint tpig[[thread_position_in_grid]]) {
+    dst[tpig] = float4(val);
+}
+
 kernel void kernel_sub(
         device const float4 * src0,
         device const float4 * src1,

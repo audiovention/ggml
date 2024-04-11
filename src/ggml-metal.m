@@ -143,6 +143,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(sqr);
     GGML_METAL_DECL_KERNEL(sqr_f16);
     GGML_METAL_DECL_KERNEL(sub);
+    GGML_METAL_DECL_KERNEL(set_val);
     GGML_METAL_DECL_KERNEL(sub_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_f16);
@@ -375,6 +376,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(sqr);
         GGML_METAL_ADD_KERNEL(sqr_f16);
         GGML_METAL_ADD_KERNEL(sub);
+        GGML_METAL_ADD_KERNEL(set_val);
         GGML_METAL_ADD_KERNEL(sub_f16);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern);
         GGML_METAL_ADD_KERNEL(conv_1d_small_kern_f16);
@@ -509,6 +511,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(sqr);
     GGML_METAL_DEL_KERNEL(sqr_f16);
     GGML_METAL_DEL_KERNEL(sub);
+    GGML_METAL_DEL_KERNEL(set_val);
     GGML_METAL_DEL_KERNEL(sub_f16);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern);
     GGML_METAL_DEL_KERNEL(conv_1d_small_kern_f16);
@@ -1200,8 +1203,14 @@ void ggml_metal_graph_compute(
                             int dispatch_z = input_channels;
                             int smem_size = threadgroupSize*sizeof(float);
 
-#if 0
+#if 1
                             if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels) && dst->type == GGML_TYPE_F32) {
+                                const float val1 = 0.0f;
+                                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:0];
+                                [encoder setBytes:&val1 length:sizeof(float) atIndex:1];
+                                [encoder setComputePipelineState:ctx->pipeline_set_val];
+                                [encoder dispatchThreads:MTLSizeMake(ggml_nelements_padded(dst)/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
+
                                 dispatch_x = 1;
                                 dispatch_y = 1;
                                 dispatch_z = num_batches;
