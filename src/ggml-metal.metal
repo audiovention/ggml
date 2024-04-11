@@ -1244,7 +1244,8 @@ kernel void kernel_conv_1d_small_kern_back_filter_f16(
 kernel void kernel_conv_1d_small_kern_back_filter_simdgr(
         device const float * src0,
         device const float * src1,
-        device volatile atomic_float*  dst,
+        // device volatile atomic_float*  dst,
+        device float*  scratch,
         constant  TensorDimensionParams & tensor_dimension_params,
         threadgroup float  * workgroup_data [[threadgroup(0)]],
         uint3 global_id[[thread_position_in_grid]],
@@ -1386,9 +1387,26 @@ kernel void kernel_conv_1d_small_kern_back_filter_simdgr(
                 output = output + workgroup_data[i*768 + ik*256 + ic*16 + oc];
             }
             let out_idx = get_linear_index(tensor_dimension_params.dst, oc, ic, ik);
-            atomic_fetch_add_explicit(&dst[out_idx], output, memory_order_relaxed);
+            scratch[tensor_dimension_params.dst.nb[3]*ir + out_idx] = output;
+            // atomic_fetch_add_explicit(&dst[out_idx], output, memory_order_relaxed);
         }
     }
+}
+
+
+kernel void kernel_conv_1d_small_kern_back_filter_simdgr_stage2(
+        device const float*  scratch,
+        device float*  dst,
+        constant  TensorDimensionParams & tensor_dimension_params,
+        uint3 global_id[[thread_position_in_grid]]) {
+    let num_batches = tensor_dimension_params.src[0].ne[2];
+    float output = 0.0;
+    let out_idx = get_linear_index(tensor_dimension_params.dst, global_id.x, global_id.y, global_id.z);
+    for (uint ir = 0; ir < num_batches; ir+=1) {
+        let scratch_idx = tensor_dimension_params.dst.nb[3]*ir + out_idx;
+        output = output + scratch[scratch_idx];
+    }
+    dst[out_idx] = output;
 }
 
 
