@@ -156,6 +156,8 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_input_simdgr_f16);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter_simdgr);
     GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter_simdgr_stage2);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter_simdgr_f16);
+    GGML_METAL_DECL_KERNEL(conv_1d_small_kern_back_filter_simdgr_stage2_f16);
     GGML_METAL_DECL_KERNEL(sum);
     GGML_METAL_DECL_KERNEL(sum_f16);
     GGML_METAL_DECL_KERNEL(add_and_trim);
@@ -369,6 +371,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_input_simdgr_f16);
             GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter_simdgr);
             GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter_simdgr_stage2);
+            GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter_simdgr_f16);
+            GGML_METAL_ADD_KERNEL(conv_1d_small_kern_back_filter_simdgr_stage2_f16);
         }
         GGML_METAL_ADD_KERNEL(rope_f32);
         GGML_METAL_ADD_KERNEL(rope_f16);
@@ -505,6 +509,8 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
         GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_input_simdgr_f16);
         GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter_simdgr);
         GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter_simdgr_stage2);
+        GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter_simdgr_f16);
+        GGML_METAL_DEL_KERNEL(conv_1d_small_kern_back_filter_simdgr_stage2_f16);
     }
     GGML_METAL_DEL_KERNEL(rope_f32);
     GGML_METAL_DEL_KERNEL(rope_f16);
@@ -1210,13 +1216,13 @@ void ggml_metal_graph_compute(
                             int smem_size = threadgroupSize*sizeof(float);
 
 #if 1
-                            if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels) && dst->type == GGML_TYPE_F32) {
+                            if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && (8 == input_channels || 16 == input_channels) && (8 == output_channels || 16 == output_channels)) {
                                 dispatch_x = 1;
                                 dispatch_y = 1;
                                 dispatch_z = num_batches;
-                                smem_size = 16*16*3*8*sizeof(float);
+                                smem_size = 16*16*3*8*ggml_element_size(dst);
 
-                                [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_back_filter_simdgr];
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_filter_simdgr)
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                 [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                                 [encoder setBuffer:ctx->scratch_buffer  offset:0  atIndex:2];
@@ -1224,7 +1230,7 @@ void ggml_metal_graph_compute(
                                 [encoder setThreadgroupMemoryLength:smem_size atIndex:0];
                                 [encoder dispatchThreadgroups:MTLSizeMake(dispatch_x, dispatch_y, dispatch_z) threadsPerThreadgroup:MTLSizeMake(threadgroupSize, 1, 1)];
 
-                                [encoder setComputePipelineState:ctx->pipeline_conv_1d_small_kern_back_filter_simdgr_stage2];
+                                GGML_METAL_SET_F32_OR_F16_PIPELINE(conv_1d_small_kern_back_filter_simdgr_stage2)
                                 [encoder setBuffer:ctx->scratch_buffer offset:0 atIndex:0];
                                 [encoder setBuffer:id_dst offset:offs_dst atIndex:1];
                                 [encoder setBytes:&this_op_params length:sizeof(this_op_params) atIndex:2];
