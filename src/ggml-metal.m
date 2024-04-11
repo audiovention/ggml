@@ -50,7 +50,7 @@ struct ggml_metal_operator_params {
 };
 
 const size_t GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL = 512;
-
+#define METAL_SCRATCH_BUFFER_SIZE (64*1024*1024)
 
 struct ggml_metal_context {
     int n_cb;
@@ -69,6 +69,7 @@ struct ggml_metal_context {
 
     id<MTLBuffer> tensor_dimension_operation_params;
     struct ggml_metal_operator_params tensor_dimension_operation_params_host[GGML_MAX_NODES];
+    id<MTLBuffer> scratch_buffer;
 
     int n_buffers;
     struct ggml_metal_buffer buffers[GGML_METAL_MAX_BUFFERS];
@@ -253,6 +254,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     ctx->d_queue = dispatch_queue_create("ggml-metal", DISPATCH_QUEUE_CONCURRENT);
 
     ctx->tensor_dimension_operation_params = [ctx->device newBufferWithBytesNoCopy:&(ctx->tensor_dimension_operation_params_host) length:GGML_METAL_OPERATOR_PARAMS_SIZE_TOTAL*GGML_MAX_NODES options:MTLResourceStorageModeShared deallocator:nil];
+    ctx->scratch_buffer = [ctx->device newBufferWithLength:METAL_SCRATCH_BUFFER_SIZE options:MTLResourceStorageModePrivate];
 
     // load library
     {
@@ -546,6 +548,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
 #undef GGML_METAL_DEL_KERNEL
 
     [ctx->tensor_dimension_operation_params release];
+    [ctx->scratch_buffer release];
     for (int i = 0; i < ctx->n_buffers; ++i) {
         [ctx->buffers[i].metal release];
     }
