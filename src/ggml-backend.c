@@ -134,6 +134,23 @@ bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor *
     return backend->iface.supports_op(backend, op);
 }
 
+void ggml_backend_simple_set_tensor(ggml_backend_t backend, struct ggml_tensor * t)
+{
+    backend->iface.simple_set_tensor(backend, t);
+}
+
+void ggml_backend_simple_get_tensor(ggml_backend_t backend, struct ggml_tensor * t)
+{
+    backend->iface.simple_get_tensor(backend, t);
+}
+
+bool ggml_backend_simple_add_buffer(ggml_backend_t backend, const char * name, void * data, size_t size, size_t max_size)
+{
+    return backend->iface.simple_add_buffer(backend, name, data, size, max_size);
+}
+
+
+
 // backend copy
 
 static bool ggml_are_same_layout(const struct ggml_tensor * a, const struct ggml_tensor * b) {

@@ -129,6 +129,11 @@ extern "C" {
     GGML_API void ggml_backend_graph_compute     (ggml_backend_t backend, struct ggml_cgraph * cgraph);
     GGML_API bool ggml_backend_supports_op       (ggml_backend_t backend, const struct ggml_tensor * op);
 
+    // New interface - for now common to wgpu/metal only
+    GGML_API void ggml_backend_simple_set_tensor(ggml_backend_t backend, struct ggml_tensor * t);
+    GGML_API void ggml_backend_simple_get_tensor(ggml_backend_t backend, struct ggml_tensor * t);
+    GGML_API bool ggml_backend_simple_add_buffer(ggml_backend_t backend, const char * name, void * data, size_t size, size_t max_size);
+
     // tensor copy between different backends
     GGML_API void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst);
 
