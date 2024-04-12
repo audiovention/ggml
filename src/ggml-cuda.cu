@@ -7765,6 +7765,9 @@ static ggml_backend_i cuda_backend_i = {
     /* .graph_plan_compute  = */ ggml_backend_cuda_graph_plan_compute,
     /* .graph_compute       = */ ggml_backend_cuda_graph_compute,
     /* .supports_op         = */ nullptr,
+    /* .simple_set_tensor   = */ nullptr,
+    /* .simple_get_tensor   = */ nullptr,
+    /* .simple_add_buffer   = */ nullptr,
 };
 
 ggml_backend_t ggml_backend_cuda_init() {

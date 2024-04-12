@@ -2055,6 +2055,22 @@ static bool ggml_backend_metal_supports_op(ggml_backend_t backend, const struct 
     UNUSED(op);
 }
 
+static void ggml_backend_metal_simple_set_tensor(ggml_backend_t backend, struct ggml_tensor * t) {
+    struct ggml_metal_context * metal_ctx = (struct ggml_metal_context *)backend->context;
+    ggml_metal_set_tensor(metal_ctx, t);
+}
+
+static void ggml_backend_metal_simple_get_tensor(ggml_backend_t backend, struct ggml_tensor * t) {
+    struct ggml_metal_context * metal_ctx = (struct ggml_metal_context *)backend->context;
+    ggml_metal_get_tensor(metal_ctx, t);
+}
+
+static bool ggml_backend_metal_simple_add_buffer(ggml_backend_t backend, const char * name, void * data, size_t size, size_t max_size) {
+    struct ggml_metal_context * metal_ctx = (struct ggml_metal_context *)backend->context;
+    return ggml_metal_add_buffer(metal_ctx, name, data, size, max_size);
+}
+
+
 static struct ggml_backend_i metal_backend_i = {
     /* .get_name            = */ ggml_backend_metal_name,
     /* .free                = */ ggml_backend_metal_free,
@@ -2070,6 +2086,9 @@ static struct ggml_backend_i metal_backend_i = {
     /* .graph_plan_compute  = */ NULL,
     /* .graph_compute       = */ ggml_backend_metal_graph_compute,
     /* .supports_op         = */ ggml_backend_metal_supports_op,
+    /* .simple_set_tensor   = */ ggml_backend_metal_simple_set_tensor,
+    /* .simple_get_tensor   = */ ggml_backend_metal_simple_get_tensor,
+    /* .simple_add_buffer   = */ ggml_backend_metal_simple_add_buffer,
 };
 
 ggml_backend_t ggml_backend_metal_init(void) {

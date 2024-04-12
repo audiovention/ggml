@@ -89,6 +89,12 @@ extern "C" {
 
         // check if the backend supports an operation
         bool (*supports_op)(ggml_backend_t backend, const struct ggml_tensor * op);
+
+        // New interface - for now common to wgpu/metal only
+        void (*simple_set_tensor)(ggml_backend_t backend, struct ggml_tensor * t);
+        void (*simple_get_tensor)(ggml_backend_t backend, struct ggml_tensor * t);
+        bool (*simple_add_buffer)(ggml_backend_t backend, const char * name, void * data, size_t size, size_t max_size);
+
     };
 
     // TODO: hide behind API

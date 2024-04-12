@@ -342,6 +342,25 @@ static bool ggml_backend_cpu_supports_op(ggml_backend_t backend, const struct gg
     UNUSED(op);
 }
 
+static void ggml_backend_cpu_simple_set_tensor(ggml_backend_t backend, struct ggml_tensor * t) {
+    UNUSED(backend);
+    UNUSED(t);
+}
+
+static void ggml_backend_cpu_simple_get_tensor(ggml_backend_t backend, struct ggml_tensor * t) {
+    UNUSED(backend);
+    UNUSED(t);
+}
+
+static bool ggml_backend_cpu_simple_add_buffer(ggml_backend_t backend, const char * name, void * data, size_t size, size_t max_size) {
+    UNUSED(backend);
+    UNUSED(name);
+    UNUSED(data);
+    UNUSED(size);
+    UNUSED(max_size);
+    return true;
+}
+
 static struct ggml_backend_i cpu_backend_i = {
     /* .get_name            = */ ggml_backend_cpu_name,
     /* .free                = */ ggml_backend_cpu_free,
@@ -357,6 +376,9 @@ static struct ggml_backend_i cpu_backend_i = {
     /* .graph_plan_compute  = */ ggml_backend_cpu_graph_plan_compute,
     /* .graph_compute       = */ ggml_backend_cpu_graph_compute,
     /* .supports_op         = */ ggml_backend_cpu_supports_op,
+    /* .simple_set_tensor   = */ ggml_backend_cpu_simple_set_tensor,
+    /* .simple_get_tensor   = */ ggml_backend_cpu_simple_get_tensor,
+    /* .simple_add_buffer   = */ ggml_backend_cpu_simple_add_buffer,
 };
 
 ggml_backend_t ggml_backend_cpu_init(void) {
