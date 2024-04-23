@@ -94,6 +94,7 @@ extern "C" {
         void (*simple_set_tensor)(ggml_backend_t backend, struct ggml_tensor * t);
         void (*simple_get_tensor)(ggml_backend_t backend, struct ggml_tensor * t);
         bool (*simple_add_buffer)(ggml_backend_t backend, const char * name, void * data, size_t size, size_t max_size);
+        void (*simple_read_back_buffer)(ggml_backend_t backend, const char * name);
 
     };
 
@@ -133,6 +134,7 @@ extern "C" {
     GGML_API void ggml_backend_simple_set_tensor(ggml_backend_t backend, struct ggml_tensor * t);
     GGML_API void ggml_backend_simple_get_tensor(ggml_backend_t backend, struct ggml_tensor * t);
     GGML_API bool ggml_backend_simple_add_buffer(ggml_backend_t backend, const char * name, void * data, size_t size, size_t max_size);
+    GGML_API void ggml_backend_simple_read_back_buffer(ggml_backend_t backend, const char * name);
 
     // tensor copy between different backends
     GGML_API void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst);

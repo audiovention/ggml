@@ -7768,6 +7768,7 @@ static ggml_backend_i cuda_backend_i = {
     /* .simple_set_tensor   = */ nullptr,
     /* .simple_get_tensor   = */ nullptr,
     /* .simple_add_buffer   = */ nullptr,
+    /* .simple_read_back_buffer  = */ nullptr,
 };
 
 ggml_backend_t ggml_backend_cuda_init() {

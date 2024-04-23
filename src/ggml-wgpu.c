@@ -3579,6 +3579,11 @@ static bool ggml_backend_wgpu_simple_add_buffer(ggml_backend_t backend, const ch
     return ggml_wgpu_add_buffer(wgpu_ctx, name, data, size, max_size);
 }
 
+static void ggml_backend_wgpu_simple_read_back_buffer(ggml_backend_t backend, const char * name) {
+    struct ggml_wgpu_context * wgpu_ctx = (struct ggml_wgpu_context *)backend->context;
+    ggml_wgpu_read_back_buffer(wgpu_ctx, name);
+}
+
 static struct ggml_backend_i wgpu_backend_i = {
     /* .get_name            = */ ggml_backend_wgpu_name,
     /* .free                = */ ggml_backend_wgpu_free,
@@ -3597,6 +3602,7 @@ static struct ggml_backend_i wgpu_backend_i = {
     /* .simple_set_tensor   = */ ggml_backend_wgpu_simple_set_tensor,
     /* .simple_get_tensor   = */ ggml_backend_wgpu_simple_get_tensor,
     /* .simple_add_buffer   = */ ggml_backend_wgpu_simple_add_buffer,
+    /* .simple_read_back_buffer = */ ggml_backend_wgpu_simple_read_back_buffer,
 };
 
 ggml_backend_t ggml_backend_wgpu_init(void) {

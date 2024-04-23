@@ -149,6 +149,10 @@ bool ggml_backend_simple_add_buffer(ggml_backend_t backend, const char * name, v
     return backend->iface.simple_add_buffer(backend, name, data, size, max_size);
 }
 
+void ggml_backend_simple_read_back_buffer(ggml_backend_t backend, const char * name)
+{
+    backend->iface.simple_read_back_buffer(backend, name);
+}
 
 
 // backend copy
@@ -378,6 +382,11 @@ static bool ggml_backend_cpu_simple_add_buffer(ggml_backend_t backend, const cha
     return true;
 }
 
+static void ggml_backend_cpu_simple_read_back_buffer(ggml_backend_t backend, const char * name) {
+    UNUSED(backend);
+    UNUSED(name);
+}
+
 static struct ggml_backend_i cpu_backend_i = {
     /* .get_name            = */ ggml_backend_cpu_name,
     /* .free                = */ ggml_backend_cpu_free,
@@ -396,6 +405,7 @@ static struct ggml_backend_i cpu_backend_i = {
     /* .simple_set_tensor   = */ ggml_backend_cpu_simple_set_tensor,
     /* .simple_get_tensor   = */ ggml_backend_cpu_simple_get_tensor,
     /* .simple_add_buffer   = */ ggml_backend_cpu_simple_add_buffer,
+    /* .simple_read_back_buffer = */ ggml_backend_cpu_simple_read_back_buffer,
 };
 
 ggml_backend_t ggml_backend_cpu_init(void) {

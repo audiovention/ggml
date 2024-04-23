@@ -2070,6 +2070,32 @@ static bool ggml_backend_metal_simple_add_buffer(ggml_backend_t backend, const c
     return ggml_metal_add_buffer(metal_ctx, name, data, size, max_size);
 }
 
+static void ggml_backend_metal_simple_read_back_buffer(ggml_backend_t backend, const char * name) {
+    struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
+
+    struct ggml_metal_buffer * buffer = NULL;
+    for (int i = 0; i < ctx->n_buffers; ++i) {
+        if (strcmp(ctx->buffers[i].name, name) == 0) {
+            GGML_ASSERT(buffer == NULL); // this function does not yet support reading split buffers
+            buffer = &ctx->buffers[i];
+        }
+    }
+
+    GGML_ASSERT(buffer);
+
+    const size_t original_size = buffer->size;
+
+    const size_t size_page = sysconf(_SC_PAGESIZE);
+
+    size_t size_aligned = size;
+    if ((size_aligned % size_page) != 0) {
+        size_aligned += (size_page - (size_aligned % size_page));
+    }
+
+    id<MTLBuffer> id_src = buffer->metal;
+
+    memcpy(buffer->data, (void *) ((uint8_t *) id_src.contents), original_size);
+}
 
 static struct ggml_backend_i metal_backend_i = {
     /* .get_name            = */ ggml_backend_metal_name,
@@ -2089,6 +2115,7 @@ static struct ggml_backend_i metal_backend_i = {
     /* .simple_set_tensor   = */ ggml_backend_metal_simple_set_tensor,
     /* .simple_get_tensor   = */ ggml_backend_metal_simple_get_tensor,
     /* .simple_add_buffer   = */ ggml_backend_metal_simple_add_buffer,
+    /* .simple_read_back_buffer = */ ggml_backend_metal_simple_read_back_buffer,
 };
 
 ggml_backend_t ggml_backend_metal_init(void) {
