@@ -6,6 +6,8 @@
 
 #import <Metal/Metal.h>
 
+#include "ggml-metal-shader.h"
+
 #undef MIN
 #undef MAX
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -268,6 +270,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
 #endif
         NSError * error = nil;
+
+#if 0
         NSString * libPath = [bundle pathForResource:@"default" ofType:@"metallib"];
         if (libPath != nil) {
             NSURL * libURL = [NSURL fileURLWithPath:libPath];
@@ -291,6 +295,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #endif
             ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
         }
+
+#else
+        NSData *shaderPlainData = [NSData dataWithBytes:DEFAULT_METALLIB length:DEFAULT_METALLIB_SIZE];
+        ctx->library = [ctx->device newLibraryWithData:shaderPlainData error:&error];
+#endif
 
         if (error) {
             GGML_METAL_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
