@@ -248,7 +248,8 @@ if (GGML_METAL)
         COMMAND xcrun -sdk macosx metal    ${XC_FLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
         COMMAND xcrun -sdk macosx metallib                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air   -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
         COMMAND rm -f ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
-        COMMAND rm -f ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal
+        COMMAND ${CMAKE_COMMAND} -P embed_compiled_metal_shader.cmake
+        COMMAND rm -f ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
         DEPENDS ggml-metal.metal
         COMMENT "Compiling Metal kernels"
         )
