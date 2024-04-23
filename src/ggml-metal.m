@@ -2087,7 +2087,7 @@ static void ggml_backend_metal_simple_read_back_buffer(ggml_backend_t backend, c
 
     const size_t size_page = sysconf(_SC_PAGESIZE);
 
-    size_t size_aligned = size;
+    size_t size_aligned = original_size;
     if ((size_aligned % size_page) != 0) {
         size_aligned += (size_page - (size_aligned % size_page));
     }
