@@ -241,11 +241,23 @@ if (GGML_METAL)
     add_compile_definitions(GGML_USE_METAL)
     #add_compile_definitions(GGML_METAL_NDEBUG)
 
-    # get full path to the file
-    #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
+    set(XC_FLAGS -O3)
 
-    # copy ggml-metal.metal to bin directory
-    configure_file(ggml-metal.metal ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal COPYONLY)
+    add_custom_command(
+        OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
+        COMMAND xcrun -sdk macosx metal    ${XC_FLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
+        COMMAND xcrun -sdk macosx metallib                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air   -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
+        COMMAND rm -f ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
+        COMMAND rm -f ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal
+        DEPENDS ggml-metal.metal
+        COMMENT "Compiling Metal kernels"
+        )
+
+    add_custom_target(
+        ggml-metal ALL
+        DEPENDS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
+        )
+
 
     set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS}
         ${FOUNDATION_LIBRARY}
