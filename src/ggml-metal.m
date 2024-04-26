@@ -245,6 +245,15 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
     // Pick and show default Metal device
     device = MTLCreateSystemDefaultDevice();
+
+    if ([device supportsFamily: MTLGPUFamilyMetal3]) {
+
+    } else {
+        GGML_METAL_LOG_INFO("%s: error: no Metal 3 support\n", __func__);
+        [device release];
+        return NULL;
+    }
+
     s = [device name];
     GGML_METAL_LOG_INFO("%s: picking default device: %s\n", __func__, [s UTF8String]);
 
