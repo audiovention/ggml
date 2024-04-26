@@ -242,6 +242,10 @@ if (GGML_METAL)
     #add_compile_definitions(GGML_METAL_NDEBUG)
 
     set(XC_FLAGS -O3)
+    set(LLAMA_METAL_MACOSX_VERSION_MIN "10.13" CACHE STRING "Minimum macOS version for Metal")
+    list(APPEND XC_FLAGS -mmacosx-version-min=${LLAMA_METAL_MACOSX_VERSION_MIN})
+    list(APPEND XC_FLAGS -std=macos-metal2.4)
+    
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal-shader.h
