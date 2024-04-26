@@ -371,6 +371,7 @@ kernel void kernel_conv_1d_small_kern(
     }
 
     if (apply_tanh) {
+        output = clamp(output, -20.0, 20.0);
         output = tanh(output);
     }
 
@@ -516,6 +517,7 @@ kernel void kernel_conv_1d_small_kern_nx8kx8m_simdgr(
         }
 
         if (apply_tanh) {
+            output = clamp(output, -20.0, 20.0);
             output = tanh(output);
         }
 
@@ -662,6 +664,7 @@ kernel void kernel_conv_1d_small_kern_nx8kx8m_simdgr_f16(
         }
 
         if (apply_tanh) {
+            output = clamp(output, -20.0, 20.0);
             output = tanh(output);
         }
 
@@ -721,6 +724,7 @@ kernel void kernel_conv_1d_small_kern_f16(
     }
 
     if (apply_tanh) {
+        output = clamp(output, -20.0, 20.0);
         output = tanh(output);
     }
 
@@ -769,6 +773,7 @@ kernel void kernel_conv_1d_small_kern_no_offset_small_dil(
     }
 
     if (apply_tanh) {
+        output = clamp(output, -20.0, 20.0);
         output = tanh(output);
     }
 
@@ -816,6 +821,7 @@ kernel void kernel_conv_1d_small_kern_no_offset_small_dil_f16(
     }
 
     if (apply_tanh) {
+        output = clamp(output, -20.0, 20.0);
         output = tanh(output);
     }
 
@@ -951,6 +957,7 @@ kernel void kernel_conv_1d_small_kern_no_offsets(
     }
 
     if (apply_tanh) {
+        output = clamp(output, float4(-20.0), float4(20.0));
         output = tanh(output);
     }
 
@@ -1008,6 +1015,7 @@ kernel void kernel_conv_1d_small_kern_no_offsets_f16(
     }
 
     if (apply_tanh) {
+        output = clamp(output, float4(-20.0), float4(20.0));
         output = tanh(output);
     }
 
