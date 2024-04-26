@@ -496,6 +496,7 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
     }
 
     if (apply_tanh) {
+        output = clamp(output, -20.0, 20.0);
         output = tanh(output);
     }
 
@@ -556,6 +557,7 @@ fn kernel_conv_1d_small_kern_no_offset_small_dil(@builtin(global_invocation_id) 
     }
 
     if (apply_tanh) {
+        output = clamp(output, -20.0, 20.0);
         output = tanh(output);
     }
 
@@ -625,6 +627,7 @@ fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3
     }
 
     if (apply_tanh) {
+        output = clamp(output, vec2f(-20.0), vec2f(20.0));
         output = tanh(output);
     }
 
@@ -679,6 +682,7 @@ fn kernel_conv_1d_small_kern_div_no_offs_pf16(@builtin(global_invocation_id) glo
     }
 
     if (apply_tanh) {
+        output = clamp(output, vec2f(-20.0), vec2f(20.0));
         output = tanh(output);
     }
 
@@ -740,6 +744,7 @@ fn kernel_conv_1d_small_kern_no_offsets(@builtin(global_invocation_id) global_id
     }
 
     if (apply_tanh) {
+        output = clamp(output, vec4f(-20.0), vec4f(20.0));
         output = tanh(output);
     }
 
@@ -1012,13 +1017,16 @@ var<workgroup> workgroup_data: array<f32, 256>;
 fn kernel_sum(@builtin(global_invocation_id) global_id: vec3<u32>, 
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
-    let ne00 = tensor_dimension_params.src[0].nb[1] / tensor_dimension_params.src[0].nb[0];
-    let num_el_src0 = ne00 * u32(tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
+    let ne00_padded = tensor_dimension_params.src[0].nb[1] / tensor_dimension_params.src[0].nb[0];
+    let ne00 = u32(tensor_dimension_params.src[0].ne[0]);
+    let num_el_src0 = ne00_padded * u32(tensor_dimension_params.src[0].ne[1] * tensor_dimension_params.src[0].ne[2] * tensor_dimension_params.src[0].ne[3]);
 
     var sum : f32 = 0.0;
     
     for (var i = local_id.x; i < num_el_src0; i = i + 256u) {
-        sum = sum + get_src0_lin(i);
+        if ((i%ne00_padded) < ne00) {
+            sum = sum + get_src0_lin(i);
+        }
     }
 
     workgroup_data[local_id.x] = sum;
@@ -1075,15 +1083,23 @@ static const char src_ggml_shader_kernel_repeat[] = MULTILINE(
 @compute
 @workgroup_size(256)
 fn kernel_repeat(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
+    let ne00_padded = tensor_dimension_params.dst.nb[1] / tensor_dimension_params.dst.nb[0];
+    let ne00 = u32(tensor_dimension_params.dst.ne[0]);
+
+    if (global_id.x >= ne00_padded) {
         return;
     }
 
-    let idx0 = global_id.x * u32(tensor_dimension_params.src[0].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
-    let idx1 = global_id.y * u32(tensor_dimension_params.src[0].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
-    let idx2 = global_id.z * u32(tensor_dimension_params.src[0].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
+    var output : f32 = 0.0;
+    if (global_id.x < ne00) {
+        let idx0 = global_id.x * u32(tensor_dimension_params.src[0].ne[0]) / u32(tensor_dimension_params.dst.ne[0]);
+        let idx1 = global_id.y * u32(tensor_dimension_params.src[0].ne[1]) / u32(tensor_dimension_params.dst.ne[1]);
+        let idx2 = global_id.z * u32(tensor_dimension_params.src[0].ne[2]) / u32(tensor_dimension_params.dst.ne[2]);
 
-    set_dst(global_id.x, global_id.y, global_id.z, get_src0(idx0, idx1, idx2));
+        output = get_src0(idx0, idx1, idx2);
+    }
+
+    set_dst(global_id.x, global_id.y, global_id.z, output);
 }
 
 );
@@ -1121,7 +1137,9 @@ static const char src_ggml_shader_kernel_mul[] = MULTILINE(
 @compute
 @workgroup_size(256)
 fn kernel_mul(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= u32(tensor_dimension_params.dst.ne[0])) {
+    let ne00_padded = tensor_dimension_params.dst.nb[1] / tensor_dimension_params.dst.nb[0];
+
+    if (global_id.x >= ne00_padded) {
         return;
     }
 
@@ -2018,8 +2036,8 @@ fn kernel_special_adam_step(@builtin(global_invocation_id) global_id: vec3<u32>)
     var m = get_src2_lin(global_id.x);
     var v = get_src3_lin(global_id.x);
 
-    m = m*beta1 +   g*(1.0 - beta1);
-    v = v*beta2 + g*g*(1.0 - beta2);
+    m = mix(g, m, beta1); // m*beta1 +   g*(1.0 - beta1);
+    v = mix(g*g, v, beta2); // v*beta2 + g*g*(1.0 - beta2);
     let mh = m*beta1h;
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
@@ -2053,8 +2071,8 @@ fn kernel_special_adam_step_inplace(@builtin(global_invocation_id) global_id: ve
     var m = get_src2_lin(global_id.x);
     var v = get_src3_lin(global_id.x);
 
-    m = m*beta1 +   g*(1.0 - beta1);
-    v = v*beta2 + g*g*(1.0 - beta2);
+    m = mix(g, m, beta1); // m*beta1 +   g*(1.0 - beta1);
+    v = mix(g*g, v, beta2); // v*beta2 + g*g*(1.0 - beta2);
     let mh = m*beta1h;
     let vh = sqrt(v*beta2h) + eps;
     x = x - mh/vh;
