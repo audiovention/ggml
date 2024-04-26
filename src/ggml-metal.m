@@ -246,10 +246,10 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     // Pick and show default Metal device
     device = MTLCreateSystemDefaultDevice();
 
-    if ([device supportsFamily: MTLGPUFamilyMetal3]) {
+    if ([device supportsFamily: MTLGPUFamilyMetal3] && [device hasUnifiedMemory]) {
 
     } else {
-        GGML_METAL_LOG_INFO("%s: error: no Metal 3 support\n", __func__);
+        GGML_METAL_LOG_INFO("%s: error: no Metal 3 support or no unified memory\n", __func__);
         [device release];
         return NULL;
     }
