@@ -229,6 +229,12 @@ static void ggml_metal_log(enum ggml_log_level level, const char* format, ...){
 
 
 struct ggml_metal_context * ggml_metal_init(int n_cb) {
+    if (@available(macOS 11.0, *)) {
+
+    } else {
+        GGML_METAL_LOG_INFO("%s: error: macOS 11.0 or later is required\n", __func__);
+        return NULL;
+    }
     GGML_METAL_LOG_INFO("%s: allocating\n", __func__);
 
     id <MTLDevice> device;
@@ -246,7 +252,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     // Pick and show default Metal device
     device = MTLCreateSystemDefaultDevice();
 
-    if ([device supportsFamily: MTLGPUFamilyMetal3] && [device hasUnifiedMemory]) {
+    if ([device supportsFamily: MTLGPUFamilyMac2] && [device hasUnifiedMemory]) {
 
     } else {
         GGML_METAL_LOG_INFO("%s: error: no Metal 3 support or no unified memory\n", __func__);
