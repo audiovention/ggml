@@ -1995,8 +1995,10 @@ static const char * ggml_backend_metal_name(ggml_backend_t backend) {
 }
 
 static void ggml_backend_metal_free(ggml_backend_t backend) {
-    struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
-    ggml_metal_free(ctx);
+    if (backend->context != NULL) {
+        struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
+        ggml_metal_free(ctx);
+    }
     free(backend);
 }
 
@@ -2143,7 +2145,7 @@ static struct ggml_backend_i metal_backend_i = {
 };
 
 ggml_backend_t ggml_backend_metal_init(void) {
-    struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
+    struct ggml_metal_context * ctx;
 
     ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
 
