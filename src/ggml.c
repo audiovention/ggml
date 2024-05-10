@@ -15059,39 +15059,55 @@ static void ggml_compute_forward_conv_1d_small_kern(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
-        if (initialize_output) {
-            for (int oc_idx=0; oc_idx<output_channels; oc_idx++) {
-                const float val = has_bias ? *((float *)((char *) src2->data + oc_idx*src2->nb[1])) : 0;
-                float * dst_data = (float *)((char *) dst->data + ir*nb2 + oc_idx*nb1);
-                if (has_inject_signal) {
-                    float * inject_src_data = (float *)((char *) src3->data + ir*src3->nb[2] + oc_idx*src3->nb[1] + (src3->ne[0] - output_len)*src3->nb[0]);
-                    ggml_vec_add1_f32(output_len, dst_data, inject_src_data, val);
-                } else {
-                    ggml_vec_set_f32(output_len, dst_data, val);
+        const int output_offset_step = 64;
+        const int output_offset_steps = (output_len + output_offset_step - 1) / output_offset_step;
+        for (int this_output_offset_step=0; this_output_offset_step<output_offset_steps; this_output_offset_step++){
+            const int output_offset = this_output_offset_step * output_offset_step;
+            const int this_output_len = MIN(output_offset_step, output_len - output_offset);
+
+            if (initialize_output) {
+                for (int oc_idx=0; oc_idx<output_channels; oc_idx++) {
+                    const float val = has_bias ? *((float *)((char *) src2->data + oc_idx*src2->nb[1])) : 0;
+                    float * dst_data = (float *)((char *) dst->data + ir*nb2 + oc_idx*nb1);
+                    if (has_inject_signal) {
+                        float * inject_src_data = (float *)((char *) src3->data + ir*src3->nb[2] + oc_idx*src3->nb[1] + (src3->ne[0] - output_len)*src3->nb[0]);
+                        ggml_vec_add1_f32(this_output_len, dst_data+output_offset, inject_src_data+output_offset, val);
+                    } else {
+                        ggml_vec_set_f32(this_output_len, dst_data+output_offset, val);
+                    }
                 }
             }
-        }
 
-        float * dst_data = (float *)((char *) dst->data + ir*nb2);
+            float * dst_data = (float *)((char *) dst->data + ir*nb2);
 
-        for (int ik = 0; ik < nk; ik++) {
-            const float * kern_data = (float *)((char *) src0->data + ik*nb02);
-            const long offset = d0 * ik;
+            for (int ik = 0; ik < nk; ik++) {
+                const float * kern_data = (float *)((char *) src0->data + ik*nb02);
+                const long offset = d0 * ik;
 
-            float * src_data = (float *)((char *) src1->data + ir*nb12 + (offset + input_len - real_input_len)*nb10);
+                float * src_data = (float *)((char *) src1->data + ir*nb12 + (offset + input_len - real_input_len)*nb10);
 #if GGML_USE_MYBLAS
-            my_cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                my_cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
 #else
-            cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                cblas_sgemm(CblasColMajor, CblasNoTrans, CblasTrans,
 #endif
-                    output_len, output_channels, input_channels,
-                    1.0f,   src_data,  nb11/nb10,
-                            kern_data, nb01/nb00,
-                    ((ik==0 && !initialize_output) ? 0.0f : 1.0f),   dst_data,  nb1/nb0);
-        }
+                        this_output_len, output_channels, input_channels,
+                        1.0f,   src_data+output_offset,  nb11/nb10,
+                                kern_data, nb01/nb00,
+                        ((ik==0 && !initialize_output) ? 0.0f : 1.0f),   dst_data+output_offset,  nb1/nb0
+#if GGML_USE_MYBLAS
+                        , apply_tanh && (ik == (nk-1))
+#endif
+                        );
+            }
 
-        if (apply_tanh) {
-            ggml_vec_tanh_f32(nb2 / nb0, dst_data, dst_data);
+#if GGML_USE_MYBLAS
+#else
+            if (apply_tanh) {
+                for (int oc_idx=0; oc_idx<output_channels; oc_idx++) {
+                    ggml_vec_tanh_f32(this_output_len, dst_data+output_offset+ oc_idx*nb1/nb0, dst_data+output_offset+ oc_idx*nb1/nb0);
+                }
+            }
+#endif
         }
     }
 }
@@ -15185,7 +15201,11 @@ static void ggml_compute_forward_conv_1d_small_kern_back_input(
                     output_len, input_channels, output_channels,
                     1.0f,   src_data,  nb11/nb10,
                             kern_data, nb01/nb00,
-                    1.0f,   dst_data,  nb1/nb0);
+                    1.0f,   dst_data,  nb1/nb0
+#if GGML_USE_MYBLAS
+                    , false
+#endif
+                    );
         }
     }
 }
@@ -15270,7 +15290,11 @@ static void ggml_compute_forward_conv_1d_small_kern_back_filter(
                     output_channels, input_channels, output_len,
                     1.0f,   A_src_data_gradient,  nb11/nb10,
                             B_src_data_signal, nb01/nb00,
-                    ((ir == 0) ? 0.0f : 1.0f),   kern_data,  nb1/nb0);
+                    ((ir == 0) ? 0.0f : 1.0f),   kern_data,  nb1/nb0
+#if GGML_USE_MYBLAS
+                    , false
+#endif
+                    );
         }
     }
 }
