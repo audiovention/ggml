@@ -15059,7 +15059,7 @@ static void ggml_compute_forward_conv_1d_small_kern(
     const int ir1 = MIN(ir0 + dr, nr);
 
     for (int ir = ir0; ir < ir1; ir++) {
-        const int output_offset_step = 64;
+        const int output_offset_step = 65536;
         const int output_offset_steps = (output_len + output_offset_step - 1) / output_offset_step;
         for (int this_output_offset_step=0; this_output_offset_step<output_offset_steps; this_output_offset_step++){
             const int output_offset = this_output_offset_step * output_offset_step;
