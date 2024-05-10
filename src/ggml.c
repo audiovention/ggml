@@ -113,6 +113,12 @@ typedef void * thread_ret_t;
 #include <hbwmalloc.h>
 #endif
 
+#if defined(_MSC_VER) // We support at least sse3 but msvc is not aware of it
+#ifndef __SSE3__
+#define __SSE3__
+#endif
+#endif
+
 // __FMA__ and __F16C__ are not defined in MSVC, however they are implied with AVX2/AVX512
 #if defined(_MSC_VER) && (defined(__AVX2__) || defined(__AVX512F__))
 #ifndef __FMA__
@@ -4020,6 +4026,44 @@ inline static __m256 tanh_fma(__m256 x)
 }
 #endif
 
+#if defined ( __SSE3__ ) || defined ( __x86_64__ )
+inline static __m128 tanh_sse(__m128 x)
+{
+    const __m128 n0 = _mm_set1_ps(4.351839500e+06);
+    const __m128 n1 = _mm_set1_ps(5.605646250e+05);
+    const __m128 n2 = _mm_set1_ps(1.263485352e+04);
+    const __m128 n3 = _mm_set1_ps(4.751771164e+01);
+
+    const __m128 d0 = n0;
+    const __m128 d1 = _mm_set1_ps(2.011170000e+06);
+    const __m128 d2 = _mm_set1_ps(1.027901563e+05);
+    const __m128 d3 = _mm_set1_ps(1.009453430e+03);
+
+    const __m128 max_val = _mm_set1_ps(7.7539052963256836);
+    const __m128 signmask = _mm_set1_ps(-0.0f);
+
+    __m128 signs = _mm_and_ps(x, signmask);
+    x = _mm_andnot_ps(signmask, x);
+    x = _mm_min_ps(x, max_val);
+
+    __m128 f2 = _mm_mul_ps(x, x);
+    // Numerator, Horner's scheme
+    __m128 num = n3;
+    num = _mm_add_ps(_mm_mul_ps(num, f2), n2);
+    num = _mm_add_ps(_mm_mul_ps(num, f2), n1);
+    num = _mm_add_ps(_mm_mul_ps(num, f2), n0);
+    num = _mm_mul_ps(_mm_xor_ps(x, signs), num);
+    __m128 denom = f2;
+    denom = _mm_add_ps(denom, d3);
+    denom = _mm_add_ps(_mm_mul_ps(denom, f2), d2);
+    denom = _mm_add_ps(_mm_mul_ps(denom, f2), d1);
+    denom = _mm_add_ps(_mm_mul_ps(denom, f2), d0);
+    // Denominator, Horner's scheme
+    return _mm_div_ps(num, denom);
+}
+#endif
+
+
 inline static void ggml_vec_norm_f32 (const int n, float * s, const float * x) { ggml_vec_dot_f32(n, s, x, x); *s = sqrtf(*s);   }
 inline static void ggml_vec_sqr_f32  (const int n, float * y, const float * x)
 {
@@ -4055,8 +4099,7 @@ inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x)
 #ifdef GGML_USE_ACCELERATE
     vvtanhf(y, x, &n);
 #else
-    // #ifdef aASDASD__AVX2__
-    #ifdef __AVX2__
+    #if defined(GGML_SIMD) && (defined ( __SSE3__ ) || defined ( __x86_64__ ))
         const int np = (n & ~(GGML_F32_STEP - 1));
 
         GGML_F32_VEC ax[GGML_F32_ARR];
@@ -4064,7 +4107,11 @@ inline static void ggml_vec_tanh_f32 (const int n, float * y, const float * x)
         for (int i = 0; i < np; i += GGML_F32_STEP) {
             for (int j = 0; j < GGML_F32_ARR; j++) {
                 ax[j] = GGML_F32_VEC_LOAD(x + i + j*GGML_F32_EPR);
+#ifdef __AVX2__                
                 ax[j] = tanh_fma(ax[j]);
+#else
+                ax[j] = tanh_sse(ax[j]);
+#endif
                 GGML_F32_VEC_STORE(y + i + j*GGML_F32_EPR, ax[j]);
             }
         }
