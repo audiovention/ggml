@@ -3179,8 +3179,6 @@ void ggml_wgpu_graph_compute(
                     GGML_ASSERT(0 == dst->op_params[1]); // padding
 
                     const int32_t d0 = dst->op_params[2];
-                    const int32_t num_threads_x = 16;
-                    const int32_t vals_per_thread = 16;
                     const int64_t nk = dst->src[0]->ne[2];
                     const int64_t output_len = dst->ne[0];
                     const int64_t real_input_len = output_len + d0*(nk-1);
