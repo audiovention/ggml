@@ -2152,10 +2152,16 @@ kernel void kernel_add_and_tanh_back_f16(
         uint3 wg_id[[threadgroup_position_in_grid]],
         uint3 wg_size[[threads_per_threadgroup]],
         uint3 local_id[[thread_position_in_threadgroup]]) {
-    let x = src0_v4[global_id.x];
-    let y = src1_v4[global_id.x];
-    let z = (1.0 - x*x)*y;
-    dst_v4[global_id.x] = z;
+    let idx1 = 2*global_id.x;
+    let idx2 = idx1+1;
+    let x1 = src0_v4[idx1];
+    let x2 = src0_v4[idx2];
+    let y1 = src1_v4[idx1];
+    let y2 = src1_v4[idx2];
+    let z1 = (1.0 - x1*x1)*y1;
+    let z2 = (1.0 - x2*x2)*y2;
+    dst_v4[idx1] = z1;
+    dst_v4[idx2] = z2;
 }
 
 
