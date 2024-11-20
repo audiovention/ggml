@@ -572,8 +572,6 @@ static const char src_ggml_shader_kernel_conv_1d_small_kern_pf16[] = MULTILINE(
 fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3<u32>, 
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
-    let s0 = u32(tensor_dimension_params.params[0][0]);
-    let p0 = u32(tensor_dimension_params.params[0][1]);
     let d0 = u32(tensor_dimension_params.params[0][2]);
     let apply_tanh = bool(tensor_dimension_params.params[0][3]);
     let has_bias = bool(tensor_dimension_params.params[1][0]);
@@ -599,7 +597,7 @@ fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3
         return;
     }
 
-    let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
+    let real_input_len = output_len + d0*(nk - 1u);
 
     var output = vec2f();
 
@@ -636,6 +634,58 @@ fn kernel_conv_1d_small_kern_pf16(@builtin(global_invocation_id) global_id: vec3
 
 );
 
+static const char src_ggml_shader_kernel_conv_1d_small_kern_nk1_pf16[] = MULTILINE(
+
+@compute
+@workgroup_size(256)
+fn kernel_conv_1d_small_kern_nk1_pf16(@builtin(global_invocation_id) global_id: vec3<u32>, 
+    @builtin(workgroup_id) wg_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>) {
+    let apply_tanh = bool(tensor_dimension_params.params[0][3]);
+    let has_bias = bool(tensor_dimension_params.params[1][0]);
+    let has_inject_signal = bool(tensor_dimension_params.params[1][1]);
+
+
+    let input_channels = u32(tensor_dimension_params.src[0].ne[1]);
+    let output_channels = u32(tensor_dimension_params.dst.ne[1]);
+    let input_len = u32(tensor_dimension_params.src[1].ne[0]);
+    let output_len = u32(tensor_dimension_params.dst.ne[0]);
+    let num_batches = u32(tensor_dimension_params.dst.ne[2]);
+
+    let mult_idx = global_id.x * 2u;
+
+    if (mult_idx >= output_len) {
+        return;
+    }
+
+    var output = vec2f();
+
+    if (has_bias) {
+        let bias = get_src2_pf16(0u, global_id.y, 0u);
+        output += bias;
+    }
+
+    if (has_inject_signal) {
+        output += unpack2x16float(bitcast<u32>(get_src3_lin(calc_src_idx(u32(tensor_dimension_params.src[3].ne[0]) - output_len + mult_idx, global_id.y, global_id.z, 3)/2u)));
+    }
+
+    let base_src1_offset = input_len - output_len + mult_idx + global_id.z * tensor_dimension_params.src[1].nb[2];
+
+    for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
+        let input = unpack2x16float(bitcast<u32>(get_src1_lin((base_src1_offset + ic * tensor_dimension_params.src[1].nb[1])/2u)));
+        let kernel = get_src0_pf16(global_id.y, ic, 0u);
+        output += input * kernel;
+    }
+
+    if (apply_tanh) {
+        output = clamp(output, vec2f(-20.0), vec2f(20.0));
+        output = tanh(output);
+    }
+
+    set_dst_lin(calc_dst_idx(mult_idx, global_id.y, global_id.z)/2u, bitcast<f32>(pack2x16float(output)));
+}
+
+);
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_div_no_offs_pf16[] = MULTILINE(
 
@@ -2219,6 +2269,7 @@ struct ggml_wgpu_context {
     GGML_WGPU_DECL_KERNEL(silu)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_pf16)
+    GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_nk1_pf16)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_simpl)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offsets)
     GGML_WGPU_DECL_KERNEL(conv_1d_small_kern_no_offset_small_dil)
@@ -2551,6 +2602,7 @@ struct ggml_wgpu_context * ggml_wgpu_init(void) {
         GGML_WGPU_ADD_KERNEL(silu);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_pf16);
+        GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_nk1_pf16);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_simpl);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offsets);
         GGML_WGPU_ADD_KERNEL(conv_1d_small_kern_no_offset_small_dil);
@@ -2613,6 +2665,7 @@ void ggml_wgpu_free(struct ggml_wgpu_context * ctx) {
     GGML_WGPU_DEL_KERNEL(silu)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_pf16)
+    GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_nk1_pf16)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_simpl)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offsets)
     GGML_WGPU_DEL_KERNEL(conv_1d_small_kern_no_offset_small_dil)
@@ -3189,7 +3242,13 @@ void ggml_wgpu_graph_compute(
                         if (real_input_len == dst->src[1]->ne[0] && (d0%2==0) && (dst->src[3] == NULL || output_len == dst->src[3]->ne[0])) {
                             GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_div_no_offs_pf16, dispatch_x, dispatch_y, dispatch_z)
                         } else {
-                            GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_pf16, dispatch_x, dispatch_y, dispatch_z)
+                            const int32_t base_offset = dst->src[1]->ne[0] - real_input_len;
+                            const int32_t inject_offset = dst->src[3] ? (dst->src[3]->ne[0] - output_len): 0;
+                            if (1 == nk && 0 == (base_offset % 2) && 0 == (inject_offset % 2)) { // nk=1, we check that base_offset and inject_offset are even but they always are in that case
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_nk1_pf16, dispatch_x, dispatch_y, dispatch_z)
+                            } else {
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_pf16, dispatch_x, dispatch_y, dispatch_z)
+                            }
                         }
                     } else {
 #if 0
