@@ -508,8 +508,6 @@ fn kernel_conv_1d_small_kern(@builtin(global_invocation_id) global_id: vec3<u32>
 
 static const char src_ggml_shader_kernel_conv_1d_small_kern_no_offset_small_dil[] = MULTILINE(
 
-var<workgroup> workgroup_data: array<array<f32, 260>, 16>; // 256 + 4 when dilation is 2 and kernel size is 3
-
 @compute
 @workgroup_size(256)
 fn kernel_conv_1d_small_kern_no_offset_small_dil(@builtin(global_invocation_id) global_id: vec3<u32>, 
@@ -528,69 +526,42 @@ fn kernel_conv_1d_small_kern_no_offset_small_dil(@builtin(global_invocation_id) 
     let output_len = u32(tensor_dimension_params.dst.ne[0]);
     let num_batches = u32(tensor_dimension_params.dst.ne[2]);
 
-    let base_src1_offset = global_id.x - local_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
-
-    let temp_1_idx = local_id.x / 4u;
-    let temp_2_idx = local_id.x % 4u;
-
-    for (var phic = 0u; phic < (input_channels/4u); phic = phic + 1u) {
-        let ic = phic * 4u + temp_2_idx;
-        let in_idx_offset = (ic * tensor_dimension_params.src[1].nb[1]  + base_src1_offset)/4u + temp_1_idx;
-        let ph_dat = src1_v4[in_idx_offset];
-        workgroup_data[ic][4u*temp_1_idx+0u] = ph_dat.x;
-        workgroup_data[ic][4u*temp_1_idx+1u] = ph_dat.y;
-        workgroup_data[ic][4u*temp_1_idx+2u] = ph_dat.z;
-        workgroup_data[ic][4u*temp_1_idx+3u] = ph_dat.w;
-    }
-
-    if (temp_1_idx < input_channels && temp_2_idx == 0u) {
-        let in_idx_offset = (temp_1_idx * tensor_dimension_params.src[1].nb[1]  + base_src1_offset + 256u) / 4u;
-        let ph_dat = src1_v4[in_idx_offset];
-        workgroup_data[temp_1_idx][256u] = ph_dat.x;
-        workgroup_data[temp_1_idx][257u] = ph_dat.y;
-        workgroup_data[temp_1_idx][258u] = ph_dat.z;
-        workgroup_data[temp_1_idx][259u] = ph_dat.w;
-    }
-    workgroupBarrier();
-
     if (global_id.x >= output_len) {
         return;
     }
 
-    for (var oc = 0u; oc < output_channels; oc = oc + 1u) {
+    var output : f32 = 0.0;
 
-        var output : f32 = 0.0;
-
-        if (has_bias) {
-            let bias = get_src2(0u, oc, 0u);
-            output += bias;
-        }
-
-        if (has_inject_signal) {
-            output += get_src3(global_id.x, oc, global_id.z);
-        }
-
-
-        for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
-            let kernel_base_idx = oc + ic * tensor_dimension_params.src[0].nb[1];
-            for (var ik = 0u; ik < nk; ik = ik + 1u) {
-                // let input = get_src1_lin(in_idx_offset + ik * d0);
-                let input = workgroup_data[ic][local_id.x + ik * d0];
-                // let kernel = get_src0(oc, ic, ik);
-                let kernel_idx = kernel_base_idx + ik * tensor_dimension_params.src[0].nb[2];
-                let kernel = get_src0_lin(kernel_idx);
-                output = output + input * kernel;
-            }
-        }
-
-        if (apply_tanh) {
-            output = clamp(output, -20.0, 20.0);
-            output = tanh(output);
-        }
-
-        set_dst(global_id.x, oc, global_id.z, output);
-
+    if (has_bias) {
+        let bias_idx = global_id.y * tensor_dimension_params.src[2].nb[1];
+        let bias = get_src2(0u, global_id.y, 0u);
+        output += bias;
     }
+
+    if (has_inject_signal) {
+        output += get_src3(global_id.x, global_id.y, global_id.z);
+    }
+
+    let base_src1_offset = global_id.x + global_id.z * tensor_dimension_params.src[1].nb[2];
+
+    for (var ik = 0u; ik < nk; ik = ik + 1u) {
+        let in_idx_offset = ik * d0 + base_src1_offset;
+        let kernel_base_idx = global_id.y + ik * tensor_dimension_params.src[0].nb[2];
+        for (var ic = 0u; ic < input_channels; ic = ic + 1u) {
+            let input = get_src1_lin(in_idx_offset + ic * tensor_dimension_params.src[1].nb[1]);
+            // let kernel = get_src0(global_id.y, ic, ik);
+            let kernel_idx = kernel_base_idx + ic * tensor_dimension_params.src[0].nb[1];
+            let kernel = get_src0_lin(kernel_idx);
+            output = output + input * kernel;
+        }
+    }
+
+    if (apply_tanh) {
+        output = clamp(output, -20.0, 20.0);
+        output = tanh(output);
+    }
+
+    set_dst(global_id.x, global_id.y, global_id.z, output);
 }
 
 );
@@ -3355,7 +3326,7 @@ void ggml_wgpu_graph_compute(
                                 GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offsets, dispatch_x, dispatch_y, dispatch_z)
                             } else {
                                 const int32_t dispatch_x = CEIL_DIV(output_len, 256);
-                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offset_small_dil, dispatch_x, 1, dispatch_z)
+                                GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_no_offset_small_dil, dispatch_x, dispatch_y, dispatch_z)
                             }
                         }
 #endif
