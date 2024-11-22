@@ -21291,9 +21291,9 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
         const double bw_gbps = (double) numel_bytes_this_node / (1024.0*1024.0*1024.0) / ((double) MAX(1, node->perf_time_us) / 1000000.0 / node->perf_runs);
 
         // if (node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER || node->ne[2]==1 ) continue;
-        // if (node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) continue;
+        if (node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) continue;
         // if ((node->op != GGML_OP_CONV_1D_SMALL_KERN && node->op != GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) || node->src[0]->ne[2]==1 || node->ne[2]==1 ) continue;
-        if ((node->op != GGML_OP_CONV_1D_SMALL_KERN ))continue;// || node->src[0]->ne[2]==1 || node->src[0]->ne[0]!=16 || node->src[0]->ne[1]!=16 ) continue;
+        // if ((node->op != GGML_OP_CONV_1D_SMALL_KERN ))continue;// || node->src[0]->ne[2]==1 || node->src[0]->ne[0]!=16 || node->src[0]->ne[1]!=16 ) continue;
         // if ((node->op != GGML_OP_CONV_1D_SMALL_KERN ) || node->src[0]->ne[2]==1) continue;
         const int32_t d0 = node->op_params[2];
         int32_t input_channels = 0;
@@ -21314,6 +21314,8 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
             input_channels = node->ne[1];
             output_channels = node->ne[0];
             nk = node->ne[2];
+            input_len = node->src[0]->ne[0];
+            inject_len = node->src[1]->ne[0];
         }
 
         GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms / %7.3f GB/s d0: %3d, ic: %3d, oc: %3d, ik: %3d, in_len: %5d, inj_len: %5d\n",

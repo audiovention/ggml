@@ -1287,8 +1287,6 @@ var<workgroup> workgroup_data: array<f32, 256>;
 fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>) {
-    let s0 = u32(tensor_dimension_params.params[0][0]);
-    let p0 = u32(tensor_dimension_params.params[0][1]);
     let d0 = u32(tensor_dimension_params.params[0][2]);
     let nk = u32(tensor_dimension_params.dst.ne[2]);
 
@@ -1299,21 +1297,9 @@ fn kernel_conv_1d_small_kern_back_filter(@builtin(global_invocation_id) global_i
     let output_len = u32(tensor_dimension_params.src[1].ne[0]);
     let num_batches = u32(tensor_dimension_params.src[0].ne[2]);
 
-    // if (wg_id.x >= nk) {
-    //     return;
-    // }
-    // if (global_id.z >= input_channels) {
-    //     return;
-    // }
-    // if (global_id.y >= output_channels) {
-    //     return;
-    // }
-
-    let real_input_len = s0*(output_len - 1u) + d0*(nk - 1u) + 1u - 2u*p0;
-
     var output : f32 = 0.0;
 
-    let base_offset = wg_id.x * d0 + input_len - real_input_len;
+    let base_offset = wg_id.x * d0;
 
     for (var ir = 0u; ir < num_batches; ir = ir + 1u) {
         let base_idx_src0 = base_offset + ir * tensor_dimension_params.src[0].nb[2] + global_id.z * tensor_dimension_params.src[0].nb[1];
@@ -3423,6 +3409,12 @@ void ggml_wgpu_graph_compute(
                 } break;
             case GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER:
                 {
+                    const int32_t d0 = dst->op_params[2];
+                    const int64_t nk = dst->ne[2];
+                    const int64_t output_len = dst->src[1]->ne[0];
+                    const int64_t input_len = dst->src[0]->ne[0];
+                    const int64_t real_input_len = output_len + d0*(nk-1);
+
                     GGML_ASSERT(dst->ne[3] == 1);
                     if (dst->type == GGML_TYPE_F16) {
                         GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter_pf16, dst->ne[2], CEIL_DIV(dst->ne[0], 2), dst->ne[1])
@@ -3432,8 +3424,10 @@ void ggml_wgpu_graph_compute(
 #else
                         if ((dst->ne[2] > 1) || (dst->ne[0]*dst->ne[1] > 32)) {
                             if (dst->ne[2] > 1) {
+                                GGML_ASSERT(input_len == real_input_len);
                                 GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter, dst->ne[2], dst->ne[0], dst->ne[1])
                             } else {
+                                GGML_ASSERT(input_len == output_len);
                                 GGML_WGPU_ENCODE_KERNEL(conv_1d_small_kern_back_filter_nk1, dst->ne[0], dst->ne[1], 1)
                             }
                         } else {
