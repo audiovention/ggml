@@ -21299,10 +21299,16 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
         int32_t input_channels = 0;
         int32_t output_channels = 0;
         int32_t nk = 0;
+        int32_t input_len = 0;
+        int32_t inject_len = 0;
         if (node->op == GGML_OP_CONV_1D_SMALL_KERN) {
             input_channels = node->src[0]->ne[1];
             output_channels = node->ne[1];
             nk = node->src[0]->ne[2];
+            input_len = node->src[1]->ne[0];
+            if (node->src[3]) {
+                inject_len = node->src[3]->ne[0];
+            }
         }
         if (node->op == GGML_OP_CONV_1D_SMALL_KERN_BACK_FILTER) {
             input_channels = node->ne[1];
@@ -21310,7 +21316,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
             nk = node->ne[2];
         }
 
-        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms / %7.3f GB/s d0: %3d, ic: %3d, oc: %3d, ik: %3d\n",
+        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s (%3d) cpu = %7.3f / %7.3f ms, wall = %7.3f / %7.3f ms / %7.3f GB/s d0: %3d, ic: %3d, oc: %3d, ik: %3d, in_len: %5d, inj_len: %5d\n",
                 i,
                 node->ne[0], node->ne[1], node->ne[2],
                 ggml_op_name(node->op), node->is_param ? "x" : node->grad ? "g" : " ", node->perf_runs,
@@ -21318,7 +21324,9 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
                 (double) node->perf_cycles  / (double) ggml_cycles_per_ms() / (double) node->perf_runs,
                 (double) node->perf_time_us / 1000.0,
                 (double) node->perf_time_us / 1000.0 / node->perf_runs,
-                bw_gbps, d0, input_channels, output_channels, nk);
+                bw_gbps, d0, input_channels, output_channels, nk,
+                input_len, inject_len
+                );
     }
 
     GGML_PRINT("n_leafs = %d\n", cgraph->n_leafs);
